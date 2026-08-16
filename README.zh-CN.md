@@ -12,7 +12,9 @@
 
 </div>
 
-**ccgui** 是一个开源的 AI 编程桌面客户端。简单说：它把 Claude Code、Codex CLI、Gemini CLI、OpenCode 等命令行 AI 编程 runtime，放进一个统一的图形界面里。
+**ccgui** 是一个开源的 **multi-engine AI 编程桌面客户端**。简单说：它把 Claude Code、Codex CLI、Gemini CLI、OpenCode、**DeepSeek Harness（DSH）** 等命令行 AI 编程 runtime，放进一个统一的图形界面里。
+
+它**不是** DSH Web UI 外壳，也**不是** `dsh-plugin`。DSH 只是多个 native engine 之一；DSH 的模型与 API key 仍在 DSH host / Web UI 中配置，ccgui 负责统一的聊天、文件、Git 与项目智能界面。
 
 你不用再盯着黑乎乎的终端敲命令——打开 ccgui，选好项目，像聊天一样让 AI 帮你写代码、改 Bug、提交 Git。文件与工具活动会实时展示；token 用量和预估费用则取决于当前 runtime 是否提供相应 metadata。
 
@@ -26,8 +28,9 @@
 
 ### 一个客户端，装下多个 AI 引擎
 
-- 当前注册 **Claude Code**、**Codex CLI**、**Gemini CLI**、**OpenCode** 四套 runtime adapter。Gemini 默认启用，OpenCode 可选启用；二者的退役仍是 active migration，并未交付。
+- 当前注册 **Claude Code**、**Codex CLI**、**Gemini CLI**、**OpenCode**、**DeepSeek Harness（DSH）** 等 runtime adapter。Gemini 默认启用，OpenCode 可选启用；二者的退役仍是 active migration，并未交付。
 - Claude 与 Codex 支持多套 managed provider profile；Gemini、OpenCode 保留各自 runtime 提供的 provider/config 能力。
+- **DeepSeek Harness** 作为 native engine（`dsh-host-rpc`）：ccgui 可复用本机已运行的 `dsh web`，也可按设置自动拉起，并在同一 GUI 里创建 / 恢复 / 分叉 DSH 会话。模型与凭证仍归 DSH——本仓库**不能**通过 `dsh plugin add` 安装。
 - 会话不丢：关掉应用再打开，历史对话还在；会话断了可以接着聊，还能看每个会话用了多少上下文。
 
 ### 聊天框是为写代码设计的
@@ -81,6 +84,15 @@
 | Linux | `.AppImage` |
 
 装好之后，在设置里配置好你的 AI 引擎（比如 Claude Code 的 API Key 或本地 CLI），添加一个项目文件夹，就可以开始用了。
+
+### 使用 DeepSeek Harness（DSH）
+
+1. 在本机安装 DSH CLI（例如 `npm i -g @deepseek-ai/dsh`，或使用你已有的本地 binary）。
+2. 在 **DSH Web UI / host** 中配置模型与 API key——不要把它当成 ccgui 里的另一套 vendor preset。
+3. 打开 ccgui 设置 → CLI 校验 / 引擎设置，选择 **DeepSeek Harness**，按需填写 host/port，并可开启本地 host 自动拉起。
+4. 在输入框引擎选择器中选中 **DeepSeek Harness**，开始对话。
+
+ccgui 是面向 DSH 生态的 multi-engine 桌面客户端，不是插件包，也不是官方 Web UI 的换皮壳。
 
 ---
 
@@ -276,6 +288,11 @@ docs(readme): 校准项目文档索引
 ## 友链
 
 感谢 [LINUX DO](https://linux.do/) 用户的支持与反馈。
+
+### DeepSeek Harness 生态
+
+- 公开插件发现页：[github.com/topics/dsh-plugin](https://github.com/topics/dsh-plugin)（仅插件——本客户端**不是** `dsh-plugin`）。
+- 精选生态列表：[Awesome DeepSeek Harness](https://github.com/0xsline/awesome-deepseek-harness) — 建议归入 **IDE & Clients**，定位 multi-engine desktop client。
 
 ---
 

@@ -5,7 +5,7 @@ import {
 } from "./sharedSessionEngines";
 
 describe("sharedSessionEngines", () => {
-  it.each(["claude", "codex", "kimi", "grok", "opencode"] as const)(
+  it.each(["claude", "codex", "kimi", "grok", "opencode", "pi"] as const)(
     "accepts %s as a Shared Session target",
     (engine) => {
       expect(isSharedSessionSupportedEngine(engine)).toBe(true);
@@ -15,6 +15,8 @@ describe("sharedSessionEngines", () => {
 
   it("keeps unsupported engines on claude fallback", () => {
     expect(isSharedSessionSupportedEngine("gemini")).toBe(false);
+    expect(isSharedSessionSupportedEngine("dsh")).toBe(false);
     expect(normalizeSharedSessionEngine("gemini")).toBe("claude");
+    expect(normalizeSharedSessionEngine("dsh")).toBe("claude");
   });
 });

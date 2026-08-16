@@ -130,6 +130,19 @@ mod rules;
 #[allow(dead_code)]
 #[path = "../runtime/mod.rs"]
 mod runtime;
+// session_management.rs 的删除核心在收口时会打 session index tombstone；
+// daemon 没有本地 SQLite index（web 模式走 legacy list），用 no-op 保持
+// 共享核心可编译，行为与桌面端一致（桌面端走完整 session_index 模块）。
+#[allow(dead_code)]
+mod session_index {
+    pub(crate) mod commands {
+        pub(crate) async fn tombstone_session_index_rows(
+            _session_ids: Vec<String>,
+        ) -> Result<u32, String> {
+            Ok(0)
+        }
+    }
+}
 // session_management now catalogs/deletes shared sessions via crate::shared_sessions.
 // The desktop app gets the full module from lib.rs; the daemon only needs the pure
 // filesystem list/delete surface, so keep a minimal local adapter here instead of
@@ -321,9 +334,10 @@ mod workspace_settings;
 mod codex {
     pub(crate) type WorkspaceSession = crate::backend::app_server::WorkspaceSession;
     pub(crate) use crate::codex_doctor::{
-        run_claude_doctor_with_settings, run_codex_doctor_with_settings,
+        dsh_node_requirement_error, node_satisfies_dsh_requirement, run_claude_doctor_with_settings,
+        run_codex_doctor_with_settings, run_dsh_doctor_with_settings,
         run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
-        run_opencode_doctor_with_settings,
+        run_opencode_doctor_with_settings, run_pi_doctor_with_settings,
     };
     pub(crate) use crate::codex_installer::{
         build_cli_install_plan_with_backend, resolve_cli_version_status,
@@ -1060,6 +1074,7 @@ fn parse_engine_type_string(value: Option<&str>) -> Option<engine::EngineType> {
         "opencode" => Some(engine::EngineType::OpenCode),
         "kimi" => Some(engine::EngineType::Kimi),
         "grok" => Some(engine::EngineType::Grok),
+        "dsh" => Some(engine::EngineType::Dsh),
         _ => None,
     }
 }
@@ -1846,6 +1861,10 @@ async fn handle_rpc_request(
         "opencode_doctor" => {
             let opencode_bin = parse_optional_string(&params, "opencodeBin");
             state.opencode_doctor(opencode_bin).await
+        }
+        "dsh_doctor" => {
+            let dsh_bin = parse_optional_string(&params, "dshBin");
+            state.dsh_doctor(dsh_bin).await
         }
         "cli_install_plan" => {
             let engine =

@@ -65,6 +65,8 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
+export type DshSessionSummary = GeminiSessionSummary;
+
 // Grok：在 Gemini 形状上扩展 parent / sessionKind（子代理树）
 export type GrokSessionSummary = GeminiSessionSummary & {
   parentSessionId?: string | null;
@@ -276,10 +278,22 @@ export function inferThreadEngineSource(
     return "kimi";
   }
   if (
+    normalized.startsWith("pi:") ||
+    normalized.startsWith("pi-pending-")
+  ) {
+    return "pi";
+  }
+  if (
     normalized.startsWith("opencode:") ||
     normalized.startsWith("opencode-pending-")
   ) {
     return "opencode";
+  }
+  if (
+    normalized.startsWith("dsh:") ||
+    normalized.startsWith("dsh-pending-")
+  ) {
+    return "dsh";
   }
   return "codex";
 }
@@ -291,7 +305,9 @@ export function isPendingThreadId(threadId: string): boolean {
     normalized.startsWith("gemini-pending-") ||
     normalized.startsWith("grok-pending-") ||
     normalized.startsWith("kimi-pending-") ||
+    normalized.startsWith("pi-pending-") ||
     normalized.startsWith("opencode-pending-") ||
+    normalized.startsWith("dsh-pending-") ||
     normalized.startsWith("codex-pending-")
   );
 }
@@ -1146,6 +1162,27 @@ export function normalizeKimiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+export function normalizePiSessionSummaries(
+  value: unknown,
+): KimiSessionSummary[] {
+  return normalizeGeminiSessionSummaries(value);
+}
+
+export function normalizeDshSessionSummaries(
+  value: unknown,
+): DshSessionSummary[] {
+  if (Array.isArray(value)) {
+    return normalizeGeminiSessionSummaries(value);
+  }
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+  const record = value as Record<string, unknown>;
+  return normalizeGeminiSessionSummaries(
+    record.sessions ?? record.items ?? record.data,
+  );
+}
+
 function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
   const base = normalizeGeminiSessionSummary(value);
   if (!base) {
@@ -1355,8 +1392,8 @@ function mergeNativeCliSessionSummaries(params: {
       sessionKind?: string | null;
     }
   >;
-  idPrefix: "gemini" | "grok" | "kimi";
-  engineSource: "gemini" | "grok" | "kimi";
+  idPrefix: "gemini" | "grok" | "kimi" | "pi" | "dsh";
+  engineSource: "gemini" | "grok" | "kimi" | "pi" | "dsh";
   fallbackTitle: string;
   workspaceId: string;
   mappedTitles: Record<string, string>;
@@ -1503,6 +1540,48 @@ export function mergeKimiSessionSummaries(
   });
 }
 
+export function mergePiSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  piSessions: KimiSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
+): ThreadSummary[] {
+  return mergeNativeCliSessionSummaries({
+    baseSummaries,
+    sessions: piSessions,
+    idPrefix: "pi",
+    engineSource: "pi",
+    fallbackTitle: "PI Session",
+    workspaceId,
+    mappedTitles,
+    getCustomName,
+    hiddenSharedBindingIds,
+  });
+}
+
+export function mergeDshSessionSummaries(
+  baseSummaries: ThreadSummary[],
+  dshSessions: DshSessionSummary[],
+  workspaceId: string,
+  mappedTitles: Record<string, string>,
+  getCustomName: (workspaceId: string, threadId: string) => string | undefined,
+  hiddenSharedBindingIds?: ReadonlySet<string>,
+): ThreadSummary[] {
+  return mergeNativeCliSessionSummaries({
+    baseSummaries,
+    sessions: dshSessions,
+    idPrefix: "dsh",
+    engineSource: "dsh",
+    fallbackTitle: "DSH Session",
+    workspaceId,
+    mappedTitles,
+    getCustomName,
+    hiddenSharedBindingIds,
+  });
+}
+
 export function mergeGrokSessionSummaries(
   baseSummaries: ThreadSummary[],
   grokSessions: GrokSessionSummary[],
@@ -1540,7 +1619,9 @@ function normalizeCatalogEngine(
     case "gemini":
     case "grok":
     case "kimi":
+    case "pi":
     case "opencode":
+    case "dsh":
       return engine;
     default:
       return "codex";
@@ -1652,9 +1733,13 @@ export function mergeCodexCatalogSessionSummaries(
             ? "Grok Session"
             : engineSource === "kimi"
               ? "Kimi Session"
-              : engineSource === "opencode"
-                ? "OpenCode Session"
-                : "Codex Session";
+              : engineSource === "pi"
+                ? "PI Session"
+                : engineSource === "opencode"
+                  ? "OpenCode Session"
+                  : engineSource === "dsh"
+                    ? "DSH Session"
+                    : "Codex Session";
     const continuationSourceName = session.sourceSessionId
       ? mergedById.get(session.sourceSessionId)?.name?.trim()
       : null;
@@ -1742,6 +1827,7 @@ const PENDING_PREFIXES_BY_ENGINE: Partial<Record<EngineSource, string>> = {
   claude: "claude-pending-",
   codex: "codex-pending-",
   opencode: "opencode-pending-",
+  dsh: "dsh-pending-",
 };
 
 function isPendingEngineThreadId(
@@ -2048,7 +2134,9 @@ export function resolveRewindSupportedEngine(
     normalized.startsWith("kimi:") ||
     normalized.startsWith("kimi-pending-") ||
     normalized.startsWith("opencode:") ||
-    normalized.startsWith("opencode-pending-")
+    normalized.startsWith("opencode-pending-") ||
+    normalized.startsWith("dsh:") ||
+    normalized.startsWith("dsh-pending-")
   ) {
     return null;
   }

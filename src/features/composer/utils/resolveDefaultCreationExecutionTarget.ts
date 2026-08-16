@@ -1,13 +1,21 @@
 import type { EngineType } from "../../../types";
-import type { ExecutionTarget } from "../../shared-session/target/types";
-import { isSharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
+import {
+  isResolvedExecutionTarget,
+  type ExecutionTarget,
+} from "../../shared-session/target/types";
+import {
+  isSharedSessionSupportedEngine,
+  type SharedSessionSupportedEngine,
+} from "../../shared-session/utils/sharedSessionEngines";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
 } from "../../threads/constants/codexProviderProfiles";
 
 /**
@@ -26,7 +34,58 @@ const LOCAL_PROFILE_IDS: Partial<Record<EngineType, string>> = {
   kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
   grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
   opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  pi: PI_LOCAL_PROVIDER_PROFILE_ID,
+  dsh: DSH_LOCAL_PROVIDER_PROFILE_ID,
 };
+
+export type CreateSessionSupportedEngine = SharedSessionSupportedEngine | "dsh";
+
+export type ResolvedCreationExecutionTarget = Omit<ExecutionTarget, "engine"> & {
+  engine: CreateSessionSupportedEngine;
+  modelCatalogEntryId: string;
+  model: string;
+  providerProfileNameSnapshot: string;
+  providerProfileSource: NonNullable<ExecutionTarget["providerProfileSource"]>;
+};
+
+export function isCreateSessionSupportedEngine(
+  engine: EngineType | null | undefined,
+): engine is CreateSessionSupportedEngine {
+  return isSharedSessionSupportedEngine(engine) || engine === "dsh";
+}
+
+function hasResolvedCreationTargetIdentity(
+  target: ExecutionTarget,
+): boolean {
+  const providerProfileId = target.providerProfileId?.trim() || null;
+  const modelCatalogEntryId = target.modelCatalogEntryId?.trim() || "";
+  const runtimeModel = target.model?.trim() || "";
+  const providerName = target.providerProfileNameSnapshot?.trim() || "";
+  if (!modelCatalogEntryId || !runtimeModel || !providerName) {
+    return false;
+  }
+  return providerProfileId
+    ? target.providerProfileSource === "managed"
+    : target.providerProfileSource === "disk";
+}
+
+/**
+ * Home / create-session 可落盘的完整目标。
+ *
+ * Shared 合同仍由 `isResolvedExecutionTarget` 守门（DSH fail-closed）。
+ * 首页 Native 引擎包含 DSH：模型来自 host catalog，不是 Shared provider。
+ */
+export function isResolvedCreationExecutionTarget(
+  target: ExecutionTarget | null | undefined,
+): target is ResolvedCreationExecutionTarget {
+  if (!target || !isCreateSessionSupportedEngine(target.engine)) {
+    return false;
+  }
+  if (target.engine === "dsh") {
+    return hasResolvedCreationTargetIdentity(target);
+  }
+  return isResolvedExecutionTarget(target);
+}
 
 function resolveRuntimeModel(model: CreationTargetModelLike): string {
   return model.model?.trim() || model.id.trim() || "";
@@ -35,7 +94,7 @@ function resolveRuntimeModel(model: CreationTargetModelLike): string {
 /**
  * 首页 create-session Atomic picker 的默认 ExecutionTarget。
  *
- * - 覆盖全部 Shared/Atomic 引擎（含 Grok / Kimi / OpenCode），禁止仅 claude/codex。
+ * - 覆盖全部首页可创建引擎（Shared/Atomic + Native DSH），禁止仅 claude/codex。
  * - catalog 命中优先；未命中但有 selectedModelId 时用 id 合成 snapshot（闭合态可展示）。
  * - runtime 回落 id，避免只有 catalog entry 无 model 字段时假空。
  * - Shared 会话不得走此默认（enabled=false）。
@@ -52,7 +111,7 @@ export function resolveDefaultCreationExecutionTarget(input: {
     return null;
   }
   const engine = input.selectedEngine;
-  if (!isSharedSessionSupportedEngine(engine)) {
+  if (!isCreateSessionSupportedEngine(engine)) {
     return null;
   }
 

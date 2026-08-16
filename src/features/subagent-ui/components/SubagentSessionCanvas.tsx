@@ -31,6 +31,7 @@ function inferEngine(threadId: string): EngineType {
   if (threadId.startsWith("kimi:")) return "kimi";
   if (threadId.startsWith("gemini:")) return "gemini";
   if (threadId.startsWith("opencode:")) return "opencode";
+  if (threadId.startsWith("dsh:")) return "dsh";
   if (threadId.startsWith("shared:")) return "codex";
   return "codex";
 }

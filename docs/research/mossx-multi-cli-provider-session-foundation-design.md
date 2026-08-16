@@ -12,7 +12,7 @@ status: implemented
 > 内容类型：Architecture Decision Record
 > 生命周期：accepted / implemented in slices；原始 A–D 路线已归档，后续修复与收口 change 独立演进
 > 初始日期：2026-07-27
-> 最近校准：2026-08-08 · Composer Run Status Strip 数据面：Shared/协作合成 **主 items ∪ agent-canvas ∪ child threads**（`collectRunStatusSourceItems`），禁止仅依赖根 props 空 items；协作写文件变更可在输入框上方「已编辑」汇总
+> 最近校准：2026-08-17 · DSH 成为第 7 个 Native Engine（`dsh-host-rpc` + 全局 `dsh web` supervisor）；第一期不进 Shared；pending 晋升 / spawned host 退出回收 / 侧栏 workspace 成员集已按 L2 收口；Session Index 有界 DSH writer 入 first-paint；校准行见下表 DSH 条目
 > 适用范围：Native Session、Shared Session、Provider Runtime、Session Catalog、Sidebar Projection、未来 Plugin / Orchestration
 > 核心决策：Native Session 保持原生身份；Shared Session 承担跨 CLI、跨 Provider 的逐 Turn 切换
 
@@ -24,9 +24,13 @@ status: implemented
 
 | 契约面 | 当前代码事实 | 事实源 |
 |--------|--------------|--------|
-| Built-in engines | 6：Claude/Codex/Gemini/Grok/Kimi/OpenCode | `engineIds.json`、`EngineType` |
-| Native rendering projection | 六引擎各有 realtime adapter + history loader | `src/features/threads/{adapters,loaders}/` |
-| Shared target boundary | Claude/Codex/Kimi/Grok/OpenCode；Gemini 排除 | `sharedSessionEngines.ts`、`src-tauri/src/shared_sessions.rs` |
+| Built-in engines | 7：Claude/Codex/Gemini/Grok/Kimi/OpenCode/**DSH** | `src/features/engine/engineIds.json`、`src/types/engine.ts` `EngineType`、`src-tauri/src/engine/mod.rs` `EngineType::Dsh` |
+| DSH protocol / runtime | 第三条 Builtin 协议臂 `dsh-host-rpc`，`executionModel: persistent`；全应用一个 `dsh web`（adopt 已有 3080，否则 spawn；adopted 不杀） | `src-tauri/src/engine/adapter_registry.rs` `BuiltinEngineProtocol`、`src-tauri/src/engine/dsh/{host,supervisor,session,events,history}.rs`、OpenSpec `add-dsh-engine` |
+| DSH identity / ACK | thread `dsh:<sessionId>` / `dsh-pending-<uuid>`；`session.create` 立即返回真实 sessionId；首轮在 prompt 前用 pending thread id 发 `SessionStarted`，mux bind 到 `dsh:<native>`；frontend `thread/started` + ACK cache 晋升，禁止双行 | `src-tauri/src/engine/dsh/{mod,session,events}.rs`、`src/features/app/hooks/useAppServerEvents.ts`、`src/features/threads/hooks/useThreadTurnEvents.ts`、`docs/research/mossx-dsh-capability-spike.md` |
+| DSH host lifecycle / list | `ExitRequested` 只 `drop_host()` 杀 spawned；adopted 保留。侧栏 `list_dsh_sessions` 用 `workspace.create` 的 `sessionIds - archivedSessionIds`，禁止 cwd suffix / 空 cwd 全匹配；Session Index 有界 writer（`sync_dsh_engine` / `rows_from_dsh_summaries`）参与 first-paint 索引，host 不可达 soft-empty | `src-tauri/src/engine/dsh/supervisor.rs` `should_kill_host`、`src-tauri/src/lib.rs` `ExitRequested`、`src-tauri/src/engine/dsh/history.rs`、`src-tauri/src/session_index/{commands,writers}.rs`、`src/features/threads/hooks/useThreadActions.ts` |
+| DSH models / config | 模型是 DSH `{provider,model}` 二元组，catalog 来自 `POST /api/llm.models`；mossx 不写 `$DSH_HOME` settings/credentials | `src-tauri/src/engine/dsh/mod.rs` `load_dsh_models`、`src-tauri/src/engine/dsh_provider_profile.rs`、`src-tauri/src/types.rs` `dshBin/dshHost/dshPort/dshAutoStart` |
+| Native rendering projection | 七引擎各有 realtime adapter + history loader（DSH：`dshRealtimeAdapter` / `dshHistoryLoader`） | `src/features/threads/{adapters,loaders}/` |
+| Shared target boundary | Claude/Codex/Kimi/Grok/OpenCode；Gemini **与 DSH** 排除（picker disabled + reason；禁止 normalize 成 claude 后写入 binding） | `sharedSessionEngines.ts`、`src-tauri/src/shared_sessions.rs`、OpenSpec `add-dsh-engine` |
 | Gemini runtime | registry 中存在，但 runtime policy 默认 disabled | `src-tauri/src/engine_policy.rs` |
 | Provider selection | Native 原子选择；Shared 逐 Turn target | `close-native-session-provider-create-binding` 与 Shared target contracts |
 | Shared send UI 状态机 | 九态 + Recovery Exit Ladder（Probe/Stop/停止并重建/放弃本轮） | `sendStateMachine.ts`、`SharedSendStatusBar.tsx`、`shared_session_v2.rs` |

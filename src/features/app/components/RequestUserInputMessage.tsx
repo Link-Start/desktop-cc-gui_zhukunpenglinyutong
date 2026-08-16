@@ -132,9 +132,10 @@ export function RequestUserInputMessage({
   const [draftByRequest, setDraftByRequest] = useState<
     Record<string, RequestDraftState>
   >({});
-  const [remainingSecondsByRequest, setRemainingSecondsByRequest] = useState<
+  const [deadlineByRequest, setDeadlineByRequest] = useState<
     Record<string, number>
   >({});
+  const [clockMs, setClockMs] = useState(() => Date.now());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const timeoutDismissedRequestKeysRef = useRef<Set<string>>(new Set());
@@ -170,13 +171,13 @@ export function RequestUserInputMessage({
         },
       };
     });
-    setRemainingSecondsByRequest((current) => {
+    setDeadlineByRequest((current) => {
       if (typeof current[requestKey] === "number") {
         return current;
       }
       return {
         ...current,
-        [requestKey]: REQUEST_STALE_TIMEOUT_SECONDS,
+        [requestKey]: Date.now() + REQUEST_STALE_TIMEOUT_SECONDS * 1000,
       };
     });
   }, [activeRequest, activeRequestKey]);
@@ -187,33 +188,29 @@ export function RequestUserInputMessage({
   }, [activeRequestKey]);
 
   useEffect(() => {
-    if (!activeRequestKey || isSubmitting || submitError) {
+    if (!activeRequestKey) {
       return undefined;
     }
     const timerId = window.setInterval(() => {
-      setRemainingSecondsByRequest((current) => {
-        const currentSeconds =
-          current[activeRequestKey] ?? REQUEST_STALE_TIMEOUT_SECONDS;
-        if (currentSeconds <= 0) {
-          return current;
-        }
-        return {
-          ...current,
-          [activeRequestKey]: currentSeconds - 1,
-        };
-      });
+      setClockMs(Date.now());
     }, 1000);
     return () => {
       window.clearInterval(timerId);
     };
-  }, [activeRequestKey, isSubmitting, submitError]);
+  }, [activeRequestKey]);
 
-  const activeRemainingSeconds = activeRequestKey
-    ? remainingSecondsByRequest[activeRequestKey] ?? REQUEST_STALE_TIMEOUT_SECONDS
-    : REQUEST_STALE_TIMEOUT_SECONDS;
-  const collapsedRemainingSeconds = collapsedRequestKey
-    ? remainingSecondsByRequest[collapsedRequestKey] ?? REQUEST_STALE_TIMEOUT_SECONDS
-    : REQUEST_STALE_TIMEOUT_SECONDS;
+  const remainingSecondsFor = (requestKey: string | null, now = clockMs) => {
+    if (!requestKey) {
+      return REQUEST_STALE_TIMEOUT_SECONDS;
+    }
+    const deadline = deadlineByRequest[requestKey];
+    if (typeof deadline !== "number") {
+      return REQUEST_STALE_TIMEOUT_SECONDS;
+    }
+    return Math.max(0, Math.ceil((deadline - now) / 1000));
+  };
+  const activeRemainingSeconds = remainingSecondsFor(activeRequestKey);
+  const collapsedRemainingSeconds = remainingSecondsFor(collapsedRequestKey);
 
   // Timeout: submit the recommended (first) option. Fall back to dismiss only
   // when there is no selectable recommended answer.
@@ -270,7 +267,7 @@ export function RequestUserInputMessage({
           delete next[activeRequestKey];
           return next;
         });
-        setRemainingSecondsByRequest((current) => {
+        setDeadlineByRequest((current) => {
           if (typeof current[activeRequestKey] !== "number") {
             return current;
           }
@@ -372,8 +369,7 @@ export function RequestUserInputMessage({
   const getSettlementOptions = (
     targetRequestKey: string,
   ): RequestUserInputSettlementOptions | undefined => {
-    const targetRemainingSeconds =
-      remainingSecondsByRequest[targetRequestKey] ?? REQUEST_STALE_TIMEOUT_SECONDS;
+    const targetRemainingSeconds = remainingSecondsFor(targetRequestKey, Date.now());
     return targetRemainingSeconds <= 0 ? { staleSettlementHint: "timeout" } : undefined;
   };
 
@@ -503,7 +499,7 @@ export function RequestUserInputMessage({
       delete next[targetRequestKey];
       return next;
     });
-    setRemainingSecondsByRequest((current) => {
+    setDeadlineByRequest((current) => {
       if (typeof current[targetRequestKey] !== "number") {
         return current;
       }

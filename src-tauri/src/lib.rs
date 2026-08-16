@@ -260,6 +260,7 @@ pub fn run() {
             let state = state::AppState::load(&app.handle());
             app.manage(state);
             renderer_stability::spawn_renderer_heartbeat_watchdog(app.handle().clone());
+            session_index::importer::spawn_session_index_importer(app.handle().clone());
             {
                 // Start the in-process AskUserQuestion MCP server so mid-turn
                 // structured asks work in default/acceptEdits (not just plan mode).
@@ -464,6 +465,7 @@ pub fn run() {
                 if let Err(error) = manager.shutdown_grok_sessions().await {
                     log::error!("[app_exit] Grok shutdown failed: {error}");
                 }
+                crate::engine::dsh::supervisor::drop_host().await;
                 if state
                     .app_settings
                     .lock()

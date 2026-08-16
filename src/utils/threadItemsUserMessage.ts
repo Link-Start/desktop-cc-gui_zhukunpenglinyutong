@@ -1,5 +1,6 @@
 import { extractCommandMessagePromptText } from "./commandMessageTags";
 import { normalizeAgentIcon } from "./agentIcons";
+import { isDshRuntimeContextText } from "./dshRuntimeContext";
 
 export const MAX_DEFAULT_THREAD_TITLE_CHARS = 50;
 
@@ -388,7 +389,8 @@ export function previewThreadName(text: string, fallback: string) {
   if (
     !collapsed ||
     PROJECT_MEMORY_OPEN_TAG_PREFIX_REGEX.test(collapsed) ||
-    GROK_RUNTIME_CONTEXT_OPEN_TAG_PREFIX_REGEX.test(collapsed)
+    GROK_RUNTIME_CONTEXT_OPEN_TAG_PREFIX_REGEX.test(collapsed) ||
+    isDshRuntimeContextText(collapsed)
   ) {
     return fallback;
   }

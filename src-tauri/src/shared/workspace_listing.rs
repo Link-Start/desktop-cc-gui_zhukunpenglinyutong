@@ -221,6 +221,9 @@ pub(crate) fn is_special_build_artifact_dir_name(name: &str) -> bool {
             | ".mypy_cache"
             | ".tox"
             | ".dart_tool"
+            | "temp"
+            | "tmp"
+            | ".tmp"
     ) || name.starts_with("cmake-build-")
 }
 
@@ -1055,4 +1058,18 @@ fn list_workspace_directory_children_uncached(
         limit_hit,
         directory_entries,
     )
+}
+
+#[cfg(test)]
+mod junk_dir_tests {
+    use super::is_special_directory_path;
+
+    #[test]
+    fn temp_family_paths_are_special_directories() {
+        assert!(is_special_directory_path("service/temp"));
+        assert!(is_special_directory_path("apps/web/tmp"));
+        assert!(is_special_directory_path("pkg/.tmp"));
+        assert!(is_special_directory_path("target"));
+        assert!(is_special_directory_path("apps/web/node_modules"));
+    }
 }

@@ -1,0 +1,278 @@
+//! DSH Host RPC unary client.
+//!
+//! Wire: `POST /api/<method>` with
+//! `{type:"client-request",rpcId,method,payload}` →
+//! `{type:"server-response",rpcId,result:{ok:true,value}|{ok:false,error}}`.
+//! Approvals/questions settle via `POST /api/respond`.
+
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::time::Duration;
+use uuid::Uuid;
+
+const RPC_TIMEOUT: Duration = Duration::from_secs(30);
+const DESCRIBE_TIMEOUT: Duration = Duration::from_secs(3);
+
+#[derive(Debug, Clone)]
+pub struct DshHostClient {
+    http: Client,
+    origin: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DshRpcError {
+    pub code: String,
+    pub message: String,
+    #[serde(default)]
+    pub details: Value,
+}
+
+impl std::fmt::Display for DshRpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", format_dsh_rpc_error(self))
+    }
+}
+
+/// DSH Host admits images from `resolveModelInfo().inputModalities`,
+/// not from whether the upstream API can see. Custom `llm-pi-ai` routes
+/// fall back to `defaultInput: [text]` when neither the model entry nor
+/// the installed catalog declares modalities.
+fn format_dsh_rpc_error(error: &DshRpcError) -> String {
+    let reason = error.details.get("reason").and_then(Value::as_str);
+    if error.code == "attachment-error" && reason == Some("MODEL_DOES_NOT_SUPPORT_IMAGES") {
+        return format!(
+            "{}: {} DSH resolved this model as text-only (custom llm-pi-ai routes fall back to `defaultInput: [text]`). If this endpoint actually accepts images, set `input: [text, image]` on the model or `defaultInput: [text, image]` on that provider route in DSH settings, then retry.",
+            error.code, error.message
+        );
+    }
+    format!("{}: {}", error.code, error.message)
+}
+
+impl std::error::Error for DshRpcError {}
+
+#[derive(Debug, Deserialize)]
+struct ServerResponseEnvelope {
+    #[serde(rename = "type")]
+    kind: String,
+    #[serde(default, rename = "rpcId")]
+    rpc_id: Option<String>,
+    result: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RpcOk {
+    ok: bool,
+    #[serde(default)]
+    value: Value,
+    #[serde(default)]
+    error: Option<DshRpcError>,
+}
+
+impl DshHostClient {
+    pub fn new(origin: impl Into<String>) -> Result<Self, String> {
+        let http = Client::builder()
+            .timeout(RPC_TIMEOUT)
+            .build()
+            .map_err(|error| format!("dsh http client: {error}"))?;
+        Ok(Self {
+            http,
+            origin: origin.into().trim_end_matches('/').to_string(),
+        })
+    }
+
+    pub fn origin(&self) -> &str {
+        &self.origin
+    }
+
+    pub fn mux_url(&self) -> String {
+        mux_url_from_origin(&self.origin)
+    }
+
+    pub fn settings_url(&self) -> String {
+        self.origin.clone()
+    }
+
+    pub async fn describe(&self) -> Result<Value, String> {
+        self.call_with_timeout("host.describe", json!({}), DESCRIBE_TIMEOUT)
+            .await
+    }
+
+    pub async fn call(&self, method: &str, payload: Value) -> Result<Value, String> {
+        self.call_with_timeout(method, payload, RPC_TIMEOUT).await
+    }
+
+    pub async fn respond(&self, rpc_id: &str, value: Value) -> Result<Value, String> {
+        let body = json!({
+            "type": "client-response",
+            "rpcId": rpc_id,
+            "result": { "ok": true, "value": value },
+        });
+        let url = format!("{}/api/respond", self.origin);
+        let response = self
+            .http
+            .post(url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| format!("dsh respond transport: {error}"))?;
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|error| format!("dsh respond body: {error}"))?;
+        if !status.is_success() {
+            return Err(format!("dsh respond HTTP {status}: {text}"));
+        }
+        serde_json::from_str(&text).map_err(|error| format!("dsh respond json: {error}"))
+    }
+
+    async fn call_with_timeout(
+        &self,
+        method: &str,
+        payload: Value,
+        timeout: Duration,
+    ) -> Result<Value, String> {
+        let rpc_id = Uuid::new_v4().to_string();
+        let body = json!({
+            "type": "client-request",
+            "rpcId": rpc_id,
+            "method": method,
+            "payload": payload,
+        });
+        let url = format!("{}/api/{method}", self.origin);
+        let response = tokio::time::timeout(timeout, self.http.post(url).json(&body).send())
+            .await
+            .map_err(|_| format!("dsh {method} timed out"))?
+            .map_err(|error| format!("dsh {method} transport: {error}"))?;
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|error| format!("dsh {method} body: {error}"))?;
+        if !status.is_success() {
+            return Err(format!("dsh {method} HTTP {status}: {text}"));
+        }
+        parse_server_response(&text, &rpc_id, method)
+    }
+}
+
+pub fn parse_server_response(text: &str, expected_rpc_id: &str, method: &str) -> Result<Value, String> {
+    let envelope: ServerResponseEnvelope = serde_json::from_str(text)
+        .map_err(|error| format!("dsh {method} envelope: {error}"))?;
+    if envelope.kind != "server-response" {
+        return Err(format!(
+            "dsh {method}: expected server-response, got {}",
+            envelope.kind
+        ));
+    }
+    if let Some(rpc_id) = envelope.rpc_id.as_deref() {
+        if rpc_id != expected_rpc_id {
+            return Err(format!(
+                "dsh {method}: rpcId mismatch ({rpc_id} != {expected_rpc_id})"
+            ));
+        }
+    }
+    let Some(result) = envelope.result else {
+        return Err(format!("dsh {method}: missing result"));
+    };
+    let parsed: RpcOk = serde_json::from_value(result)
+        .map_err(|error| format!("dsh {method} result: {error}"))?;
+    if parsed.ok {
+        return Ok(parsed.value);
+    }
+    let error = parsed.error.unwrap_or(DshRpcError {
+        code: "unknown".to_string(),
+        message: format!("{method} failed"),
+        details: Value::Null,
+    });
+    Err(error.to_string())
+}
+
+pub fn origin_from_host_port(host: &str, port: u16) -> String {
+    format!("http://{host}:{port}")
+}
+
+pub fn mux_url_from_origin(origin: &str) -> String {
+    let origin = origin.trim().trim_end_matches('/');
+    if let Some(rest) = origin.strip_prefix("https://") {
+        return format!("wss://{rest}/api/events.mux");
+    }
+    if let Some(rest) = origin.strip_prefix("http://") {
+        return format!("ws://{rest}/api/events.mux");
+    }
+    format!("ws://{origin}/api/events.mux")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_ok_envelope() {
+        let rpc_id = "rpc-1";
+        let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":true,"value":{"sessionId":"session-1"}}}"#;
+        let value = parse_server_response(body, rpc_id, "session.create").unwrap();
+        assert_eq!(value["sessionId"], "session-1");
+    }
+
+    #[test]
+    fn parses_error_envelope() {
+        let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":false,"error":{"code":"fork-unavailable","message":"turn open","details":{}}}}"#;
+        let err = parse_server_response(body, "rpc-1", "session.fork").unwrap_err();
+        assert!(err.contains("fork-unavailable"));
+    }
+
+    #[test]
+    fn explains_model_does_not_support_images_as_resolved_declaration() {
+        let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":false,"error":{"code":"attachment-error","message":"Model \"grok-4.5\" does not support image input.","details":{"reason":"MODEL_DOES_NOT_SUPPORT_IMAGES"}}}}"#;
+        let err = parse_server_response(body, "rpc-1", "session.prompt").unwrap_err();
+        assert!(
+            err.contains("attachment-error"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            err.contains("grok-4.5"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            err.contains("resolved this model as text-only"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            err.contains("defaultInput"),
+            "actionable DSH settings hint missing: {err}"
+        );
+        assert!(
+            err.contains("input: [text, image]"),
+            "actionable model input hint missing: {err}"
+        );
+    }
+
+    #[test]
+    fn other_attachment_errors_stay_unmapped() {
+        let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":false,"error":{"code":"attachment-error","message":"too many","details":{"reason":"TOO_MANY_IMAGES"}}}}"#;
+        let err = parse_server_response(body, "rpc-1", "session.prompt").unwrap_err();
+        assert_eq!(err, "attachment-error: too many");
+    }
+
+    #[test]
+    fn rejects_wrong_type() {
+        let body = r#"{"type":"client-request","rpcId":"rpc-1","method":"x","payload":{}}"#;
+        let err = parse_server_response(body, "rpc-1", "x").unwrap_err();
+        assert!(err.contains("expected server-response"));
+    }
+
+    #[test]
+    fn mux_url_maps_http_and_https() {
+        assert_eq!(
+            mux_url_from_origin("http://127.0.0.1:3080"),
+            "ws://127.0.0.1:3080/api/events.mux"
+        );
+        assert_eq!(
+            mux_url_from_origin("https://dsh.example:8443/"),
+            "wss://dsh.example:8443/api/events.mux"
+        );
+    }
+}

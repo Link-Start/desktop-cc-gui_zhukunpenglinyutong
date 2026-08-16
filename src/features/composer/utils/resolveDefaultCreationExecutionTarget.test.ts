@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { isResolvedExecutionTarget } from "../../shared-session/target/types";
 import {
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
 } from "../../threads/constants/codexProviderProfiles";
-import { resolveDefaultCreationExecutionTarget } from "./resolveDefaultCreationExecutionTarget";
+import {
+  isResolvedCreationExecutionTarget,
+  resolveDefaultCreationExecutionTarget,
+} from "./resolveDefaultCreationExecutionTarget";
 
 describe("resolveDefaultCreationExecutionTarget", () => {
   it("returns null when create-session is disabled", () => {
@@ -131,6 +136,50 @@ describe("resolveDefaultCreationExecutionTarget", () => {
     expect(isResolvedExecutionTarget(target)).toBe(true);
   });
 
+  it("builds a resolved DSH host catalog target for home create-session", () => {
+    const target = resolveDefaultCreationExecutionTarget({
+      enabled: true,
+      selectedEngine: "dsh",
+      selectedModelId: "grok-4.6/Grok 4.5",
+      providerProfileId: DSH_LOCAL_PROVIDER_PROFILE_ID,
+      models: [
+        {
+          id: "grok-4.6/Grok 4.5",
+          model: "Grok 4.5",
+        },
+        {
+          id: "grok-4.6/Grok 4.6",
+          model: "Grok 4.6",
+          isDefault: true,
+        },
+      ],
+    });
+
+    expect(target).toEqual({
+      engine: "dsh",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok-4.6/Grok 4.5",
+      model: "Grok 4.5",
+      reasoning: null,
+      providerProfileNameSnapshot: LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      providerProfileSource: "disk",
+    });
+    expect(isResolvedExecutionTarget(target)).toBe(false);
+    expect(isResolvedCreationExecutionTarget(target)).toBe(true);
+  });
+
+  it("rejects an incomplete DSH target on the create-session contract", () => {
+    expect(
+      isResolvedCreationExecutionTarget({
+        engine: "dsh",
+        providerProfileId: null,
+        modelCatalogEntryId: "grok-4.6/Grok 4.5",
+        model: "Grok 4.5",
+        providerProfileNameSnapshot: "本地配置",
+      }),
+    ).toBe(false);
+  });
+
   it("still builds Claude local defaults (regression)", () => {
     const target = resolveDefaultCreationExecutionTarget({
       enabled: true,
@@ -147,6 +196,33 @@ describe("resolveDefaultCreationExecutionTarget", () => {
 
     expect(target?.engine).toBe("claude");
     expect(target?.providerProfileSource).toBe("disk");
+    expect(isResolvedExecutionTarget(target)).toBe(true);
+  });
+
+  it("treats the PI local sentinel as disk, not a managed profile", () => {
+    const target = resolveDefaultCreationExecutionTarget({
+      enabled: true,
+      selectedEngine: "pi",
+      selectedModelId: "kimi-coding/k3",
+      providerProfileId: PI_LOCAL_PROVIDER_PROFILE_ID,
+      models: [
+        {
+          id: "kimi-coding/k3",
+          model: "kimi-coding/k3",
+          isDefault: true,
+        },
+      ],
+    });
+
+    expect(target).toEqual({
+      engine: "pi",
+      providerProfileId: null,
+      modelCatalogEntryId: "kimi-coding/k3",
+      model: "kimi-coding/k3",
+      reasoning: null,
+      providerProfileNameSnapshot: LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      providerProfileSource: "disk",
+    });
     expect(isResolvedExecutionTarget(target)).toBe(true);
   });
 });

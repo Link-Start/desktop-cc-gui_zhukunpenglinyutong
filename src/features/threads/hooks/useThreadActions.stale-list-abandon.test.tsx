@@ -15,6 +15,8 @@ import {
   listGeminiSessions,
   listGrokSessions,
   listKimiSessions,
+  listDshSessions,
+  listPiSessions,
   listThreadTitles,
   listThreads,
   listWorkspaceSessions,
@@ -43,6 +45,8 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
@@ -132,6 +136,8 @@ describe("useThreadActions list stale abandon (runtime workspace switch)", () =>
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
     vi.mocked(listKimiSessions).mockResolvedValue([]);
     vi.mocked(listGrokSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],

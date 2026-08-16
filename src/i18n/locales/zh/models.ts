@@ -16,6 +16,7 @@ const models = {
     refreshConfigFailed: "刷新失败：{{message}}",
     emptyChannelModelsTitle: "该供应商暂无可用模型",
     emptyChannelModelsHint: "可点击下方「添加模型」，在自定义模型中添加后使用",
+    emptyDshHostHint: "请在 DeepSeek Harness 中配置模型。点击此项打开设置。",
     claude: {
       fable5: {
         label: "Fable 5",

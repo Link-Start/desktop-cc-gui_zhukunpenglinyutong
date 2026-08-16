@@ -345,11 +345,11 @@
     }
 
     #[test]
-    fn active_keyword_and_archived_queries_require_exhaustive_scan() {
+    fn only_explicit_scan_mode_requires_exhaustive_scan() {
         assert!(!query_requires_exhaustive_scan(
             &WorkspaceSessionCatalogQuery::default()
         ));
-        assert!(query_requires_exhaustive_scan(
+        assert!(!query_requires_exhaustive_scan(
             &WorkspaceSessionCatalogQuery {
                 keyword: Some("needle".to_string()),
                 engine: None,
@@ -358,7 +358,7 @@
                 ..Default::default()
             }
         ));
-        assert!(query_requires_exhaustive_scan(
+        assert!(!query_requires_exhaustive_scan(
             &WorkspaceSessionCatalogQuery {
                 keyword: None,
                 engine: None,
@@ -373,6 +373,7 @@
                 engine: None,
                 status: Some("active".to_string()),
                 folder_id: Some("folder-a".to_string()),
+                scan_mode: Some("exhaustive".to_string()),
                 ..Default::default()
             }
         ));
@@ -382,6 +383,7 @@
                 engine: None,
                 status: Some("all".to_string()),
                 folder_id: None,
+                scan_mode: Some("bounded".to_string()),
                 ..Default::default()
             }
         ));
@@ -414,6 +416,12 @@
             parse_catalog_identity("plain-codex-id"),
             SessionCatalogIdentity::Codex {
                 session_id: "plain-codex-id".to_string()
+            }
+        );
+        assert_eq!(
+            parse_catalog_identity("pi:019fe705-27fd-712e-a1be-f972ef3773f3"),
+            SessionCatalogIdentity::Pi {
+                session_id: "019fe705-27fd-712e-a1be-f972ef3773f3".to_string()
             }
         );
     }

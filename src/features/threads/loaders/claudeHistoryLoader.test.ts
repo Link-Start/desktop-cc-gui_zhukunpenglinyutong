@@ -2086,3 +2086,21 @@ describe("createClaudeHistoryLoader token usage restore", () => {
     expect(snapshot.tokenUsage).toBeNull();
   });
 });
+
+describe("createClaudeHistoryLoader disk window", () => {
+  it("forwards load_claude_session hasMore/nextCursor onto snapshot meta", async () => {
+    const loader = createClaudeHistoryLoader({
+      workspaceId: "ws-window",
+      workspacePath: "/tmp/ws-window",
+      loadClaudeSession: vi.fn().mockResolvedValue({
+        messages: [{ kind: "message", id: "u-1", role: "user", text: "你好" }],
+        hasMore: true,
+        nextCursor: "120",
+      }),
+    });
+
+    const snapshot = await loader.load("claude:session-window");
+    expect(snapshot.meta.historyHasMore).toBe(true);
+    expect(snapshot.meta.historyNextCursor).toBe("120");
+  });
+});

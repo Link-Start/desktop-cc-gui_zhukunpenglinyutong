@@ -28,6 +28,8 @@ pub fn capability_state(engine_type: EngineType, capability: &str) -> &'static s
         EngineType::Grok => EngineFeatures::grok(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Pi => EngineFeatures::pi(),
+        EngineType::Dsh => EngineFeatures::dsh(),
     };
 
     match capability {
@@ -118,6 +120,30 @@ mod tests {
         );
         assert_eq!(
             capability_state(EngineType::OpenCode, "image.input"),
+            "supported"
+        );
+    }
+
+    #[test]
+    fn pi_supports_image_input_via_at_file_transport() {
+        assert_eq!(
+            spec_capability_state(EngineType::Pi, "image.input"),
+            "supported"
+        );
+        assert_eq!(
+            capability_state(EngineType::Pi, "image.input"),
+            "supported"
+        );
+    }
+
+    #[test]
+    fn pi_supports_thinking_effort() {
+        assert_eq!(
+            spec_capability_state(EngineType::Pi, "reasoning.effort"),
+            "supported"
+        );
+        assert_eq!(
+            capability_state(EngineType::Pi, "reasoning.effort"),
             "supported"
         );
     }

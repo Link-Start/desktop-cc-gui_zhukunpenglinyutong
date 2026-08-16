@@ -85,7 +85,14 @@ export type CodexLaunchProfilePreview = {
   nextLaunchOnly: boolean;
 };
 
-export type CliInstallEngine = "codex" | "claude" | "kimi" | "grok" | "opencode";
+export type CliInstallEngine =
+  | "claude"
+  | "codex"
+  | "grok"
+  | "kimi"
+  | "opencode"
+  | "pi"
+  | "dsh";
 
 export type CliInstallAction = "installLatest" | "updateLatest" | "uninstall";
 

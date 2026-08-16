@@ -48,6 +48,7 @@ import { CodexProviderDialog } from "./CodexProviderDialog";
 import { KimiProviderDialog } from "./KimiProviderDialog";
 import { GrokProviderDialog } from "./GrokProviderDialog";
 import { OpenCodeProviderDialog } from "./OpenCodeProviderDialog";
+import { PiProviderAuthSection } from "./PiProviderAuthSection";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { CustomModelDialog } from "./CustomModelDialog";
 import {
@@ -309,7 +310,17 @@ export function VendorSettingsPanel({
   const [unifiedExecActionBusy, setUnifiedExecActionBusy] = useState(false);
   const [unifiedExecActionNotice, setUnifiedExecActionNotice] =
     useState<InlineNoticeState>(null);
+  const [dshHostDraft, setDshHostDraft] = useState(appSettings.dshHost ?? "127.0.0.1");
+  const [dshPortDraft, setDshPortDraft] = useState(String(appSettings.dshPort ?? 3080));
   const didSeedCodexPluginModelsRef = useRef(false);
+
+  useEffect(() => {
+    setDshHostDraft(appSettings.dshHost ?? "127.0.0.1");
+  }, [appSettings.dshHost]);
+
+  useEffect(() => {
+    setDshPortDraft(String(appSettings.dshPort ?? 3080));
+  }, [appSettings.dshPort]);
 
   const claude = useProviderManagement();
   const codex = useCodexProviderManagement();
@@ -448,6 +459,10 @@ export function VendorSettingsPanel({
         return { path: appSettings.grokBin ?? null, args: null };
       case "opencode":
         return { path: appSettings.opencodeBin ?? null, args: null };
+      case "pi":
+        return { path: appSettings.piBin ?? null, args: null };
+      case "dsh":
+        return { path: appSettings.dshBin ?? null, args: null };
       case "codex":
         return {
           path: appSettings.codexBin ?? null,
@@ -481,6 +496,18 @@ export function VendorSettingsPanel({
           await onUpdateAppSettings({
             ...appSettings,
             opencodeBin: payload.path,
+          });
+          break;
+        case "pi":
+          await onUpdateAppSettings({
+            ...appSettings,
+            piBin: payload.path,
+          });
+          break;
+        case "dsh":
+          await onUpdateAppSettings({
+            ...appSettings,
+            dshBin: payload.path,
           });
           break;
         case "codex":
@@ -949,8 +976,18 @@ export function VendorSettingsPanel({
         kimiHasConfig,
         grokHasConfig,
         openCodeHasConfig,
+        piHasConfig: Boolean(appSettings.piBin?.trim()),
+        dshHasConfig: Boolean(appSettings.dshBin?.trim()),
       }),
-    [claudeHasConfig, codexGlobalConfigExists, kimiHasConfig, grokHasConfig, openCodeHasConfig],
+    [
+      appSettings.piBin,
+      appSettings.dshBin,
+      claudeHasConfig,
+      codexGlobalConfigExists,
+      kimiHasConfig,
+      grokHasConfig,
+      openCodeHasConfig,
+    ],
   );
   const filteredEngineNavItems = useMemo(() => {
     const normalizedQuery = cliSearchQuery.trim().toLowerCase();
@@ -1614,6 +1651,166 @@ export function VendorSettingsPanel({
               readContent={readOpenCodeConfigJson}
               saveContent={saveOpenCodeConfigJson}
             />
+          </div>
+          </CliLifecycleProvider>
+        ) : activeCli === "pi" ? (
+          <CliLifecycleProvider engine="pi" active>
+          <div className="vendor-tab-content vendor-tab-content-dense">
+            <CliBrandHeader
+              id="pi"
+              title="PI CLI"
+              description={t("settings.piDescription", {
+                defaultValue:
+                  "Install and configure the PI CLI used by ccgui. Auth and models stay in ~/.pi.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Official docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.pi}
+              actions={<CliLifecycleHeaderActions />}
+            />
+            <CliLifecycleInstallerPanel />
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                <div className="settings-help" style={{ padding: "8px 12px" }}>
+                  {t("settings.piCliLifecycleHint", {
+                    defaultValue:
+                      "Install, update, or uninstall the local PI CLI via npm package @earendil-works/pi-coding-agent. Auth and models stay in ~/.pi.",
+                  })}
+                </div>
+                {renderCustomPathEntry("pi")}
+              </div>
+            </VendorSettingsSection>
+            <VendorSettingsSection
+              label={t("settings.vendor.piAuth.sectionTitle", {
+                defaultValue: "供应商认证",
+              })}
+            >
+              <PiProviderAuthSection piBin={appSettings.piBin ?? null} />
+            </VendorSettingsSection>
+          </div>
+          </CliLifecycleProvider>
+        ) : activeCli === "dsh" ? (
+          <CliLifecycleProvider engine="dsh" active>
+          <div className="vendor-tab-content vendor-tab-content-dense">
+            <CliBrandHeader
+              id="dsh"
+              title="DeepSeek Harness"
+              description={t("settings.dshDescription", {
+                defaultValue:
+                  "DeepSeek Harness is a local Node host (dsh web). Configure models and API keys in the DSH Web UI, not in mossx.",
+              })}
+              helpLabel={t("settings.vendor.openCliDocs", {
+                defaultValue: "Official docs",
+              })}
+              href={CLI_DOCS_HREF_BY_ID.dsh}
+              actions={<CliLifecycleHeaderActions />}
+            />
+            <CliLifecycleInstallerPanel />
+            <VendorSettingsSection
+              label={t("settings.vendor.engineSettings", {
+                defaultValue: "Engine settings",
+              })}
+            >
+              <div className="vendor-group-card">
+                {renderCustomPathEntry("dsh")}
+                <div className="vendor-group-row">
+                  <div className="vendor-group-row-copy">
+                    <span className="vendor-group-row-title">
+                      {t("settings.vendor.dshHost")}
+                    </span>
+                  </div>
+                  <input
+                    className="vendor-input vendor-input-sm"
+                    value={dshHostDraft}
+                    aria-label={t("settings.vendor.dshHost")}
+                    onChange={(event) => setDshHostDraft(event.target.value)}
+                    onBlur={() => {
+                      const nextHost = dshHostDraft.trim() || "127.0.0.1";
+                      setDshHostDraft(nextHost);
+                      if (nextHost === (appSettings.dshHost ?? "127.0.0.1")) {
+                        return;
+                      }
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        dshHost: nextHost,
+                      });
+                    }}
+                  />
+                </div>
+                <div className="vendor-group-row">
+                  <div className="vendor-group-row-copy">
+                    <span className="vendor-group-row-title">
+                      {t("settings.vendor.dshPort")}
+                    </span>
+                  </div>
+                  <input
+                    className="vendor-input vendor-input-sm"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={dshPortDraft}
+                    aria-label={t("settings.vendor.dshPort")}
+                    onChange={(event) => setDshPortDraft(event.target.value)}
+                    onBlur={() => {
+                      const parsed = Number.parseInt(dshPortDraft, 10);
+                      const nextPort =
+                        Number.isFinite(parsed) && parsed > 0 && parsed <= 65535
+                          ? parsed
+                          : (appSettings.dshPort ?? 3080);
+                      setDshPortDraft(String(nextPort));
+                      if (nextPort === (appSettings.dshPort ?? 3080)) {
+                        return;
+                      }
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        dshPort: nextPort,
+                      });
+                    }}
+                  />
+                </div>
+                <div className="settings-toggle-row vendor-group-row">
+                  <div className="vendor-group-row-copy">
+                    <span className="vendor-group-row-title">
+                      {t("settings.vendor.dshAutoStart")}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={appSettings.dshAutoStart !== false}
+                    aria-label={t("settings.vendor.dshAutoStart")}
+                    onCheckedChange={(checked) =>
+                      void onUpdateAppSettings({
+                        ...appSettings,
+                        dshAutoStart: checked,
+                      })
+                    }
+                  />
+                </div>
+                <div className="vendor-group-row">
+                  <div className="vendor-group-row-copy">
+                    <span className="vendor-group-row-title">
+                      {t("settings.vendor.dshModelsHint")}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const host = (appSettings.dshHost ?? "").trim() || "127.0.0.1";
+                      const port = appSettings.dshPort || 3080;
+                      void openUrl(`http://${host}:${port}`);
+                    }}
+                  >
+                    {t("settings.vendor.dshOpenUi")}
+                  </Button>
+                </div>
+              </div>
+            </VendorSettingsSection>
           </div>
           </CliLifecycleProvider>
         ) : (

@@ -430,7 +430,7 @@ fn validate_turn_execution_snapshot(
 ) -> Result<(), FactValidationError> {
     if !matches!(
         snapshot.engine.as_str(),
-        "claude" | "codex" | "gemini" | "kimi" | "grok" | "opencode"
+        "claude" | "codex" | "gemini" | "kimi" | "grok" | "opencode" | "pi"
     ) {
         return Err(FactValidationError::new(
             ctx,
@@ -530,7 +530,7 @@ fn validate_provider_private_ref(
     require_non_empty(&pref.ref_id, "refId", ctx)?;
     if !matches!(
         pref.engine.as_str(),
-        "claude" | "codex" | "gemini" | "kimi" | "grok" | "opencode"
+        "claude" | "codex" | "gemini" | "kimi" | "grok" | "opencode" | "pi"
     ) {
         return Err(FactValidationError::new(
             ctx,
@@ -686,7 +686,7 @@ fn validate_timestamp(value: i64, name: &str, ctx: &str) -> Result<(), FactValid
 mod tests {
     use super::super::types::{
         CanonicalBlock, CanonicalProviderProfileSource, CanonicalUserInput, Outcome, OutcomeStatus,
-        TurnExecutionSnapshot, TurnRequestedFact, UsageRecordedFact, UsageShape,
+        ProviderPrivateRef, TurnExecutionSnapshot, TurnRequestedFact, UsageRecordedFact, UsageShape,
     };
     use super::*;
 
@@ -725,6 +725,28 @@ mod tests {
     fn valid_turn_requested_passes() {
         let fact = CanonicalFact::TurnRequested(valid_turn_requested());
         assert!(validate_fact(&fact).is_ok());
+    }
+
+    #[test]
+    fn turn_requested_accepts_pi_engine() {
+        let mut fact = valid_turn_requested();
+        fact.target.engine = "pi".to_string();
+        assert!(validate_fact(&CanonicalFact::TurnRequested(fact)).is_ok());
+    }
+
+    #[test]
+    fn provider_private_ref_accepts_pi_engine() {
+        let pref = ProviderPrivateRef {
+            ref_id: "ref-1".to_string(),
+            engine: "pi".to_string(),
+            kind: super::super::types::ProviderPrivateRefKind::ProviderRaw,
+            provider_profile_id: None,
+            model: None,
+            opaque_ref: None,
+            artifact_ref: None,
+            extra: serde_json::Value::Object(Default::default()),
+        };
+        assert!(validate_provider_private_ref(&pref, "test").is_ok());
     }
 
     #[test]

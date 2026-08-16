@@ -9,6 +9,8 @@ import {
   listGeminiSessions,
   listGrokSessions,
   listKimiSessions,
+  listDshSessions,
+  listPiSessions,
   listWorkspaceSessions,
   listThreadTitles,
   listThreads,
@@ -40,7 +42,15 @@ vi.mock("../../../services/tauri", () => ({
   listClaudeSessions: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(async () => ({
+    data: [],
+    source: "session-index",
+    synced: false,
+    engines: [],
+  })),
   listWorkspaceSessions: vi.fn(),
   listThreadTitles: vi.fn(),
   listThreads: vi.fn(),
@@ -127,6 +137,8 @@ describe("useThreadActions shared/native compatibility", () => {
     });
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
       nextCursor: null,
@@ -198,6 +210,7 @@ describe("useThreadActions shared/native compatibility", () => {
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {
         includeOpenCodeSessions: true,
+        includeEngineDiskLists: true,
       });
     });
 
@@ -249,7 +262,9 @@ describe("useThreadActions shared/native compatibility", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     await waitFor(() => {
@@ -387,6 +402,7 @@ describe("useThreadActions shared/native compatibility", () => {
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {
         includeOpenCodeSessions: true,
+        includeEngineDiskLists: true,
       });
     });
 
@@ -475,7 +491,9 @@ describe("useThreadActions shared/native compatibility", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     // 主路径 setThreads 先落地（binding 仍空，尚无 grok 行）

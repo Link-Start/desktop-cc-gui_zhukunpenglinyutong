@@ -22,6 +22,12 @@ const providers = {
     },
     "opencode": {
       "label": "OpenCode"
+    },
+    "dsh": {
+      "label": "DeepSeek Harness"
+    },
+    "pi": {
+      "label": "PI CLI"
     }
   }
 };

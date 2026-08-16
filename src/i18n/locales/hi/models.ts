@@ -19,6 +19,7 @@ const models = {
     "discoveringModels": "मॉडल खोजे जा रहे हैं...",
     "emptyChannelModelsTitle": "इस प्रदाता के पास अभी कोई मॉडल नहीं है",
     "emptyChannelModelsHint": "नीचे «मॉडल जोड़ें» पर क्लिक करके कस्टम मॉडल जोड़ें",
+    "emptyDshHostHint": "DeepSeek Harness में मॉडल कॉन्फ़िगर करें। सेटिंग्स खोलने के लिए यहाँ क्लिक करें।",
     "refreshConfigFailed": "रीफ़्रेश विफल: {{message}}",
         "claude": {
       "fable5": {

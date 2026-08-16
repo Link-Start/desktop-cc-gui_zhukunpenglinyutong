@@ -39,6 +39,8 @@ import {
   listGeminiSessions as listGeminiSessionsService,
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
+  listPiSessions as listPiSessionsService,
+  invalidateSessionIndexForWorkspace as invalidateSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
 import { sendSharedSessionTurnRouted } from "../../shared-session/runtime/sendSharedSessionTurn";
 import {
@@ -232,6 +234,7 @@ import {
 import {
   buildReviewCommandText,
   extractSessionIdFromEngineSendResponse,
+  resolveDshModelForSend,
   isCodexMissingThreadBindingError,
   isInvalidReviewThreadIdError,
   isLikelyForeignModelForGemini,
@@ -242,6 +245,7 @@ import {
   pickLikelyGeminiSessionId,
   pickLikelyGrokSessionId,
   pickLikelyKimiSessionId,
+  pickLikelyPiSessionId,
   primeThreadStreamLatencyForSend,
   resolveCollaborationModeIdFromPayload,
   resolveRecoverableCodexFirstPacketTimeout,
@@ -331,7 +335,7 @@ type HandleFusionStalledOptions = {
 type RunWithCreateSessionLoading = <T>(
   params: {
     workspace: WorkspaceInfo;
-    engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+    engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
   },
   action: () => Promise<T>,
 ) => Promise<T>;
@@ -372,7 +376,7 @@ type UseThreadMessagingOptions = {
   claudeThinkingVisible?: boolean;
   steerEnabled: boolean;
   customPrompts: CustomPromptOption[];
-  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+  activeEngine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
   threadStatusById: ThreadState["threadStatusById"];
   itemsByThread: ThreadState["itemsByThread"];
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
@@ -389,7 +393,7 @@ type UseThreadMessagingOptions = {
   getThreadEngine: (
     workspaceId: string,
     threadId: string,
-  ) => "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined;
+  ) => "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh" | undefined;
   getThreadKind?: (
     workspaceId: string,
     threadId: string,
@@ -429,7 +433,7 @@ type UseThreadMessagingOptions = {
     workspaceId: string,
     options?: {
       activate?: boolean;
-      engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+      engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
       folderId?: string | null;
       autoSession?: AutoSessionMetadata | null;
       providerProfileId?: string | null;
@@ -526,6 +530,8 @@ export function useThreadMessaging({
     geminiSessionIdByPendingThreadRef,
     grokSessionIdByPendingThreadRef,
     kimiSessionIdByPendingThreadRef,
+    dshSessionIdByPendingThreadRef,
+    piSessionIdByPendingThreadRef,
     isClaudePendingThreadAwaitingNativeSession,
     isThreadIdCompatibleWithEngine,
     normalizeEngineSelection,
@@ -1720,7 +1726,12 @@ export function useThreadMessaging({
       const modelForSend =
         resolvedEngine === "opencode"
           ? (sanitizedOpenCodeModel ?? "openai/gpt-5.3-codex")
-          : sanitizedOpenCodeModel;
+          : resolvedEngine === "dsh"
+            ? resolveDshModelForSend({
+                catalogId: selectedModelId,
+                runtimeModel: sanitizedOpenCodeModel,
+              })
+            : sanitizedOpenCodeModel;
       if (resolvedEngine === "opencode") {
         const normalizedModel = (modelForSend ?? "").trim().toLowerCase();
         const prevModel = lastOpenCodeModelByThreadRef.current.get(threadId);
@@ -2514,10 +2525,26 @@ export function useThreadMessaging({
                               ? (kimiSessionIdByPendingThreadRef.current.get(
                                   threadId,
                                 ) ?? null)
-                              : resolvedEngine === "opencode" &&
-                                  isOpenCodeSession
-                                ? threadId.slice("opencode:".length)
-                                : null;
+                              : resolvedEngine === "dsh" &&
+                                  threadId.startsWith("dsh:")
+                                ? threadId.slice("dsh:".length)
+                                : resolvedEngine === "dsh" &&
+                                    threadId.startsWith("dsh-pending-")
+                                  ? (dshSessionIdByPendingThreadRef.current.get(
+                                      threadId,
+                                    ) ?? null)
+                                  : resolvedEngine === "pi" &&
+                                      threadId.startsWith("pi:")
+                                    ? threadId.slice("pi:".length)
+                                    : resolvedEngine === "pi" &&
+                                        threadId.startsWith("pi-pending-")
+                                      ? (piSessionIdByPendingThreadRef.current.get(
+                                          threadId,
+                                        ) ?? null)
+                                      : resolvedEngine === "opencode" &&
+                                          isOpenCodeSession
+                                        ? threadId.slice("opencode:".length)
+                                        : null;
           const shouldAttachCliSpecRootHint =
             realSessionId === null && Boolean(customSpecRoot);
 
@@ -2830,6 +2857,83 @@ export function useThreadMessaging({
                     threadId,
                     sessionId: responseSessionId,
                     source: "kimiSessionListFallback",
+                  },
+                });
+              }
+            }
+            if (
+              resolvedEngine === "dsh" &&
+              threadId.startsWith("dsh-pending-")
+            ) {
+              const rawSessionId =
+                extractSessionIdFromEngineSendResponse(response);
+              const responseSessionId = rawSessionId?.startsWith("dsh:")
+                ? rawSessionId.slice("dsh:".length)
+                : rawSessionId;
+              if (responseSessionId) {
+                dshSessionIdByPendingThreadRef.current.set(
+                  threadId,
+                  responseSessionId,
+                );
+                onDebug?.({
+                  id: `${Date.now()}-client-dsh-session-cache`,
+                  timestamp: Date.now(),
+                  source: "client",
+                  label: "thread/session cached",
+                  payload: {
+                    workspaceId: workspace.id,
+                    threadId,
+                    sessionId: responseSessionId,
+                    source: "engineSendMessageResponse",
+                  },
+                });
+              }
+            }
+            if (
+              resolvedEngine === "pi" &&
+              threadId.startsWith("pi-pending-")
+            ) {
+              let responseSessionId =
+                extractSessionIdFromEngineSendResponse(response);
+              if (!responseSessionId) {
+                const workspacePath = workspace.path?.trim();
+                if (workspacePath) {
+                  try {
+                    const sessions = await listPiSessionsService(
+                      workspacePath,
+                      6,
+                    );
+                    responseSessionId = pickLikelyPiSessionId(
+                      sessions,
+                      sendRequestedAt - 120_000,
+                    );
+                  } catch {
+                    responseSessionId = null;
+                  }
+                }
+              }
+              if (responseSessionId) {
+                piSessionIdByPendingThreadRef.current.set(
+                  threadId,
+                  responseSessionId,
+                );
+                if (
+                  typeof invalidateSessionIndexForWorkspaceService === "function"
+                ) {
+                  void invalidateSessionIndexForWorkspaceService(
+                    workspace.id,
+                  ).catch(() => undefined);
+                }
+                onDebug?.({
+                  id: `${Date.now()}-client-pi-session-cache`,
+                  timestamp: Date.now(),
+                  source: "client",
+                  label: "thread/session cached",
+                  payload: {
+                    workspaceId: workspace.id,
+                    threadId,
+                    sessionId: responseSessionId,
+                    source: "piSessionListFallback",
                   },
                 });
               }
@@ -3170,6 +3274,8 @@ export function useThreadMessaging({
       geminiSessionIdByPendingThreadRef,
       grokSessionIdByPendingThreadRef,
       kimiSessionIdByPendingThreadRef,
+      dshSessionIdByPendingThreadRef,
+      piSessionIdByPendingThreadRef,
       getCustomName,
       getThreadEngine,
       isClaudePendingThreadAwaitingNativeSession,

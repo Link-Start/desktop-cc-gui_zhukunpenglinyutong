@@ -43,6 +43,18 @@ pub mod kimi;
 pub mod kimi_history;
 #[path = "../../engine/kimi_provider_profile.rs"]
 pub(crate) mod kimi_provider_profile;
+#[path = "../../engine/pi.rs"]
+pub mod pi;
+#[path = "../../engine/pi_auth.rs"]
+pub mod pi_auth;
+#[path = "../../engine/pi_history.rs"]
+pub mod pi_history;
+#[path = "../../engine/pi_provider_profile.rs"]
+pub(crate) mod pi_provider_profile;
+#[path = "../../engine/dsh/mod.rs"]
+pub mod dsh;
+#[path = "../../engine/dsh_provider_profile.rs"]
+pub(crate) mod dsh_provider_profile;
 #[allow(dead_code)]
 #[path = "../../engine/manager.rs"]
 pub mod manager;
@@ -503,6 +515,8 @@ pub enum EngineType {
     Grok,
     OpenCode,
     Kimi,
+    Pi,
+    Dsh,
 }
 
 impl Default for EngineType {
@@ -520,6 +534,8 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
+            EngineType::Pi => "PI CLI",
+            EngineType::Dsh => "DeepSeek Harness",
         }
     }
 
@@ -531,6 +547,8 @@ impl EngineType {
             EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
+            EngineType::Pi => "pi",
+            EngineType::Dsh => "dsh",
         }
     }
 }
@@ -551,7 +569,9 @@ pub(crate) fn engine_enabled_in_settings(
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => true,
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Dsh => true,
     }
 }
 
@@ -562,7 +582,9 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => None,
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Dsh => None,
     }
 }
 
@@ -791,6 +813,30 @@ impl EngineFeatures {
             mcp: false,
         }
     }
+
+    pub fn pi() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
+
+    pub fn dsh() -> Self {
+        Self {
+            reasoning_effort: true,
+            collaboration_mode: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
 }
 
 pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
@@ -801,6 +847,8 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Grok => EngineFeatures::grok(),
         EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Pi => EngineFeatures::pi(),
+        EngineType::Dsh => EngineFeatures::dsh(),
     };
     EngineStatus {
         engine_type,

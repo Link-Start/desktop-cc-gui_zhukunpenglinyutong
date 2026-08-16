@@ -2092,6 +2092,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
         { type: 'opencode', installed: true, version: '1.0.0' },
         { type: 'kimi', installed: true, version: '1.0.0' },
         { type: 'grok', installed: true, version: '1.0.0' },
+        { type: 'dsh', installed: true, version: '1.0.0' },
       ],
     });
 
@@ -2108,6 +2109,7 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
       opencode: true,
       kimi: true,
       grok: true,
+      dsh: false,
     });
   });
 
@@ -2201,5 +2203,15 @@ describe('ChatInputBoxAdapter toggle bridge', () => {
     const latest = mockState.latestProps as { currentProvider?: string };
 
     expect(latest.currentProvider).toBe('kimi');
+  });
+
+  it('reports pi as the current provider when the pi engine is selected', async () => {
+    renderAdapter({ selectedEngine: 'pi' });
+
+    await waitFor(() => expect(mockState.latestProps).toBeTruthy());
+
+    const latest = mockState.latestProps as { currentProvider?: string };
+
+    expect(latest.currentProvider).toBe('pi');
   });
 });

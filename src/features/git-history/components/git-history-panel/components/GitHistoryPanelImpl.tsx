@@ -78,7 +78,7 @@ import type {
   GitRepositorySummary,
   WorkspaceInfo,
 } from "../../../../../types";
-import type { EngineType } from "../../../../../types";
+
 import type {
   CommitMessageEngine,
   CommitMessageLanguage,
@@ -749,7 +749,7 @@ export type GitHistoryPanelViewScope = {
   createPrCanOpen: boolean;
   createPrCompareBranchOptions: GitHistoryInlinePickerOption[];
   createPrContentElapsedSec: number;
-  createPrContentEngine: EngineType;
+  createPrContentEngine: CommitMessageEngine;
   createPrContentError: string | null;
   createPrContentGenerating: boolean;
   createPrContentSlow: boolean;

@@ -21,6 +21,8 @@ mod claude_history_issue529_tests;
 pub(crate) mod claude_history_large_payload;
 #[cfg(test)]
 mod claude_history_large_payload_tests;
+#[cfg(test)]
+mod claude_history_list_budget_tests;
 pub(crate) mod claude_history_subagents;
 pub(crate) mod claude_message_content;
 pub(crate) mod cli_image_input;
@@ -39,6 +41,12 @@ pub(crate) mod grok_provider_profile;
 pub mod kimi;
 pub mod kimi_history;
 pub(crate) mod kimi_provider_profile;
+pub mod pi;
+pub mod pi_auth;
+pub(crate) mod pi_history;
+pub(crate) mod pi_provider_profile;
+pub mod dsh;
+pub(crate) mod dsh_provider_profile;
 pub mod manager;
 pub mod opencode;
 pub(crate) mod opencode_provider_profile;
@@ -53,6 +61,9 @@ pub use commands::*;
 pub use manager::EngineManager;
 pub use rewind_commands::*;
 pub use session_history_commands::*;
+pub use pi_auth::{
+    pi_auth_delete_credential, pi_auth_list_providers, pi_auth_set_api_key,
+};
 pub use status::resolve_engine_type;
 pub use task_output::*;
 
@@ -72,6 +83,10 @@ pub enum EngineType {
     OpenCode,
     /// Kimi Code CLI
     Kimi,
+    /// PI CLI
+    Pi,
+    /// DeepSeek Harness (dsh web host)
+    Dsh,
 }
 
 impl Default for EngineType {
@@ -90,6 +105,8 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
+            EngineType::Pi => "PI CLI",
+            EngineType::Dsh => "DeepSeek Harness",
         }
     }
 
@@ -102,6 +119,8 @@ impl EngineType {
             EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
+            EngineType::Pi => "pi",
+            EngineType::Dsh => "dsh",
         }
     }
 }
@@ -116,7 +135,9 @@ pub(crate) fn engine_enabled_in_settings(
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => true,
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Dsh => true,
     }
 }
 
@@ -127,7 +148,9 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
         | EngineType::Claude
         | EngineType::Codex
         | EngineType::Grok
-        | EngineType::Kimi => None,
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Dsh => None,
     }
 }
 
@@ -139,6 +162,8 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Grok => EngineFeatures::grok(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Pi => EngineFeatures::pi(),
+        EngineType::Dsh => EngineFeatures::dsh(),
     };
     EngineStatus {
         engine_type,
@@ -411,6 +436,32 @@ impl EngineFeatures {
             mcp: false,
         }
     }
+
+    pub fn pi() -> Self {
+        Self {
+            // PI: `--thinking` levels (off/minimal/low/medium/high/xhigh/max).
+            reasoning_effort: true,
+            collaboration_mode: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
+
+    /// Features for DeepSeek Harness (host-managed tools / catalog).
+    pub fn dsh() -> Self {
+        Self {
+            reasoning_effort: true,
+            collaboration_mode: false,
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
 }
 
 /// Parameters for sending a message to an engine
@@ -492,6 +543,7 @@ mod tests {
     fn engine_type_display_names() {
         assert_eq!(EngineType::Claude.display_name(), "Claude Code");
         assert_eq!(EngineType::Codex.display_name(), "Codex");
+        assert_eq!(EngineType::Pi.display_name(), "PI CLI");
     }
 
     #[test]
@@ -530,6 +582,12 @@ mod tests {
         assert!(grok.reasoning_effort);
         assert!(grok.image_input);
         assert!(!grok.mcp);
+
+        let pi = EngineFeatures::pi();
+        assert!(pi.reasoning_effort);
+        assert!(pi.image_input);
+        assert!(pi.session_resume);
+        assert!(!pi.mcp);
     }
 
     #[test]

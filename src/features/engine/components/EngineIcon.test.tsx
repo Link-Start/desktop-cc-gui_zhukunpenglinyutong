@@ -36,4 +36,13 @@ describe("EngineIcon", () => {
       expect(markup).not.toContain("<img");
     },
   );
+
+  it("renders DeepSeek Harness with the official whale icon", () => {
+    const markup = renderToStaticMarkup(<EngineIcon engine="dsh" size={16} />);
+
+    expect(markup).toContain("<img");
+    expect(markup).toContain("alt=\"DeepSeek Harness\"");
+    expect(markup).toMatch(/deepseek/i);
+    expect(markup).not.toContain("<svg");
+  });
 });

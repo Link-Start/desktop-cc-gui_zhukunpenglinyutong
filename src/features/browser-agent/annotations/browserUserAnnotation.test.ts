@@ -208,7 +208,69 @@ describe("BrowserUserAnnotation", () => {
       label: "This domain is for use in documentation examples.",
       selectorHint: "p",
     });
+    expect(annotation.locate).toMatchObject({
+      documentX: 254,
+      documentY: 510,
+      viewportX: 254,
+      viewportY: 510,
+      width: 742,
+      height: 112,
+    });
     expect(formatBrowserUserAnnotationEvidence(annotation)).toContain("w=742 h=112");
+  });
+
+  it("keeps native locate details instead of dropping them to element/selector only", () => {
+    const annotation = buildBrowserUserAnnotationFromSelectedElement({
+      annotationId: "selection-locate-1",
+      observation: makeObservation(),
+      element: {
+        tagName: "p",
+        role: null,
+        label: null,
+        text: "This domain is for use in documentation examples.",
+        href: null,
+        selectorHint: "p",
+        sensitive: false,
+        bounds: {
+          x: 254,
+          y: 510,
+          width: 742,
+          height: 112,
+        },
+        viewport: {
+          width: 1234,
+          height: 900,
+          scrollX: 0,
+          scrollY: 400,
+          devicePixelRatio: 2,
+        },
+        locate: {
+          documentX: 254,
+          documentY: 910,
+          viewportX: 254,
+          viewportY: 510,
+          width: 742,
+          height: 112,
+          scrollX: 0,
+          scrollY: 400,
+          listIndex: null,
+          listLength: null,
+          previousText: null,
+          nextText: "More information...",
+          ancestorLabel: "Example Domain",
+          cssPath: "body > div > p",
+        },
+        selectedAt: 1500,
+      },
+    });
+
+    expect(annotation.locate).toMatchObject({
+      documentX: 254,
+      documentY: 910,
+      nextText: "More information...",
+      ancestorLabel: "Example Domain",
+      cssPath: "body > div > p",
+    });
   });
 
   it("preserves precise selected link evidence for Composer context", () => {

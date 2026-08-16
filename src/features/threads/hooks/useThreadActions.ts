@@ -12,12 +12,27 @@ import {
   listGeminiSessions as listGeminiSessionsService,
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
+  listPiSessions as listPiSessionsService,
+  listDshSessions as listDshSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
 import {
+  filterSessionIndexRowsByEngine,
+  mergeSummariesForMissingEngines,
   sessionIndexRowsToThreadSummaries,
 } from "./sessionIndexThreadSummaries";
+import {
+  expandVisibilityHideSet,
+  isFullyVerifiedSharedNativeVisibility,
+  isUsableSharedNativeVisibility,
+  hasVerifiedSharedHide,
+  lastVerifiedSharedHide,
+  mergePreservedSharedThreadsForIndexFirstPaint,
+  rememberVerifiedSharedHideIfComplete,
+  strengthenVerifiedSharedHide,
+  unionHideSets,
+} from "./sharedNativeVisibility";
 import * as tauriServices from "../../../services/tauri";
 import {
   getThreadTimestamp,
@@ -68,10 +83,14 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  mergePiSessionSummaries,
+  mergeDshSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   normalizeGeminiSessionSummaries,
   normalizeGrokSessionSummaries,
   normalizeKimiSessionSummaries,
+  normalizePiSessionSummaries,
+  normalizeDshSessionSummaries,
   normalizeThreadListPartialSource,
   resolveThreadSourceMeta,
   seedLastGoodClaudeIntoMerged,
@@ -87,6 +106,7 @@ import {
   type GeminiSessionSummary,
   type GrokSessionSummary,
   type KimiSessionSummary,
+  type DshSessionSummary,
 } from "./useThreadActions.helpers";
 import { buildPartialHistoryDiagnostic } from "../utils/stabilityDiagnostics";
 import { buildThreadDebugCorrelation } from "../utils/threadDebugCorrelation";
@@ -106,6 +126,10 @@ import {
   GROK_SESSION_FETCH_TIMEOUT_MS,
   KIMI_SESSION_CACHE_TTL_MS,
   KIMI_SESSION_FETCH_TIMEOUT_MS,
+  DSH_SESSION_CACHE_TTL_MS,
+  DSH_SESSION_FETCH_TIMEOUT_MS,
+  PI_SESSION_CACHE_TTL_MS,
+  PI_SESSION_FETCH_TIMEOUT_MS,
   NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS,
   OPENCODE_FULL_CATALOG_FETCH_TIMEOUT_MS,
   THREAD_LIST_LIVE_REQUEST_TIMEOUT_MS,
@@ -175,10 +199,18 @@ export function useThreadActions({
     Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
   >({});
   const kimiRefreshAttemptedRef = useRef<Record<string, boolean>>({});
+  const piSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
+  >({});
+  const piRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const grokSessionCacheRef = useRef<
     Record<string, { fetchedAt: number; sessions: GrokSessionSummary[] }>
   >({});
   const grokRefreshAttemptedRef = useRef<Record<string, boolean>>({});
+  const dshSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: DshSessionSummary[] }>
+  >({});
+  const dshRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const threadListRequestSeqRef = useRef<Record<string, number>>({});
   const lastGoodThreadSummariesByWorkspaceEngineRef = useRef<
     Record<string, LastGoodThreadSummariesByEngine>
@@ -326,6 +358,11 @@ export function useThreadActions({
       options?: {
         preserveState?: boolean;
         includeOpenCodeSessions?: boolean;
+        /**
+         * Opt-in engine disk `list_*` fan-out (Gemini/Grok/Kimi/PI).
+         * Default false: sidebar hydrate uses Session Index.
+         */
+        includeEngineDiskLists?: boolean;
         deletedThreadIds?: string[];
         recoverySource?: AutomaticRuntimeRecoverySource;
         allowRuntimeReconnect?: boolean;
@@ -337,6 +374,8 @@ export function useThreadActions({
         forceSessionIndexSync?: boolean;
         /** Orchestrator cancel/stale flag — skip late setThreads after soft-ignore cancel. */
         isStale?: () => boolean;
+        /** Importer refresh: merge SQLite rows onto the current list. */
+        mergeExistingThreads?: boolean;
       },
     ) => {
       // Store workspace path for Claude session loading
@@ -357,6 +396,9 @@ export function useThreadActions({
       // First-paint never fans out OpenCode/native multi-engine lists.
       const includeOpenCodeSessions =
         !isFirstPaintHydration && (options?.includeOpenCodeSessions ?? true);
+      // Gemini/Grok/Kimi disk list is opt-in. Default hydrate uses Session Index.
+      const includeEngineDiskLists =
+        !isFirstPaintHydration && options?.includeEngineDiskLists === true;
       const deletedThreadIds = [
         ...new Set(
           (options?.deletedThreadIds ?? [])
@@ -447,9 +489,11 @@ export function useThreadActions({
         // CRITICAL UX: on first-paint, await index FIRST and paint immediately.
         // Do NOT wait for titles/shared/codex live list — that left the sidebar
         // stuck on stale sidebarSnapshot for seconds (user: old list → late correct).
+        // One display page (20) per engine feeds the mixed top-20 view; older
+        // rows arrive via keyset paging (sidebar 更多).
         const sessionIndexLimit = Math.max(
           resolveInitialThreadListTargetCount(workspace) * 4,
-          50,
+          20,
         );
         // Only explicit soft re-sync forces writers; cold first-paint must hit
         // warm SQLite (ms) so stale sidebarSnapshot is replaced immediately.
@@ -467,13 +511,31 @@ export function useThreadActions({
             listSessionIndexForWorkspaceService(workspace.id, {
               limit: sessionIndexLimit,
               // Warm SQLite should answer without rescan; force only soft re-sync.
-              syncIfNeeded: true,
+              syncIfNeeded: !isFirstPaintHydration,
               forceSync: forceIndexSync,
             })
               .then((page) => page ?? null)
               .catch(() => null),
             sessionIndexTimeoutMs,
           );
+          // First-paint 2.5s can expire if a writer is still running. Retry a
+          // warm read so already-indexed native PI rows still reach the sidebar.
+          if (
+            sessionIndexPage === null &&
+            isFirstPaintHydration &&
+            !forceIndexSync
+          ) {
+            sessionIndexPage = await withTimeout(
+              listSessionIndexForWorkspaceService(workspace.id, {
+                limit: sessionIndexLimit,
+                syncIfNeeded: false,
+                forceSync: false,
+              })
+                .then((page) => page ?? null)
+                .catch(() => null),
+              800,
+            );
+          }
         }
         {
           const abandoned = abandonIfStale();
@@ -483,21 +545,46 @@ export function useThreadActions({
         }
         // Progressive paint: replace stale snapshot ASAP with index rows.
         // Urgent dispatch (not startTransition) so WebView paints before heavy work.
+        // Never paint ordinary native Index rows with an empty/unverified hide set.
         let earlyIndexPaintApplied = false;
+        const indexVisibility = sessionIndexPage?.visibility ?? null;
+        const visibilityHideSet = expandVisibilityHideSet(indexVisibility);
+        const verifiedHideSet = lastVerifiedSharedHide(workspace.id);
+        const canProjectIndexNatives =
+          isUsableSharedNativeVisibility(indexVisibility) ||
+          hasVerifiedSharedHide(workspace.id);
+        const earlyPaintHideSet = unionHideSets(
+          visibilityHideSet,
+          verifiedHideSet,
+          expandHiddenSharedBindingIds([...getCollabWorkerNativeHideIds()]),
+        );
+        rememberVerifiedSharedHideIfComplete(
+          workspace.id,
+          indexVisibility,
+          earlyPaintHideSet,
+        );
         if (
           isFirstPaintHydration &&
           sessionIndexPage &&
           Array.isArray(sessionIndexPage.data) &&
-          sessionIndexPage.data.length > 0
+          sessionIndexPage.data.length > 0 &&
+          canProjectIndexNatives
         ) {
-          const earlyIndexSummaries = sessionIndexRowsToThreadSummaries(
-            sessionIndexPage.data,
-            {
-              workspaceId: workspace.id,
-              mappedTitles: {},
-              getCustomName,
-              hiddenSharedBindingIds: new Set(),
-            },
+          const earlyIndexSummaries = mergeSummariesForMissingEngines(
+            mergePreservedSharedThreadsForIndexFirstPaint(
+              sessionIndexRowsToThreadSummaries(sessionIndexPage.data, {
+                workspaceId: workspace.id,
+                mappedTitles: {},
+                getCustomName,
+                hiddenSharedBindingIds: earlyPaintHideSet,
+              }),
+              threadsByWorkspace[workspace.id],
+              getLastGoodThreadSummariesWithoutDeleted(),
+            ),
+            [
+              ...(threadsByWorkspace[workspace.id] ?? []),
+              ...getLastGoodThreadSummariesWithoutDeleted(),
+            ],
           );
           if (earlyIndexSummaries.length > 0) {
             // Urgent early paint still yields one macrotask when a click is
@@ -524,9 +611,56 @@ export function useThreadActions({
                 source: sessionIndexPage.source,
                 syncMs: sessionIndexPage.syncMs ?? null,
                 engines: sessionIndexPage.engines,
+                visibilityAvailable: Boolean(indexVisibility?.available),
+                hiddenCount: earlyPaintHideSet.size,
               },
             });
           }
+        } else if (
+          isFirstPaintHydration &&
+          sessionIndexPage &&
+          Array.isArray(sessionIndexPage.data) &&
+          sessionIndexPage.data.length > 0 &&
+          !canProjectIndexNatives
+        ) {
+          rememberPartialSource("shared-visibility-unavailable");
+          const piIndexSummaries = sessionIndexRowsToThreadSummaries(
+            filterSessionIndexRowsByEngine(sessionIndexPage.data, "pi"),
+            {
+              workspaceId: workspace.id,
+              mappedTitles: {},
+              getCustomName,
+              hiddenSharedBindingIds: earlyPaintHideSet,
+            },
+          );
+          const earlyPiSummaries = mergePreservedSharedThreadsForIndexFirstPaint(
+            piIndexSummaries,
+            threadsByWorkspace[workspace.id],
+            getLastGoodThreadSummariesWithoutDeleted(),
+          );
+          if (earlyPiSummaries.length > 0) {
+            await yieldIfInteractiveInputPending();
+          }
+          if (earlyPiSummaries.length > 0 && isLatestThreadListRequest()) {
+            dispatch({
+              type: "setThreads",
+              workspaceId: workspace.id,
+              threads: earlyPiSummaries,
+            });
+            earlyIndexPaintApplied = true;
+            appliedThreadListUpdate = true;
+          }
+          onDebug?.({
+            id: `${Date.now()}-client-session-index-visibility-pending`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "thread/list session-index visibility pending",
+            payload: {
+              workspaceId: workspace.id,
+              reason: indexVisibility?.reason ?? "visibility-unavailable",
+              piRowCount: piIndexSummaries.length,
+            },
+          });
         } else if (sessionIndexPage === null) {
           rememberPartialSource("session-index-timeout");
         }
@@ -579,11 +713,24 @@ export function useThreadActions({
         const sharedSessions = normalizeSharedSessionSummaries(
           sharedSessionsResult ?? [],
         );
-        const hiddenSharedBindingIds = expandHiddenSharedBindingIds([
-          ...sharedSessions.flatMap((session) => session.nativeThreadIds),
-          // 协作 worker realtime 登记的 native id（改名 Agent N 后仍能 strip）
-          ...getCollabWorkerNativeHideIds(),
-        ]);
+        const hiddenSharedBindingIds = unionHideSets(
+          expandHiddenSharedBindingIds([
+            ...sharedSessions.flatMap((session) => session.nativeThreadIds),
+            // 协作 worker realtime 登记的 native id（改名 Agent N 后仍能 strip）
+            ...getCollabWorkerNativeHideIds(),
+          ]),
+          visibilityHideSet,
+          verifiedHideSet,
+        );
+        if (isFullyVerifiedSharedNativeVisibility(indexVisibility)) {
+          rememberVerifiedSharedHideIfComplete(
+            workspace.id,
+            indexVisibility,
+            hiddenSharedBindingIds,
+          );
+        } else {
+          strengthenVerifiedSharedHide(workspace.id, hiddenSharedBindingIds);
+        }
         const nativeOwnerToSharedThreadId =
           buildNativeOwnerToSharedThreadMap(sharedSessions);
         const existingThreads = filterDeletedSummaries(
@@ -625,6 +772,20 @@ export function useThreadActions({
         const hasFreshKimiCache =
           !!cachedKimi &&
           Date.now() - cachedKimi.fetchedAt <= KIMI_SESSION_CACHE_TTL_MS;
+        const hasPiSignal =
+          existingThreads.some(
+            (thread) =>
+              thread.engineSource === "pi" ||
+              thread.id.startsWith("pi:") ||
+              thread.id.startsWith("pi-pending-"),
+          ) ||
+          activeThreadId.startsWith("pi:") ||
+          activeThreadId.startsWith("pi-pending-") ||
+          Object.keys(mappedTitles).some((id) => id.startsWith("pi:"));
+        const cachedPi = piSessionCacheRef.current[workspace.id];
+        const hasFreshPiCache =
+          !!cachedPi &&
+          Date.now() - cachedPi.fetchedAt <= PI_SESSION_CACHE_TTL_MS;
         const hasGrokSignal =
           existingThreads.some(
             (thread) =>
@@ -635,10 +796,24 @@ export function useThreadActions({
           activeThreadId.startsWith("grok:") ||
           activeThreadId.startsWith("grok-pending-") ||
           Object.keys(mappedTitles).some((id) => id.startsWith("grok:"));
+        const hasDshSignal =
+          existingThreads.some(
+            (thread) =>
+              thread.engineSource === "dsh" ||
+              thread.id.startsWith("dsh:") ||
+              thread.id.startsWith("dsh-pending-"),
+          ) ||
+          activeThreadId.startsWith("dsh:") ||
+          activeThreadId.startsWith("dsh-pending-") ||
+          Object.keys(mappedTitles).some((id) => id.startsWith("dsh:"));
         const cachedGrok = grokSessionCacheRef.current[workspace.id];
         const hasFreshGrokCache =
           !!cachedGrok &&
           Date.now() - cachedGrok.fetchedAt <= GROK_SESSION_CACHE_TTL_MS;
+        const cachedDsh = dshSessionCacheRef.current[workspace.id];
+        const hasFreshDshCache =
+          !!cachedDsh &&
+          Date.now() - cachedDsh.fetchedAt <= DSH_SESSION_CACHE_TTL_MS;
         const knownActivityByThread =
           threadActivityRef.current[workspace.id] ?? {};
         const hasKnownActivity = Object.keys(knownActivityByThread).length > 0;
@@ -962,6 +1137,34 @@ export function useThreadActions({
         }
         if (sessionIndexPage) {
           rememberPartialSource(sessionIndexPage.partialSource);
+          const canMergeIndexNatives =
+            isUsableSharedNativeVisibility(indexVisibility) ||
+            hasVerifiedSharedHide(workspace.id);
+          if (!canMergeIndexNatives) {
+            rememberPartialSource("shared-visibility-unavailable");
+            getLastGoodThreadSummariesWithoutDeleted().forEach((summary) => {
+              if (!mergedById.has(summary.id)) {
+                mergedById.set(summary.id, summary);
+              }
+            });
+            sessionIndexRowsToThreadSummaries(
+              filterSessionIndexRowsByEngine(sessionIndexPage.data ?? [], "pi"),
+              {
+                workspaceId: workspace.id,
+                mappedTitles,
+                getCustomName,
+                hiddenSharedBindingIds,
+              },
+            ).forEach((summary) => {
+              const prev = mergedById.get(summary.id);
+              if (!prev || summary.updatedAt >= prev.updatedAt) {
+                mergedById.set(
+                  summary.id,
+                  prev ? { ...summary, name: prev.name || summary.name } : summary,
+                );
+              }
+            });
+          } else {
           const indexSummaries = sessionIndexRowsToThreadSummaries(
             sessionIndexPage.data ?? [],
             {
@@ -995,6 +1198,7 @@ export function useThreadActions({
               });
             }
           });
+          }
           if (!earlyIndexPaintApplied) {
             onDebug?.({
               id: `${Date.now()}-client-session-index`,
@@ -1438,6 +1642,48 @@ export function useThreadActions({
             }
           });
         }
+        if (hasDshSignal) {
+          existingThreads.forEach((thread) => {
+            if (
+              thread.threadKind === "shared" ||
+              hiddenSharedBindingIds.has(thread.id)
+            ) {
+              return;
+            }
+            const isDshThread =
+              thread.engineSource === "dsh" ||
+              thread.id.startsWith("dsh:") ||
+              thread.id.startsWith("dsh-pending-");
+            if (
+              !isDshThread ||
+              !isRetainableEngineContinuitySummary("dsh", thread)
+            ) {
+              return;
+            }
+            const prev = mergedById.get(thread.id);
+            const threadUpdatedAt = Number.isFinite(thread.updatedAt)
+              ? Math.max(0, thread.updatedAt)
+              : 0;
+            const updatedAt =
+              threadUpdatedAt ||
+              nextActivityByThread[thread.id] ||
+              prev?.updatedAt ||
+              0;
+            if (updatedAt > (nextActivityByThread[thread.id] ?? 0)) {
+              nextActivityByThread[thread.id] = updatedAt;
+              didChangeActivity = true;
+            }
+            const next: ThreadSummary = {
+              ...thread,
+              updatedAt,
+              engineSource: "dsh",
+              threadKind: thread.threadKind ?? "native",
+            };
+            if (!prev || next.updatedAt >= prev.updatedAt) {
+              mergedById.set(thread.id, next);
+            }
+          });
+        }
         allSummaries = Array.from(mergedById.values()).sort(
           (a, b) => b.updatedAt - a.updatedAt,
         );
@@ -1467,6 +1713,19 @@ export function useThreadActions({
             hiddenSharedBindingIds,
           );
         }
+        if (hasFreshPiCache && cachedPi.sessions.length > 0) {
+          allSummaries = mergePiSessionSummaries(
+            allSummaries,
+            cachedPi.sessions.filter(
+              (session) =>
+                !hiddenSharedBindingIds.has(`pi:${session.sessionId}`),
+            ),
+            workspace.id,
+            mappedTitles,
+            getCustomName,
+            hiddenSharedBindingIds,
+          );
+        }
         if (hasFreshGrokCache && cachedGrok.sessions.length > 0) {
           allSummaries = mergeGrokSessionSummaries(
             allSummaries,
@@ -1478,6 +1737,19 @@ export function useThreadActions({
             mappedTitles,
             getCustomName,
             nativeOwnerToSharedThreadId,
+            hiddenSharedBindingIds,
+          );
+        }
+        if (hasFreshDshCache && cachedDsh.sessions.length > 0) {
+          allSummaries = mergeDshSessionSummaries(
+            allSummaries,
+            cachedDsh.sessions.filter(
+              (session) =>
+                !hiddenSharedBindingIds.has(`dsh:${session.sessionId}`),
+            ),
+            workspace.id,
+            mappedTitles,
+            getCustomName,
             hiddenSharedBindingIds,
           );
         }
@@ -1652,10 +1924,20 @@ export function useThreadActions({
             return abandoned;
           }
         }
+        const sessionIndexOldest = sessionIndexPage?.data?.length
+          ? sessionIndexPage.data[sessionIndexPage.data.length - 1]
+          : null;
         const cursorForDisplay = resolveThreadListCursorForDisplay({
           catalogCursor: projectCatalogValue?.nextCursor ?? null,
           catalogPartialSource: projectCatalogValue?.partialSource ?? null,
           runtimeCursor: cursor,
+          sessionIndexHasMore: sessionIndexPage?.hasMore ?? false,
+          sessionIndexOldestKey: sessionIndexOldest
+            ? {
+                updatedAt: Number(sessionIndexOldest.updatedAt) || 0,
+                sessionId: String(sessionIndexOldest.sessionId ?? "").trim(),
+              }
+            : null,
         });
         const previewUpdates: Array<{
           threadId: string;
@@ -1719,7 +2001,7 @@ export function useThreadActions({
           geminiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGeminiSessions =
           isLatestThreadListRequest() &&
-          !isFirstPaintHydration &&
+          includeEngineDiskLists &&
           (hasGeminiSignal || !!cachedGemini || !hasAttemptedGeminiRefresh);
         if (shouldRefreshGeminiSessions) {
           void (async () => {
@@ -1830,14 +2112,36 @@ export function useThreadActions({
           kimiRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshKimiSessions =
           isLatestThreadListRequest() &&
-          !isFirstPaintHydration &&
+          includeEngineDiskLists &&
           (hasKimiSignal || !!cachedKimi || !hasAttemptedKimiRefresh);
         const hasAttemptedGrokRefresh =
           grokRefreshAttemptedRef.current[workspace.id] === true;
         const shouldRefreshGrokSessions =
           isLatestThreadListRequest() &&
-          !isFirstPaintHydration &&
+          includeEngineDiskLists &&
           (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
+        const hasAttemptedDshRefresh =
+          dshRefreshAttemptedRef.current[workspace.id] === true;
+        // DSH is host-RPC only and is often missing from Session Index.
+        // First-paint (and the post-first-paint index soft refresh, which
+        // reuses first-paint mode) must still probe the live host once, or
+        // the sidebar permanently loses native DSH history after cold start
+        // marks full-catalog "fresh" without ever listing DSH sessions.
+        const indexHasDshRows = Boolean(
+          sessionIndexPage?.data?.some((row) => {
+            const engine = String(row.engine ?? "")
+              .trim()
+              .toLowerCase();
+            return engine === "dsh";
+          }),
+        );
+        const shouldRefreshDshSessions =
+          isLatestThreadListRequest() &&
+          ((includeEngineDiskLists &&
+            (hasDshSignal || !!cachedDsh || !hasAttemptedDshRefresh)) ||
+            (isFirstPaintHydration &&
+              !indexHasDshRows &&
+              !hasAttemptedDshRefresh));
         if (shouldRefreshGrokSessions) {
           void (async () => {
             grokRefreshAttemptedRef.current[workspace.id] = true;
@@ -2057,6 +2361,162 @@ export function useThreadActions({
             }
           })();
         }
+        if (shouldRefreshDshSessions) {
+          void (async () => {
+            dshRefreshAttemptedRef.current[workspace.id] = true;
+            const dshResult = await withTimeout(
+              listDshSessionsService(workspace.path, 50),
+              DSH_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (!isLatestThreadListRequest()) {
+              return;
+            }
+            if (dshResult === null) {
+              onDebug?.({
+                id: `${Date.now()}-client-dsh-session-timeout`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/list dsh timeout",
+                payload: {
+                  workspaceId: workspace.id,
+                  timeoutMs: DSH_SESSION_FETCH_TIMEOUT_MS,
+                },
+              });
+              return;
+            }
+            const normalizedDshSessions =
+              normalizeDshSessionSummaries(dshResult);
+            dshSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedDshSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergeDshSessionSummaries(
+              baselineSummaries,
+              normalizedDshSessions.filter(
+                (session) =>
+                  !hiddenSharedBindingIds.has(`dsh:${session.sessionId}`),
+              ),
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds,
+            );
+            const visibleNextSummaries = applySessionArchiveState(
+              stripHiddenSharedBindingSummaries(
+                nextSummaries,
+                hiddenSharedBindingIds,
+              ),
+              await archivedSessionMapPromise,
+            );
+            const unchanged =
+              visibleNextSummaries.length === baselineSummaries.length &&
+              visibleNextSummaries.every((entry, index) => {
+                const prev = baselineSummaries[index];
+                return (
+                  !!prev &&
+                  prev.id === entry.id &&
+                  prev.name === entry.name &&
+                  prev.updatedAt === entry.updatedAt &&
+                  prev.engineSource === entry.engineSource &&
+                  prev.threadKind === entry.threadKind
+                );
+              });
+            if (!unchanged) {
+              await yieldIfInteractiveInputPending();
+              if (!isLatestThreadListRequest()) {
+                return;
+              }
+              dispatch({
+                type: "setThreads",
+                workspaceId: workspace.id,
+                threads: visibleNextSummaries,
+              });
+              latestThreadsByWorkspaceRef.current = {
+                ...latestThreadsByWorkspaceRef.current,
+                [workspace.id]: visibleNextSummaries,
+              };
+            }
+          })();
+        }
+        const hasAttemptedPiRefresh =
+          piRefreshAttemptedRef.current[workspace.id] === true;
+        const indexHasPiRows = Boolean(
+          sessionIndexPage?.data?.some((row) => {
+            const engine = String(row.engine ?? "")
+              .trim()
+              .toLowerCase();
+            return engine === "pi";
+          }),
+        );
+        const shouldRefreshPiSessions =
+          isLatestThreadListRequest() &&
+          ((includeEngineDiskLists &&
+            (hasPiSignal || !!cachedPi || !hasAttemptedPiRefresh)) ||
+            (isFirstPaintHydration &&
+              !indexHasPiRows &&
+              !hasAttemptedPiRefresh));
+        if (shouldRefreshPiSessions) {
+          void (async () => {
+            piRefreshAttemptedRef.current[workspace.id] = true;
+            const piResult = await withTimeout(
+              listPiSessionsService(workspace.path, 50),
+              PI_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (!isLatestThreadListRequest()) {
+              return;
+            }
+            if (piResult === null) {
+              onDebug?.({
+                id: `${Date.now()}-client-pi-session-timeout`,
+                timestamp: Date.now(),
+                source: "client",
+                label: "thread/list pi timeout",
+                payload: {
+                  workspaceId: workspace.id,
+                  timeoutMs: PI_SESSION_FETCH_TIMEOUT_MS,
+                },
+              });
+              return;
+            }
+            const normalizedPiSessions = normalizePiSessionSummaries(piResult);
+            piSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedPiSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergePiSessionSummaries(
+              baselineSummaries,
+              normalizedPiSessions,
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds,
+            );
+            const visibleNextSummaries = applySessionArchiveState(
+              nextSummaries,
+              await archivedSessionMapPromise,
+            );
+            if (!isLatestThreadListRequest()) {
+              return;
+            }
+            dispatch({
+              type: "setThreads",
+              workspaceId: workspace.id,
+              threads: visibleNextSummaries,
+            });
+            latestThreadsByWorkspaceRef.current = {
+              ...latestThreadsByWorkspaceRef.current,
+              [workspace.id]: visibleNextSummaries,
+            };
+          })();
+        }
       } catch (error) {
         const fallbackThreads = filterRetainableContinuitySummaries(
           getLastGoodThreadSummaries(workspace.id),
@@ -2185,19 +2645,15 @@ export function useThreadActions({
 
   const deleteThreadForWorkspace = useMemo(() => {
     const deleteThread = createDeleteThreadForWorkspaceAction({
-      archiveClaudeThread,
       threadsByWorkspace,
-      workspacePathsByIdRef,
     });
     return async (workspaceId: string, threadId: string) => {
       await deleteThread(workspaceId, threadId);
       removeThreadFromCachedSummaries(workspaceId, threadId);
     };
   }, [
-    archiveClaudeThread,
     removeThreadFromCachedSummaries,
     threadsByWorkspace,
-    workspacePathsByIdRef,
   ]);
 
   return {

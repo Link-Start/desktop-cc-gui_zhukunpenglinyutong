@@ -198,7 +198,12 @@ export function useAppShellComposerSendSection(
             images,
             mergeSelectedAgentOption({
               ...turnOptions,
-              model: createSessionTarget.model,
+              // DSH host RPC parses `provider/model`; runtime-only names drop
+              // the provider and silently keep the host default.
+              model:
+                createSessionTarget.engine === "dsh"
+                  ? createSessionTarget.modelCatalogEntryId
+                  : createSessionTarget.model,
               effort: createSessionTarget.effort,
             }),
           );

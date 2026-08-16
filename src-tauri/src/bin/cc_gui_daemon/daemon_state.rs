@@ -1,6 +1,7 @@
 use super::*;
 use engine::grok::resolve_grok_session_id_for_engine_send;
 use engine::kimi::resolve_kimi_session_id_for_engine_send;
+use engine::pi::resolve_pi_session_id_for_engine_send;
 use tokio::time::Duration;
 mod file_access;
 mod git;
@@ -665,6 +666,11 @@ impl DaemonState {
         crate::codex::run_opencode_doctor_with_settings(opencode_bin, &settings).await
     }
 
+    pub(super) async fn dsh_doctor(&self, dsh_bin: Option<String>) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        crate::codex::run_dsh_doctor_with_settings(dsh_bin, &settings).await
+    }
+
     pub(super) async fn cli_install_plan(
         &self,
         engine: crate::codex_installer::CliInstallEngine,
@@ -887,6 +893,18 @@ impl DaemonState {
                 },
             )
             .await;
+        self.engine_manager
+            .set_engine_config(
+                engine::EngineType::Dsh,
+                engine::EngineConfig {
+                    bin_path: settings.dsh_bin.clone(),
+                    home_dir: None,
+                    custom_args: None,
+                    default_model: None,
+                },
+            )
+            .await;
+        let _ = engine::dsh::runtime_settings_from_app(&settings);
     }
 
     pub(super) async fn detect_engines(&self) -> Vec<engine::EngineStatus> {
@@ -1339,8 +1357,14 @@ impl DaemonState {
                                     engine::EngineType::Kimi => {
                                         current_thread_id = format!("kimi:{}", session_id);
                                     }
+                                    engine::EngineType::Pi => {
+                                        current_thread_id = format!("pi:{}", session_id);
+                                    }
                                     engine::EngineType::Grok => {
                                         current_thread_id = format!("grok:{}", session_id);
+                                    }
+                                    engine::EngineType::Dsh => {
+                                        current_thread_id = format!("dsh:{}", session_id);
                                     }
                                     engine::EngineType::Codex => {}
                                 }
@@ -2079,6 +2103,251 @@ impl DaemonState {
                     }
                 }))
             }
+            engine::EngineType::Pi => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_binding_lookup_session_id = session_id
+                    .as_deref()
+                    .or(thread_id.as_deref())
+                    .map(str::to_string);
+                let effective_provider_profile_id =
+                    session_management::resolve_engine_provider_profile_id(
+                        self.storage_path.as_path(),
+                        &workspace_id,
+                        provider_binding_lookup_session_id.as_deref(),
+                        "pi",
+                        provider_profile_id.as_deref(),
+                    )?;
+                let provider_launch_profile =
+                    engine::pi_provider_profile::resolve_pi_provider_launch_profile(
+                        &workspace_id,
+                        effective_provider_profile_id.as_deref(),
+                        None,
+                    )?;
+                let session = self
+                    .engine_manager
+                    .get_or_create_pi_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.home_dir.as_deref(),
+                    )
+                    .await;
+                let resolved_session_id = resolve_pi_session_id_for_engine_send(
+                    continue_session,
+                    session_id,
+                    session.get_session_id().await,
+                );
+                let response_session_id = resolved_session_id.clone();
+                let sanitized_model = model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string());
+
+                let params = engine::SendMessageParams {
+                    text,
+                    model: sanitized_model,
+                    effort,
+                    disable_thinking: false,
+                    access_mode,
+                    images,
+                    continue_session,
+                    session_id: resolved_session_id,
+                    fork_session_id: None,
+                    agent: None,
+                    variant: None,
+                    collaboration_mode: None,
+                    custom_spec_root: normalized_custom_spec_root.clone(),
+                };
+
+                let turn_id = format!("pi-turn-{}", uuid::Uuid::new_v4());
+                let thread_id = thread_id.unwrap_or_else(|| turn_id.clone());
+                let binding_session_id = response_session_id
+                    .as_deref()
+                    .or(provider_binding_lookup_session_id.as_deref())
+                    .unwrap_or(thread_id.as_str());
+                if let Some(binding) = provider_launch_profile.binding.as_ref() {
+                    session_management::record_engine_provider_binding_core(
+                        &self.workspaces,
+                        self.storage_path.as_path(),
+                        workspace_id.clone(),
+                        binding_session_id.to_string(),
+                        "pi".to_string(),
+                        binding.clone(),
+                    )
+                    .await?;
+                }
+                let item_id = format!("pi-item-{}", uuid::Uuid::new_v4());
+
+                let mut receiver = session.subscribe();
+                let event_sink = self.event_sink.clone();
+                let agent_event_bus = self.engine_manager.agent_event_bus();
+                let mut current_thread_id = thread_id.clone();
+                let item_id_clone = item_id.clone();
+                let turn_id_for_forwarder = turn_id.clone();
+                let mut accumulated_agent_text = String::new();
+                let provider_binding_for_forwarder = provider_launch_profile.binding.clone();
+                let provider_binding_storage_path = self.storage_path.clone();
+                let provider_binding_workspace_id = workspace_id.clone();
+                tokio::spawn(async move {
+                    let mut render_state = GeminiRenderRoutingState::default();
+                    loop {
+                        let turn_event = match receiver.recv().await {
+                            Ok(event) => event,
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                continue;
+                            }
+                        };
+                        if turn_event.turn_id != turn_id_for_forwarder {
+                            continue;
+                        }
+
+                        let event = turn_event.event;
+                        agent_event_bus.publish_engine_event(
+                            engine::EngineType::Pi,
+                            &current_thread_id,
+                            None,
+                            &turn_id_for_forwarder,
+                            Some(&turn_id_for_forwarder),
+                            &event,
+                        );
+                        let is_terminal = event.is_terminal();
+                        if let (
+                            Some(binding),
+                            engine::events::EngineEvent::SessionStarted {
+                                session_id,
+                                engine: engine::EngineType::Pi,
+                                ..
+                            },
+                        ) = (provider_binding_for_forwarder.as_ref(), &event)
+                        {
+                            if !session_id.is_empty() && session_id != "pending" {
+                                session_management::schedule_engine_provider_binding_record(
+                                    provider_binding_storage_path.clone(),
+                                    provider_binding_workspace_id.clone(),
+                                    session_id.clone(),
+                                    "pi".to_string(),
+                                    binding.clone(),
+                                );
+                            }
+                        }
+                        let render_lane = match &event {
+                            engine::events::EngineEvent::TextDelta { .. } => GeminiRenderLane::Text,
+                            engine::events::EngineEvent::ReasoningDelta { .. } => {
+                                GeminiRenderLane::Reasoning
+                            }
+                            engine::events::EngineEvent::ToolStarted { .. }
+                            | engine::events::EngineEvent::ToolCompleted { .. }
+                            | engine::events::EngineEvent::ToolInputUpdated { .. }
+                            | engine::events::EngineEvent::ToolOutputDelta { .. } => {
+                                GeminiRenderLane::Tool
+                            }
+                            _ => GeminiRenderLane::Other,
+                        };
+                        let routed_item_id = next_gemini_routed_item_id(
+                            &mut render_state,
+                            render_lane,
+                            &item_id_clone,
+                        );
+
+                        if let engine::events::EngineEvent::TextDelta { text, .. } = &event {
+                            render_state.saw_text_delta = true;
+                            accumulated_agent_text.push_str(text);
+                        }
+
+                        if let engine::events::EngineEvent::TurnCompleted { result, .. } = &event {
+                            let fallback_text =
+                                extract_turn_result_text(result.as_ref()).unwrap_or_default();
+                            let completed_text = if accumulated_agent_text.trim().is_empty() {
+                                fallback_text
+                            } else {
+                                accumulated_agent_text.clone()
+                            };
+                            if !completed_text.trim().is_empty() {
+                                let completion_item_id = gemini_agent_completion_item_id(
+                                    &render_state,
+                                    &item_id_clone,
+                                );
+                                event_sink.emit_app_server_event(AppServerEvent {
+                                    workspace_id: event.workspace_id().to_string(),
+                                    message: json!({
+                                        "method": "item/completed",
+                                        "params": {
+                                            "threadId": &current_thread_id,
+                                            "item": {
+                                                "id": completion_item_id,
+                                                "type": "agentMessage",
+                                                "text": completed_text,
+                                                "status": "completed",
+                                            }
+                                        }
+                                    }),
+                                });
+                            }
+                        }
+
+                        if let Some(payload) =
+                            engine::events::engine_event_to_app_server_event_with_turn_context(
+                                &event,
+                                &current_thread_id,
+                                &routed_item_id,
+                                Some(&turn_id_for_forwarder),
+                            )
+                        {
+                            event_sink.emit_app_server_event(payload);
+                        }
+
+                        if let engine::events::EngineEvent::SessionStarted {
+                            session_id,
+                            engine,
+                            ..
+                        } = &event
+                        {
+                            if !session_id.is_empty()
+                                && session_id != "pending"
+                                && matches!(engine, engine::EngineType::Pi)
+                            {
+                                current_thread_id = format!("pi:{}", session_id);
+                            }
+                        }
+
+                        if is_terminal {
+                            break;
+                        }
+                    }
+                });
+
+                let session_clone = session.clone();
+                let turn_id_clone = turn_id.clone();
+                tokio::spawn(async move {
+                    if let Err(error) = session_clone.send_message(params, &turn_id_clone).await {
+                        eprintln!("PI send_message failed: {error}");
+                    }
+                });
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    response_session_id.as_deref(),
+                    auto_session,
+                    "pi",
+                )
+                .await;
+
+                Ok(json!({
+                    "engine": "pi",
+                    "sessionId": response_session_id,
+                    "result": {
+                        "turn": {
+                            "id": turn_id,
+                            "status": "started",
+                        }
+                    },
+                    "turn": {
+                        "id": turn_id,
+                        "status": "started",
+                    }
+                }))
+            }
             engine::EngineType::Grok => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let provider_binding_lookup_session_id = session_id
@@ -2321,6 +2590,45 @@ impl DaemonState {
                     },
                     "turn": {
                         "id": turn_id,
+                        "status": "started",
+                    }
+                }))
+            }
+            engine::EngineType::Dsh => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let runtime = engine::dsh::runtime_settings_from_app(&settings);
+                let resume_id = session_id.as_deref().or(thread_id.as_deref());
+                let outcome = engine::dsh::send_user_turn(
+                    &runtime,
+                    None,
+                    &workspace_id,
+                    &workspace_path,
+                    &text,
+                    model.as_deref(),
+                    effort.as_deref(),
+                    images.as_deref(),
+                    resume_id,
+                    continue_session,
+                )
+                .await?;
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    Some(outcome.native_session_id.as_str()),
+                    auto_session,
+                    "dsh",
+                )
+                .await;
+                Ok(json!({
+                    "engine": "dsh",
+                    "sessionId": outcome.thread_id,
+                    "result": {
+                        "turn": {
+                            "id": outcome.turn_id,
+                            "status": "started",
+                        }
+                    },
+                    "turn": {
+                        "id": outcome.turn_id,
                         "status": "started",
                     }
                 }))
@@ -2627,6 +2935,69 @@ impl DaemonState {
                     "text": response,
                 }))
             }
+            engine::EngineType::Pi => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let provider_launch_profile =
+                    engine::pi_provider_profile::resolve_pi_provider_launch_profile(
+                        &workspace_id,
+                        None,
+                        None,
+                    )?;
+                let session = self
+                    .engine_manager
+                    .get_or_create_pi_session_for_runtime(
+                        &workspace_id,
+                        &workspace_path,
+                        &provider_launch_profile.runtime_key,
+                        provider_launch_profile.home_dir.as_deref(),
+                    )
+                    .await;
+                let resolved_session_id = resolve_pi_session_id_for_engine_send(
+                    continue_session,
+                    session_id,
+                    session.get_session_id().await,
+                );
+                let sanitized_model = model
+                    .as_ref()
+                    .map(|value| value.trim())
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string());
+                let params = engine::SendMessageParams {
+                    text,
+                    model: sanitized_model,
+                    effort,
+                    disable_thinking: false,
+                    access_mode,
+                    images,
+                    continue_session,
+                    session_id: resolved_session_id,
+                    fork_session_id: None,
+                    agent: None,
+                    variant: None,
+                    collaboration_mode: None,
+                    custom_spec_root: normalized_custom_spec_root.clone(),
+                };
+                let turn_id = format!("pi-sync-{}", uuid::Uuid::new_v4());
+                let response = tokio::time::timeout(
+                    std::time::Duration::from_secs(900),
+                    session.send_message(params, &turn_id),
+                )
+                .await
+                .map_err(|_| "PI response timed out".to_string())??;
+                let response_session_id = session.get_session_id().await;
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    response_session_id.as_deref(),
+                    auto_session,
+                    "pi",
+                )
+                .await;
+                Ok(json!({
+                    "engine": "pi",
+                    "sessionId": response_session_id,
+                    "text": response,
+                }))
+            }
             engine::EngineType::Grok => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let session = self
@@ -2680,6 +3051,44 @@ impl DaemonState {
                     "text": response,
                 }))
             }
+            engine::EngineType::Dsh => {
+                let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
+                let runtime = engine::dsh::runtime_settings_from_app(&settings);
+                let resume_id = session_id.as_deref();
+                let outcome = engine::dsh::send_user_turn(
+                    &runtime,
+                    None,
+                    &workspace_id,
+                    &workspace_path,
+                    &text,
+                    model.as_deref(),
+                    effort.as_deref(),
+                    images.as_deref(),
+                    resume_id,
+                    continue_session,
+                )
+                .await?;
+                let (_snapshot, client) = engine::dsh::ensure_ready(&runtime).await?;
+                let response = engine::dsh::collect_turn_text(
+                    &client,
+                    &outcome.native_session_id,
+                    outcome.turn_waiter,
+                    std::time::Duration::from_secs(900),
+                )
+                .await?;
+                self.record_auto_session_metadata_if_present(
+                    &workspace_id,
+                    Some(outcome.native_session_id.as_str()),
+                    auto_session,
+                    "dsh",
+                )
+                .await;
+                Ok(json!({
+                    "engine": "dsh",
+                    "sessionId": outcome.thread_id,
+                    "text": response,
+                }))
+            }
         }
     }
 
@@ -2710,10 +3119,23 @@ impl DaemonState {
                     .interrupt_kimi_sessions(&workspace_id, None)
                     .await
             }
+            engine::EngineType::Pi => {
+                self.engine_manager
+                    .interrupt_pi_sessions(&workspace_id, None)
+                    .await
+            }
             engine::EngineType::Grok => {
                 self.engine_manager
                     .interrupt_grok_sessions(&workspace_id, None)
                     .await
+            }
+            engine::EngineType::Dsh => {
+                let settings = self.app_settings.lock().await.clone();
+                engine::dsh::interrupt_workspace(
+                    &engine::dsh::runtime_settings_from_app(&settings),
+                    &workspace_id,
+                )
+                .await
             }
         }
     }
@@ -2772,10 +3194,23 @@ impl DaemonState {
                     .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
                     .await
             }
+            engine::EngineType::Pi => {
+                self.engine_manager
+                    .interrupt_pi_sessions(&workspace_id, Some(&turn_id))
+                    .await
+            }
             engine::EngineType::Grok => {
                 self.engine_manager
                     .interrupt_grok_sessions(&workspace_id, Some(&turn_id))
                     .await
+            }
+            engine::EngineType::Dsh => {
+                let settings = self.app_settings.lock().await.clone();
+                engine::dsh::interrupt_turn(
+                    &engine::dsh::runtime_settings_from_app(&settings),
+                    &turn_id,
+                )
+                .await
             }
         }
     }
@@ -3949,6 +4384,12 @@ impl DaemonState {
         result: Value,
         provider_profile_id: Option<String>,
     ) -> Result<Value, String> {
+        if let Some(dsh_request) = crate::engine::dsh::parse_control_request(&request_id) {
+            let settings = self.app_settings.lock().await.clone();
+            let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+            crate::engine::dsh::respond_to_control(&runtime, dsh_request, &result).await?;
+            return Ok(json!({ "ok": true }));
+        }
         if request_id.is_string() {
             for session in self
                 .engine_manager

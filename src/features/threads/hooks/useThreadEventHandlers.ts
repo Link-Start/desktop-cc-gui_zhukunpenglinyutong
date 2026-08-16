@@ -43,6 +43,7 @@ import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
 import { handleThreadAppServerEventDiagnostics } from "./threadAppServerEventDiagnostics";
 import {
   clearLiveAssistantText,
+  drainLiveAssistantTextTail,
   peekLiveAssistantText,
 } from "../utils/liveAssistantTextChannel";
 import {
@@ -730,7 +731,7 @@ export function useThreadEventHandlers({
 
   const shouldSkipCodexTurnEvent = useCallback(
     (input: {
-      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+      engine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
       workspaceId: string;
       threadId: string;
       turnId: string;
@@ -1132,10 +1133,29 @@ export function useThreadEventHandlers({
     dispatch,
     resolveClaudeContinuationThreadId,
   });
+  const flushPendingRealtimeEventsRef = useRef<(() => void) | null>(null);
+  const drainLiveItemDeltasForThreadRef = useRef<
+    ((threadId: string) => void) | null
+  >(null);
   const settleThreadWaitingForUserChoice = useCallback(
-    (threadId: string) => {
+    (threadId: string, workspaceId?: string | null) => {
       if (!threadId) {
         return;
+      }
+      if (workspaceId) {
+        flushPendingRealtimeEventsRef.current?.();
+        drainLiveItemDeltasForThreadRef.current?.(threadId);
+        const liveTextTail = drainLiveAssistantTextTail(threadId);
+        if (liveTextTail) {
+          dispatch({
+            type: "appendAgentDelta",
+            workspaceId,
+            threadId,
+            itemId: liveTextTail.itemId,
+            delta: liveTextTail.tailDelta,
+            hasCustomName: true,
+          });
+        }
       }
       // User-choice gates are no longer normal foreground processing.
       markProcessingTracked(threadId, false);
@@ -1162,7 +1182,7 @@ export function useThreadEventHandlers({
       if (!threadId) {
         return;
       }
-      settleThreadWaitingForUserChoice(threadId);
+      settleThreadWaitingForUserChoice(threadId, request.workspace_id);
     },
     [
       enqueueUserInputRequest,
@@ -1193,7 +1213,7 @@ export function useThreadEventHandlers({
         });
       }
       if (requestUserInputBlocked) {
-        settleThreadWaitingForUserChoice(threadId);
+        settleThreadWaitingForUserChoice(threadId, event.workspace_id);
       }
       const reason =
         event.params.reason.trim() ||
@@ -1271,6 +1291,8 @@ export function useThreadEventHandlers({
     onAgentMessageCompletedExternal,
     onExitPlanModeToolCompleted,
   });
+  flushPendingRealtimeEventsRef.current = flushPendingRealtimeEvents;
+  drainLiveItemDeltasForThreadRef.current = drainLiveItemDeltasForThread;
 
   const settleDurableRealtimeTurn = useCallback(
     (threadId: string, runtimeTurnId: string) => {

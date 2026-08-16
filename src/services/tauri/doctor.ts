@@ -39,6 +39,18 @@ export async function runOpenCodeDoctor(
   return invoke<CodexDoctorResult>("opencode_doctor", { opencodeBin });
 }
 
+export async function runPiDoctor(
+  piBin: string | null,
+): Promise<CodexDoctorResult> {
+  return invoke<CodexDoctorResult>("pi_doctor", { piBin });
+}
+
+export async function runDshDoctor(
+  dshBin: string | null,
+): Promise<CodexDoctorResult> {
+  return invoke<CodexDoctorResult>("dsh_doctor", { dshBin });
+}
+
 export async function previewCodexLaunchProfile({
   codexBin,
   codexArgs,

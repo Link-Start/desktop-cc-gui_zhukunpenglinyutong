@@ -12,6 +12,8 @@ describe("engineControllerAvailability", () => {
       "grok",
       "kimi",
       "opencode",
+      "pi",
+      "dsh",
     ]);
     expect(buildAvailableEngines([], false)).toEqual([
       expect.objectContaining({
@@ -39,6 +41,16 @@ describe("engineControllerAvailability", () => {
         type: "opencode",
         displayName: "OpenCode",
         shortName: "OpenCode",
+      }),
+      expect.objectContaining({
+        type: "pi",
+        displayName: "PI CLI",
+        shortName: "PI",
+      }),
+      expect.objectContaining({
+        type: "dsh",
+        displayName: "DeepSeek Harness",
+        shortName: "DSH",
       }),
     ]);
   });

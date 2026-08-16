@@ -40,6 +40,8 @@ describe("engineCapabilityMatrix", () => {
     expect(getEngineCapabilityState("codex", "reasoning.effort")).toBe("supported");
     expect(getEngineCapabilityState("claude", "reasoning.effort")).toBe("supported");
     expect(getEngineCapabilityState("grok", "reasoning.effort")).toBe("supported");
+    expect(getEngineCapabilityState("pi", "reasoning.effort")).toBe("supported");
+    expect(getEngineCapabilityState("pi", "image.input")).toBe("supported");
     expect(getEngineCapabilityState("opencode", "tool.mcp")).toBe("unsupported");
   });
 

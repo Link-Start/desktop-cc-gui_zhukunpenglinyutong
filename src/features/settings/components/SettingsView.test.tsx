@@ -196,8 +196,13 @@ const workspaceB: WorkspaceInfo = {
 const baseSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  piBin: null,
   grokBin: null,
   opencodeBin: null,
+  dshBin: null,
+  dshHost: "127.0.0.1",
+  dshPort: 3080,
+  dshAutoStart: true,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
@@ -1082,10 +1087,59 @@ describe("SettingsView Display", () => {
     expect(screen.getByRole("tab", { name: "Codex" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "Claude Code" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "OpenCode CLI" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "PI CLI" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "Gemini CLI" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "Gemini CLI" })).toBeNull();
     expect(screen.queryByRole("switch", { name: "OpenCode CLI" })).toBeNull();
     expect(onUpdateAppSettings).not.toHaveBeenCalled();
+  });
+
+  it("switches to the PI CLI tab and runs PI doctor", async () => {
+    cleanup();
+    const onRunPiDoctor = vi.fn().mockResolvedValue({
+      ...createDoctorResult(),
+      version: "0.84.1",
+    });
+    render(
+      <SettingsView
+        reduceTransparency={false}
+        onToggleTransparency={vi.fn()}
+        appSettings={baseSettings}
+        openAppIconById={{}}
+        onUpdateAppSettings={vi.fn().mockResolvedValue(undefined)}
+        workspaceGroups={[]}
+        groupedWorkspaces={[]}
+        ungroupedLabel="Ungrouped"
+        onClose={vi.fn()}
+        onMoveWorkspace={vi.fn()}
+        onDeleteWorkspace={vi.fn()}
+        onCreateWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRenameWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onMoveWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onDeleteWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onAssignWorkspaceGroup={vi.fn().mockResolvedValue(null)}
+        onRunDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunClaudeDoctor={vi.fn().mockResolvedValue(createDoctorResult())}
+        onRunPiDoctor={onRunPiDoctor}
+        activeWorkspace={null}
+        activeEngine="codex"
+        onUpdateWorkspaceCodexBin={vi.fn().mockResolvedValue(undefined)}
+        onUpdateWorkspaceSettings={vi.fn().mockResolvedValue(undefined)}
+        scaleShortcutTitle="Scale shortcut"
+        scaleShortcutText="Use Command +/-"
+        onTestNotificationSound={vi.fn()}
+        initialSection="runtime-environment"
+        initialHighlightTarget="cli-validation"
+      />,
+    );
+
+    fireEvent.focus(screen.getByRole("tab", { name: "PI CLI" }));
+    fireEvent.click(screen.getByRole("tab", { name: "PI CLI" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run PI Doctor" }));
+
+    await waitFor(() => {
+      expect(onRunPiDoctor).toHaveBeenCalled();
+    });
   });
 
   it("updates the theme selection", async () => {

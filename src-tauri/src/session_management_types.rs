@@ -17,6 +17,8 @@ pub(crate) const SESSION_CATALOG_PARTIAL_CLAUDE_UNCERTAIN_EMPTY: &str = "claude-
 pub(crate) const SESSION_CATALOG_PARTIAL_GEMINI: &str = "gemini-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_GROK: &str = "grok-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_KIMI: &str = "kimi-history-unavailable";
+pub(crate) const SESSION_CATALOG_PARTIAL_DSH: &str = "dsh-history-unavailable";
+pub(crate) const SESSION_CATALOG_PARTIAL_PI: &str = "pi-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_OPENCODE: &str = "opencode-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_SHARED: &str = "shared-history-unavailable";
 pub(crate) const SESSION_CATALOG_PARTIAL_ARCHIVE_METADATA: &str = "archive-metadata-unavailable";
@@ -251,6 +253,10 @@ pub(crate) struct WorkspaceSessionCatalogQuery {
     /// Management / mutations keep the default `full` inventory parse.
     #[serde(default)]
     pub(crate) scan_quality: Option<WorkspaceSessionScanQuality>,
+    /// `bounded` (default) or `exhaustive`. Keyword/folder/archived MUST NOT
+    /// implicitly upgrade scan mode.
+    #[serde(default)]
+    pub(crate) scan_mode: Option<String>,
 }
 
 impl WorkspaceSessionCatalogQuery {
@@ -562,7 +568,9 @@ pub(crate) enum SessionCatalogIdentity {
     Gemini { session_id: String },
     Grok { session_id: String },
     Kimi { session_id: String },
+    Pi { session_id: String },
     OpenCode { session_id: String },
+    Dsh { session_id: String },
     Shared { session_id: String },
 }
 
@@ -574,7 +582,9 @@ impl SessionCatalogIdentity {
             Self::Gemini { .. } => "gemini",
             Self::Grok { .. } => "grok",
             Self::Kimi { .. } => "kimi",
+            Self::Pi { .. } => "pi",
             Self::OpenCode { .. } => "opencode",
+            Self::Dsh { .. } => "dsh",
             Self::Shared { .. } => "shared",
         }
     }
@@ -586,7 +596,9 @@ impl SessionCatalogIdentity {
             | Self::Gemini { session_id }
             | Self::Grok { session_id }
             | Self::Kimi { session_id }
+            | Self::Pi { session_id }
             | Self::OpenCode { session_id }
+            | Self::Dsh { session_id }
             | Self::Shared { session_id } => session_id,
         }
     }
@@ -613,8 +625,18 @@ pub(crate) fn parse_catalog_identity(session_id: &str) -> SessionCatalogIdentity
             session_id: raw_id.to_string(),
         };
     }
+    if let Some(raw_id) = session_id.strip_prefix("pi:") {
+        return SessionCatalogIdentity::Pi {
+            session_id: raw_id.to_string(),
+        };
+    }
     if let Some(raw_id) = session_id.strip_prefix("opencode:") {
         return SessionCatalogIdentity::OpenCode {
+            session_id: raw_id.to_string(),
+        };
+    }
+    if let Some(raw_id) = session_id.strip_prefix("dsh:") {
+        return SessionCatalogIdentity::Dsh {
             session_id: raw_id.to_string(),
         };
     }
@@ -754,29 +776,12 @@ pub(crate) fn build_catalog_scan_limit(cursor: Option<&str>, limit: Option<u32>)
 }
 
 pub(crate) fn query_requires_exhaustive_scan(query: &WorkspaceSessionCatalogQuery) -> bool {
-    let has_keyword = query
-        .keyword
+    query
+        .scan_mode
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .is_some();
-    if has_keyword {
-        return true;
-    }
-    let has_folder_filter = query
-        .folder_id
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .filter(|value| *value != "__all__")
-        .is_some();
-    if has_folder_filter {
-        return true;
-    }
-    matches!(
-        parse_status_filter(query.status.as_deref()),
-        SessionCatalogStatusFilter::Archived
-    )
+        .map(|value| value.eq_ignore_ascii_case("exhaustive"))
+        .unwrap_or(false)
 }
 
 pub(crate) fn build_catalog_scan_mode(

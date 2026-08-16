@@ -9,6 +9,7 @@ import {
   runGrokDoctor,
   runKimiDoctor,
   runOpenCodeDoctor,
+  runPiDoctor,
   takeSettingsRecoveryNotice,
   updateAppSettings,
 } from "../../../services/tauri";
@@ -124,6 +125,25 @@ function normalizeWebServicePort(value: number | null | undefined): number {
   return normalized;
 }
 
+const DSH_DEFAULT_HOST = "127.0.0.1";
+const DSH_DEFAULT_PORT = 3080;
+
+function normalizeDshHost(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : DSH_DEFAULT_HOST;
+}
+
+function normalizeDshPort(value: number | null | undefined): number {
+  if (!Number.isFinite(value)) {
+    return DSH_DEFAULT_PORT;
+  }
+  const normalized = Math.round(value as number);
+  if (normalized < 1 || normalized > 65535) {
+    return DSH_DEFAULT_PORT;
+  }
+  return normalized;
+}
+
 function normalizeWebServiceToken(
   value: string | null | undefined,
 ): string | null {
@@ -214,8 +234,13 @@ function normalizeDisabledCliEngines(value: unknown): string[] {
 const defaultSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  piBin: null,
   grokBin: null,
   opencodeBin: null,
+  dshBin: null,
+  dshHost: "127.0.0.1",
+  dshPort: 3080,
+  dshAutoStart: true,
   codexBin: null,
   codexArgs: null,
   terminalShellPath: null,
@@ -402,10 +427,15 @@ function normalizeAppSettings(
     experimentalUnifiedExecEnabled: undefined,
     claudeBin: settings.claudeBin?.trim() ? settings.claudeBin.trim() : null,
     kimiBin: settings.kimiBin?.trim() ? settings.kimiBin.trim() : null,
+    piBin: settings.piBin?.trim() ? settings.piBin.trim() : null,
     grokBin: settings.grokBin?.trim() ? settings.grokBin.trim() : null,
     opencodeBin: settings.opencodeBin?.trim()
       ? settings.opencodeBin.trim()
       : null,
+    dshBin: settings.dshBin?.trim() ? settings.dshBin.trim() : null,
+    dshHost: normalizeDshHost(settings.dshHost),
+    dshPort: normalizeDshPort(settings.dshPort),
+    dshAutoStart: settings.dshAutoStart !== false,
     codexBin: settings.codexBin?.trim() ? settings.codexBin.trim() : null,
     codexArgs: settings.codexArgs?.trim() ? settings.codexArgs.trim() : null,
     terminalShellPath: settings.terminalShellPath?.trim()
@@ -739,6 +769,10 @@ export function useAppSettings() {
     return runOpenCodeDoctor(opencodeBin);
   }, []);
 
+  const piDoctor = useCallback(async (piBin: string | null) => {
+    return runPiDoctor(piBin);
+  }, []);
+
   return {
     settings,
     setSettings,
@@ -748,6 +782,7 @@ export function useAppSettings() {
     kimiDoctor,
     grokDoctor,
     opencodeDoctor,
+    piDoctor,
     isLoading,
   };
 }

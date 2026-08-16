@@ -105,6 +105,8 @@ export function useThreadRealtimeHistoryReconcile({
         canonicalThreadId.startsWith("kimi-pending-") ||
         canonicalThreadId.startsWith("opencode:") ||
         canonicalThreadId.startsWith("opencode-pending-") ||
+        canonicalThreadId.startsWith("dsh:") ||
+        canonicalThreadId.startsWith("dsh-pending-") ||
         canonicalThreadId.startsWith("shared:")
       ) {
         return false;

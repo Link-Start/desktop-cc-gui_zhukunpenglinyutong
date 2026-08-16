@@ -12,6 +12,7 @@ import {
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
 } from "../../threads/constants/codexProviderProfiles";
 import type { AgentExecutionTarget } from "../types";
 
@@ -21,6 +22,7 @@ const LOCAL_PROFILE: Record<string, string> = {
   kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
   grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
   opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  pi: PI_LOCAL_PROVIDER_PROFILE_ID,
 };
 
 type StageTargetPickerProps = {
@@ -72,10 +74,10 @@ export function StageTargetPicker({
   onChange,
 }: StageTargetPickerProps) {
   const providerId = (
-    ["claude", "codex", "kimi", "grok", "opencode"].includes(value.engine)
+    ["claude", "codex", "kimi", "grok", "opencode", "pi"].includes(value.engine)
       ? value.engine
       : "claude"
-  ) as "claude" | "codex" | "kimi" | "grok" | "opencode";
+  ) as "claude" | "codex" | "kimi" | "grok" | "opencode" | "pi";
 
   const catalog = useAtomicProviderTargetCatalog({
     enabled: true,

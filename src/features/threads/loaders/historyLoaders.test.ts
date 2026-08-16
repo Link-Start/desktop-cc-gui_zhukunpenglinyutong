@@ -5,7 +5,9 @@ import { parseCodexSessionHistory } from "./codexSessionHistory";
 import { createGeminiHistoryLoader } from "./geminiHistoryLoader";
 import { parseGeminiHistoryMessages } from "./geminiHistoryParser";
 import { createGrokHistoryLoader } from "./grokHistoryLoader";
+import { createDshHistoryLoader } from "./dshHistoryLoader";
 import { createKimiHistoryLoader } from "./kimiHistoryLoader";
+import { createPiHistoryLoader } from "./piHistoryLoader";
 
 describe("history loaders", () => {
   it("loads codex history into normalized snapshot", async () => {
@@ -762,6 +764,137 @@ describe("history loaders", () => {
     const snapshot = await loader.load("kimi:session-1");
     expect(snapshot.engine).toBe("kimi");
     expect(snapshot.threadId).toBe("kimi:session-1");
+    expect(snapshot.items).toHaveLength(0);
+  });
+
+  it("loads dsh history into normalized snapshot", async () => {
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession: vi.fn().mockResolvedValue({
+        messages: [
+          {
+            id: "dsh-user-1",
+            kind: "message",
+            role: "user",
+            text: "hello",
+          },
+          {
+            id: "dsh-assistant-1",
+            kind: "message",
+            role: "assistant",
+            text: "hi",
+          },
+          {
+            id: "dsh-tool-1",
+            kind: "tool",
+            title: "Grep",
+            toolInput: { pattern: "foo" },
+          },
+          {
+            id: "dsh-tool-1",
+            kind: "tool",
+            title: "Grep",
+            toolOutput: "3 matches",
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(snapshot.engine).toBe("dsh");
+    expect(snapshot.threadId).toBe("dsh:session-1");
+    expect(snapshot.items).toHaveLength(3);
+    expect(snapshot.items[0]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+      }),
+    );
+    expect(snapshot.items[1]).toEqual(
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+      }),
+    );
+    expect(snapshot.items[2]).toEqual(
+      expect.objectContaining({
+        kind: "tool",
+        status: "completed",
+        output: "3 matches",
+      }),
+    );
+  });
+
+  it("returns an empty dsh snapshot when workspace path is missing", async () => {
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: null,
+      loadDshSession: vi.fn(),
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(snapshot.engine).toBe("dsh");
+    expect(snapshot.threadId).toBe("dsh:session-1");
+    expect(snapshot.items).toHaveLength(0);
+  });
+
+  it("loads pi history into normalized snapshot", async () => {
+    const loadPiSession = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "pi-user-1",
+          kind: "message",
+          role: "user",
+          text: "1+1",
+        },
+        {
+          id: "pi-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "2",
+        },
+      ],
+    });
+    const loader = createPiHistoryLoader({
+      workspaceId: "ws-pi",
+      workspacePath: "/tmp/workspace",
+      loadPiSession,
+    });
+
+    const snapshot = await loader.load("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(loadPiSession).toHaveBeenCalledWith(
+      "/tmp/workspace",
+      "019ffb7b-dedc-7b36-8d2f-f85f35501036",
+    );
+    expect(snapshot.engine).toBe("pi");
+    expect(snapshot.threadId).toBe("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(snapshot.items).toEqual([
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+        text: "1+1",
+      }),
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+        text: "2",
+      }),
+    ]);
+  });
+
+  it("returns an empty pi snapshot when workspace path is missing", async () => {
+    const loadPiSession = vi.fn();
+    const loader = createPiHistoryLoader({
+      workspaceId: "ws-pi",
+      workspacePath: null,
+      loadPiSession,
+    });
+
+    const snapshot = await loader.load("pi:session-1");
+    expect(loadPiSession).not.toHaveBeenCalled();
+    expect(snapshot.engine).toBe("pi");
+    expect(snapshot.threadId).toBe("pi:session-1");
     expect(snapshot.items).toHaveLength(0);
   });
 

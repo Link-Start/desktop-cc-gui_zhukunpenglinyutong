@@ -11,6 +11,10 @@ import {
   useThreadEventHandlers,
 } from "./useThreadEventHandlers";
 import {
+  appendLiveAssistantText,
+  resetLiveAssistantTextChannelForTests,
+} from "../utils/liveAssistantTextChannel";
+import {
   createDomainEventRuntimeController,
   type DomainEventRuntimeController,
 } from "../domain-events";
@@ -288,10 +292,12 @@ describe("useThreadEventHandlers diagnostics", () => {
     streamLatencyMocks.isWindowsPlatform.mockReturnValue(false);
     streamLatencyMocks.isMacPlatform.mockReturnValue(false);
     resetThreadStreamLatencyDiagnosticsForTests();
+    resetLiveAssistantTextChannelForTests();
   });
 
   afterEach(() => {
     window.localStorage.removeItem("ccgui.debug.turnTrace.enabled");
+    resetLiveAssistantTextChannelForTests();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -557,6 +563,69 @@ describe("useThreadEventHandlers diagnostics", () => {
       }),
       hasCustomName: false,
     });
+  });
+
+  it("drains the live-text tail before settling an AskUserQuestion gate", () => {
+    resetLiveAssistantTextChannelForTests();
+    const options = makeOptions();
+    const { result } = renderHook(() => useThreadEventHandlers(options));
+
+    act(() => {
+      result.current.onTurnStarted("ws-1", "thread-1", "turn-1");
+    });
+
+    appendLiveAssistantText("thread-1", "item-1", "Let me check that first.");
+    appendLiveAssistantText("thread-1", "item-1", " One more thing before I ask:");
+
+    options.dispatch.mockClear();
+
+    act(() => {
+      result.current.onRequestUserInput({
+        workspace_id: "ws-1",
+        request_id: "ask-1",
+        params: {
+          thread_id: "thread-1",
+          turn_id: "turn-1",
+          item_id: "ask-item-1",
+          questions: [{ id: "q-1", header: "", question: "Proceed?" }],
+        },
+      });
+    });
+
+    expect(options.dispatch).toHaveBeenCalledWith({
+      type: "appendAgentDelta",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      itemId: "item-1",
+      delta: " One more thing before I ask:",
+      hasCustomName: true,
+    });
+    expect(options.markProcessing).toHaveBeenCalledWith("thread-1", false);
+
+    const drainCall = options.dispatch.mock.calls.findIndex(
+      ([action]) => action?.type === "appendAgentDelta",
+    );
+    const settleCall = options.markProcessing.mock.calls.findIndex(
+      ([, processing]) => processing === false,
+    );
+    expect(drainCall).toBeGreaterThanOrEqual(0);
+    expect(settleCall).toBeGreaterThanOrEqual(0);
+    expect(options.dispatch.mock.invocationCallOrder[drainCall]).toBeLessThan(
+      options.markProcessing.mock.invocationCallOrder[settleCall],
+    );
+
+    const flushPendingRealtimeEvents =
+      itemHookFactory.getFlushPendingRealtimeEvents();
+    const drainLiveItemDeltasForThread =
+      itemHookFactory.getDrainLiveItemDeltasForThread();
+    expect(flushPendingRealtimeEvents).toHaveBeenCalledTimes(1);
+    expect(drainLiveItemDeltasForThread).toHaveBeenCalledWith("thread-1");
+    expect(
+      flushPendingRealtimeEvents.mock.invocationCallOrder[0],
+    ).toBeLessThan(drainLiveItemDeltasForThread.mock.invocationCallOrder[0]);
+    expect(
+      drainLiveItemDeltasForThread.mock.invocationCallOrder[0],
+    ).toBeLessThan(options.dispatch.mock.invocationCallOrder[drainCall]);
   });
 
   it("marks codex foreground turns as suspected after the bounded no-progress window", () => {

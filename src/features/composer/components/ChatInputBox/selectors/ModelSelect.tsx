@@ -7,6 +7,7 @@ import type { ModelInfo, ProviderId } from '../types';
 import {
   resolveAtomicReasoningEffort,
 } from '../../../../models/atomicModelReasoning';
+import { formatDshModelDisplayLabel } from './dshModelDisplayLabel';
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
@@ -14,9 +15,11 @@ import { PROVIDER_CONTINUATION_UI_ROLLBACK_EVENT } from "../../../../threads/ser
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
 } from '../../../../threads/constants/codexProviderProfiles';
 import { EngineIcon } from '../../../../engine/components/EngineIcon';
 import { ProviderBrandIconImg } from '../../../../vendors/components/ProviderBrandIconImg';
@@ -120,6 +123,8 @@ const LOCAL_PROVIDER_PROFILE_IDS: Partial<Record<ProviderId, string>> = {
   kimi: KIMI_LOCAL_PROVIDER_PROFILE_ID,
   grok: GROK_LOCAL_PROVIDER_PROFILE_ID,
   opencode: OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  pi: PI_LOCAL_PROVIDER_PROFILE_ID,
+  dsh: DSH_LOCAL_PROVIDER_PROFILE_ID,
 };
 
 export function normalizeExecutionProviderProfileId(
@@ -403,6 +408,7 @@ const ENGINE_NATIVE_BRAND_SRC: Partial<Record<string, string>> = {
   codex: PROVIDER_BRAND_ICON_SRC.openai,
   kimi: PROVIDER_BRAND_ICON_SRC.kimi,
   opencode: PROVIDER_BRAND_ICON_SRC.opencode,
+  dsh: PROVIDER_BRAND_ICON_SRC.deepseek,
 };
 
 function renderBrandIcon(src: string, size: number) {
@@ -439,6 +445,14 @@ const ModelIcon = ({
     modelIdForIcon?.trim() ||
     (model ? resolveRuntimeModel(model) ?? model.id : null);
 
+  // DSH host catalog (and remapped slots) can expose Grok models. Those
+  // must use the same theme-aware Grok glyph as Grok CLI, not the host
+  // CLI's DeepSeek whale. Match only the resolved runtime id so a later
+  // remap away from Grok still follows the brand-icon path.
+  if (resolvedModelId && /grok/i.test(resolvedModelId)) {
+    return <EngineIcon engine="grok" size={size} style={imgStyle} />;
+  }
+
   // Cross-vendor remap only — do not pass presetId, otherwise every Kimi model
   // without "kimi" in its id would short-circuit through brand while the
   // provider row still used EngineIcon (or vice versa).
@@ -459,6 +473,9 @@ const ModelIcon = ({
   if (provider === 'kimi') {
     return renderBrandIcon(PROVIDER_BRAND_ICON_SRC.kimi, size);
   }
+  if (provider === 'dsh') {
+    return renderBrandIcon(PROVIDER_BRAND_ICON_SRC.deepseek, size);
+  }
 
   switch (provider) {
     case 'codex':
@@ -469,6 +486,8 @@ const ModelIcon = ({
       return <EngineIcon engine="grok" size={size} style={imgStyle} />;
     case 'opencode':
       return <EngineIcon engine="opencode" size={size} style={imgStyle} />;
+    case 'pi':
+      return <EngineIcon engine="pi" size={size} style={imgStyle} />;
     case 'claude':
     default:
       return <EngineIcon engine="claude" size={size} style={imgStyle} />;
@@ -702,6 +721,10 @@ export const ModelSelect = memo(({
         }
         return claudeLabel;
       }
+    }
+
+    if (providerId === 'dsh') {
+      return formatDshModelDisplayLabel(model);
     }
 
     const parentLabel = model.label?.trim() || "";
@@ -1119,7 +1142,10 @@ export const ModelSelect = memo(({
             {pickerGroups.map((group, groupIndex) => {
               const groupRefresh = resolveGroupRefresh(group);
               const hasChannelSwitcher =
-                hasTargetGroups && group.profiles.length > 0;
+                hasTargetGroups &&
+                group.providerId !== 'dsh' &&
+                group.profiles.length > 0;
+              const canAddModel = Boolean(onAddModel) && group.providerId !== 'dsh';
               return (
                 <Fragment key={group.providerId}>
                   {groupIndex > 0 && <DropdownMenuSeparator />}
@@ -1200,9 +1226,23 @@ export const ModelSelect = memo(({
                         !group.error &&
                         group.models.length === 0 && (
                           <DropdownMenuItem
-                            disabled
+                            disabled={
+                              group.providerId === 'dsh'
+                                ? !onOpenCliSettings
+                                : true
+                            }
                             className="items-start gap-2"
                             data-empty-channel-models={group.providerId}
+                            onSelect={(event) => {
+                              if (
+                                group.providerId !== 'dsh' ||
+                                !onOpenCliSettings
+                              ) {
+                                return;
+                              }
+                              event.preventDefault();
+                              handleOpenCliSettings();
+                            }}
                           >
                             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                               <span className="text-sm">
@@ -1211,10 +1251,15 @@ export const ModelSelect = memo(({
                                 })}
                               </span>
                               <span className="text-xs text-muted-foreground whitespace-normal">
-                                {t('models.emptyChannelModelsHint', {
-                                  defaultValue:
-                                    '可点击下方「添加模型」，在自定义模型中添加后使用',
-                                })}
+                                {group.providerId === 'dsh'
+                                  ? t('models.emptyDshHostHint', {
+                                      defaultValue:
+                                        '请在 DeepSeek Harness 中配置模型。点击此项打开设置。',
+                                    })
+                                  : t('models.emptyChannelModelsHint', {
+                                      defaultValue:
+                                        '可点击下方「添加模型」，在自定义模型中添加后使用',
+                                    })}
                               </span>
                             </div>
                           </DropdownMenuItem>
@@ -1258,7 +1303,7 @@ export const ModelSelect = memo(({
                           </DropdownMenuItem>
                         );
                       })}
-                      {(hasChannelSwitcher || onAddModel) && (
+                      {(hasChannelSwitcher || canAddModel) && (
                         <>
                           <DropdownMenuSeparator />
                           {hasChannelSwitcher ? (
@@ -1314,7 +1359,7 @@ export const ModelSelect = memo(({
                                   />
                                 )}
                               </button>
-                              {onAddModel && (
+                              {canAddModel && (
                                 <button
                                   type="button"
                                   className={SUBMENU_FOOTER_BUTTON_CLASS}

@@ -150,6 +150,11 @@ const FileViewPanel = lazy(() =>
     default: m.FileViewPanel,
   })),
 );
+const BrowserDock = lazy(() =>
+  import("../../browser-agent/components/BrowserDock").then((m) => ({
+    default: m.BrowserDock,
+  })),
+);
 const ProjectMapPanel = lazy(() =>
   import("../../project-map/components/ProjectMapPanel").then((m) => ({
     default: m.ProjectMapPanel,
@@ -184,7 +189,7 @@ const EMPTY_PROJECT_MAP_IMPACT_INPUT: ProjectMapImpactInput = {
 function toConversationEngine(
   engine: EngineType | undefined,
 ): ConversationEngine {
-  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode") {
+  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode" || engine === "dsh" || engine === "pi") {
     return engine;
   }
   return "codex";
@@ -223,10 +228,22 @@ function inferConversationEngineFromThreadId(
     return "kimi";
   }
   if (
+    normalizedThreadId.startsWith("pi:") ||
+    normalizedThreadId.startsWith("pi-pending-")
+  ) {
+    return "pi";
+  }
+  if (
     normalizedThreadId.startsWith("opencode:") ||
     normalizedThreadId.startsWith("opencode-pending-")
   ) {
     return "opencode";
+  }
+  if (
+    normalizedThreadId.startsWith("dsh:") ||
+    normalizedThreadId.startsWith("dsh-pending-")
+  ) {
+    return "dsh";
   }
   if (
     normalizedThreadId.startsWith("codex:") ||
@@ -2957,7 +2974,19 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
     diffLabel: t("workspace.diff"),
     onBackFromDiff: options.onBackFromDiff,
   });
-  const browserDockNode = null;
+  const browserDockNode =
+    options.browserDockOpen &&
+    options.centerMode === "chat" &&
+    options.activeWorkspaceId ? (
+      <Suspense fallback={<HeavyPanelFallback />}>
+        <BrowserDock
+          workspaceId={options.activeWorkspaceId}
+          ownerSurface="main-split-browser-dock"
+          displayMode="embedded"
+          className="browser-agent-center-panel-dock"
+        />
+      </Suspense>
+    ) : null;
 
   return {
     codeAnnotationBridgeProps,

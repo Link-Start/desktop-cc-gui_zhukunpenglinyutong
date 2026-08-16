@@ -85,7 +85,7 @@ use stream_helpers::extract_tool_result_text;
 use stream_helpers::{
     can_force_kill_for_grace, extract_background_task_id, extract_claude_tool_input,
     extract_claude_tool_name, extract_result_text, extract_string_field,
-    extract_terminal_task_release_id, is_claude_stream_control_line,
+    extract_task_started_id, extract_terminal_task_release_id, is_claude_stream_control_line,
     looks_like_claude_runtime_error, merge_text_chunks, parse_claude_stream_json_line,
     tool_input_signature, try_register_background_task_id, try_release_background_task_id,
 };
@@ -314,6 +314,18 @@ const CLAUDE_STREAM_DIAGNOSTIC_SAMPLE_LIMIT: usize = 800;
 // processes or hooks keep the CLI alive, the UI would otherwise stay stuck on
 // "generating…" indefinitely. This grace caps how long we wait after `result`.
 const CLAUDE_POST_RESULT_GRACE: Duration = Duration::from_secs(5);
+// Before `result` is seen, the stream-read wait is normally unbounded by design (a legitimate
+// turn can run a long time with no risk indicator present). But the CLI observably defers this
+// turn's own `result` event until every pending Agent/Task subagent (`run_in_background: true`)
+// has settled, so a subagent that crashes or hangs without ever emitting a terminal
+// `task_notification` leaves this wait genuinely unbounded with no recovery path. This constant
+// caps ONLY that specific pre-result window, and only while a pending Agent/Task subagent
+// (`task_started`, no matching terminal notification yet) has actually been observed; a normal
+// turn with no background task involved is never subject to it.
+#[cfg(not(test))]
+const CLAUDE_BG_TASK_MAX_WAIT: Duration = Duration::from_secs(30 * 60);
+#[cfg(test)]
+const CLAUDE_BG_TASK_MAX_WAIT: Duration = Duration::from_secs(3);
 // Draining the stderr reader must be bounded for the same reason as the stdout
 // wait above: a descendant that escaped the CLI's process group (e.g. an MCP
 // server or Stop hook that called setsid) keeps the inherited stderr write end
@@ -324,6 +336,9 @@ const CLAUDE_POST_RESULT_GRACE: Duration = Duration::from_secs(5);
 // stderr handling.
 const CLAUDE_POST_RESULT_STDERR_DRAIN: Duration = Duration::from_secs(2);
 const CLAUDE_REASONING_EFFORTS: &[&str] = &["low", "medium", "high", "xhigh", "max"];
+const ASK_USER_QUESTION_TIMEOUT_SECS: u64 = 1800;
+/// CLI MCP fetch timeout must exceed the server wait, or the race is zero-width.
+const ASK_USER_QUESTION_CLI_TIMEOUT_MARGIN_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ClaudeCommandProfile {
@@ -1185,12 +1200,16 @@ impl ClaudeSession {
                 cmd.arg(crate::engine::claude::AskUserMcpServer::allowed_tool_name());
                 // The CLI's per-request MCP tool-call fetch timeout defaults to 60s
                 // for remote HTTP servers. Our AskUserQuestion server blocks up to
-                // 1800s waiting for the user, so without this the CLI abandons the
-                // call early. Raise it to match our server bound (ms). Only set when
-                // our MCP ask is actually wired; the user can still override via env.
-                // Keep ≥ frontend USER_INPUT_TIMEOUT_SECONDS (30 min).
+                // ASK_USER_QUESTION_TIMEOUT_SECS waiting for the user, so without
+                // this the CLI abandons the call early. Raise it past the server
+                // bound (ms) so scheduling jitter cannot still lose the answer.
+                // Only set when our MCP ask is actually wired; the user can still
+                // override via env.
                 if std::env::var_os("MCP_TOOL_TIMEOUT").is_none() {
-                    cmd.env("MCP_TOOL_TIMEOUT", "1800000");
+                    let timeout_ms = (ASK_USER_QUESTION_TIMEOUT_SECS
+                        + ASK_USER_QUESTION_CLI_TIMEOUT_MARGIN_SECS)
+                        * 1000;
+                    cmd.env("MCP_TOOL_TIMEOUT", timeout_ms.to_string());
                 }
             } else {
                 log::warn!(
@@ -1749,11 +1768,27 @@ impl ClaudeSession {
         // blockers clear after WaitBgTasks → full re-arm from clearance.
         let mut post_result_grace_deadline: Option<Instant> = None;
         // Turn-scoped structured backgroundTaskId set (settlement blockers).
+        // Bash background shells (#983) only. Agent/Task async-launch subagents use
+        // `pending_agent_task_ids` below instead; the two waits have different risk
+        // models and must not share one set/timer.
         let mut active_background_task_ids: HashSet<String> = HashSet::new();
-        // Set when we stop waiting because the post-result grace elapsed. The
-        // turn is settled as a success (result was already emitted) and the
-        // exit-status failure checks are skipped for the process we force-kill.
+        // Turn-scoped Agent/Task `task_started` ids seen before `result`. Bounds the
+        // pre-result wait (see CLAUDE_BG_TASK_MAX_WAIT) instead of the post-result
+        // WaitBgTasks path #983 deliberately leaves unbounded.
+        let mut pending_agent_task_ids: HashSet<String> = HashSet::new();
+        // Armed the first time `pending_agent_task_ids` becomes non-empty, and RESET
+        // on every received stream line thereafter. Idle bound, not absolute: a
+        // subagent that is still producing activity never hits it. Cleared when the
+        // set empties so a later still-pre-result task_started can re-arm.
+        let mut pending_agent_task_deadline: Option<Instant> = None;
+        // Set when we stop waiting because the post-result grace elapsed, OR because
+        // the pre-result pending-task idle-wait elapsed. The turn is settled as a
+        // success and the exit-status failure checks are skipped for the process we
+        // force-kill.
         let mut settled_by_grace = false;
+        // Specifically the pre-result pending-task idle-wait. Used only to synthesize
+        // a visible notice if `response_text` would otherwise be silently empty.
+        let mut settled_by_pending_task_max_wait = false;
 
         // Spawn stderr reader
         let stderr_reader = BufReader::new(stderr);
@@ -1810,8 +1845,31 @@ impl ClaudeSession {
                                 }
                             }
                         }
-                    } else {
+                    } else if pending_agent_task_ids.is_empty() {
                         lines.next_line().await
+                    } else {
+                        // A pending Agent/Task subagent is outstanding pre-result.
+                        // Bound the wait; see CLAUDE_BG_TASK_MAX_WAIT.
+                        let deadline = pending_agent_task_deadline
+                            .get_or_insert_with(|| Instant::now() + CLAUDE_BG_TASK_MAX_WAIT);
+                        let remaining = deadline.saturating_duration_since(Instant::now());
+                        match tokio::time::timeout(remaining, lines.next_line()).await {
+                            Ok(result) => result,
+                            Err(_) => {
+                                if pending_agent_task_ids.is_empty() {
+                                    continue;
+                                }
+                                log::warn!(
+                                    "[claude] pending Agent/Task idle max-wait ({:?}) elapsed with {} task(s) still pending turn={}; force-settling",
+                                    CLAUDE_BG_TASK_MAX_WAIT,
+                                    pending_agent_task_ids.len(),
+                                    turn_id
+                                );
+                                settled_by_grace = true;
+                                settled_by_pending_task_max_wait = true;
+                                break;
+                            }
+                        }
                     }
                 } else {
                     let wait_duration = first_event_deadline
@@ -1847,6 +1905,11 @@ impl ClaudeSession {
                         .get_or_insert_with(|| Instant::now() + CLAUDE_POST_RESULT_GRACE);
                     wait_duration =
                         wait_duration.min(deadline.saturating_duration_since(Instant::now()));
+                } else if result_seen_at.is_none() && !pending_agent_task_ids.is_empty() {
+                    let deadline = pending_agent_task_deadline
+                        .get_or_insert_with(|| Instant::now() + CLAUDE_BG_TASK_MAX_WAIT);
+                    wait_duration =
+                        wait_duration.min(deadline.saturating_duration_since(Instant::now()));
                 }
                 match tokio::time::timeout(wait_duration, lines.next_line()).await {
                     Ok(result) => result,
@@ -1858,6 +1921,21 @@ impl ClaudeSession {
                         {
                             self.flush_buffered_text_delta(turn_id, &mut pending_text_delta);
                             settled_by_grace = true;
+                            break;
+                        }
+                        if result_seen_at.is_none()
+                            && !pending_agent_task_ids.is_empty()
+                            && pending_agent_task_deadline.is_some_and(|d| Instant::now() >= d)
+                        {
+                            self.flush_buffered_text_delta(turn_id, &mut pending_text_delta);
+                            log::warn!(
+                                "[claude] pending Agent/Task idle max-wait ({:?}) elapsed with {} task(s) still pending turn={}; force-settling",
+                                CLAUDE_BG_TASK_MAX_WAIT,
+                                pending_agent_task_ids.len(),
+                                turn_id
+                            );
+                            settled_by_grace = true;
+                            settled_by_pending_task_max_wait = true;
                             break;
                         }
                         if saw_valid_stream_event {
@@ -1903,6 +1981,11 @@ impl ClaudeSession {
 
             match parse_claude_stream_json_line(&line) {
                 Ok(event) => {
+                    // Idle-reset the pending Agent/Task max-wait: any successfully parsed
+                    // stream line while a task is pending is evidence the process is alive.
+                    if result_seen_at.is_none() && !pending_agent_task_ids.is_empty() {
+                        pending_agent_task_deadline = Some(Instant::now() + CLAUDE_BG_TASK_MAX_WAIT);
+                    }
                     // Structured background-task settlement blockers (issue #983).
                     if let Some(bg_id) = extract_background_task_id(&event) {
                         let before_len = active_background_task_ids.len();
@@ -1926,6 +2009,32 @@ impl ClaudeSession {
                                 turn_id,
                                 bg_id.len()
                             );
+                        }
+                    }
+                    // Agent/Task pending-task tracking: independent of
+                    // active_background_task_ids, only bounds the pre-result wait.
+                    if result_seen_at.is_none() {
+                        if let Some(agent_task_id) = extract_task_started_id(&event) {
+                            let before_len = pending_agent_task_ids.len();
+                            if try_register_background_task_id(
+                                &mut pending_agent_task_ids,
+                                &agent_task_id,
+                            ) {
+                                if before_len != pending_agent_task_ids.len() {
+                                    log::info!(
+                                        "[claude] registered pending Agent/Task turn={} id={} pending={}",
+                                        turn_id,
+                                        agent_task_id,
+                                        pending_agent_task_ids.len()
+                                    );
+                                }
+                            } else if before_len >= stream_helpers::CLAUDE_BG_TASK_SET_MAX {
+                                log::warn!(
+                                    "[claude] pending Agent/Task budget full turn={} rejected_id_len={}",
+                                    turn_id,
+                                    agent_task_id.len()
+                                );
+                            }
                         }
                     }
                     if let Some(release_id) = extract_terminal_task_release_id(&event) {
@@ -1954,6 +2063,21 @@ impl ClaudeSession {
                                     "[claude] re-armed post-result grace after blockers cleared turn={}",
                                     turn_id
                                 );
+                            }
+                        }
+                        if try_release_background_task_id(
+                            &mut pending_agent_task_ids,
+                            &release_id,
+                            "completed",
+                        ) {
+                            log::info!(
+                                "[claude] released pending Agent/Task turn={} id={} pending={}",
+                                turn_id,
+                                release_id,
+                                pending_agent_task_ids.len()
+                            );
+                            if pending_agent_task_ids.is_empty() {
+                                pending_agent_task_deadline = None;
                             }
                         }
                     }
@@ -2340,6 +2464,15 @@ impl ClaudeSession {
             self.emit_pending_ask_user_question_resume_failure(turn_id, &error_msg);
             self.clear_turn_ephemeral_state(turn_id);
             return Err(error_msg);
+        }
+
+        // A pending-task idle max-wait force-kill must never look identical to
+        // an ordinary empty-but-successful turn.
+        if settled_by_pending_task_max_wait && response_text.trim().is_empty() {
+            response_text = format!(
+                "[A background subagent did not report back within {:?} and was abandoned. Its work may be incomplete or lost.]",
+                CLAUDE_BG_TASK_MAX_WAIT
+            );
         }
 
         // Emit turn completed

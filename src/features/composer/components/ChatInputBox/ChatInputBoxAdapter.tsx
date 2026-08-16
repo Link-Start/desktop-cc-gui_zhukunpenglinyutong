@@ -722,7 +722,7 @@ function attachmentToGeminiImageInput(attachment: Attachment): string | null {
 
 function attachmentsToImageInputs(
   attachments: Attachment[] | undefined,
-  provider: 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' = 'claude',
+  provider: 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh' = 'claude',
 ): string[] | undefined {
   if (!attachments || attachments.length === 0) {
     return undefined;
@@ -742,7 +742,7 @@ function attachmentsToImageInputs(
 /**
  * Maps Composer engine types to ChatInputBox provider IDs
  */
-type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode';
+type ChatInputProvider = 'claude' | 'codex' | 'gemini' | 'grok' | 'kimi' | 'opencode' | 'pi' | 'dsh';
 
 function engineToProvider(engine?: EngineType): ChatInputProvider {
   switch (engine) {
@@ -756,6 +756,10 @@ function engineToProvider(engine?: EngineType): ChatInputProvider {
       return 'grok';
     case 'kimi':
       return 'kimi';
+    case 'pi':
+      return 'pi';
+    case 'dsh':
+      return 'dsh';
     case 'claude':
     default:
       return 'claude';
@@ -1844,6 +1848,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         gemini: isEngineEnabled('gemini'),
         grok: isEngineEnabled('grok'),
         kimi: isEngineEnabled('kimi'),
+        pi: isEngineEnabled('pi'),
+        dsh: isEngineEnabled('dsh'),
       } as const;
     }, [engines, isSharedSession]);
 
@@ -1861,6 +1867,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         return t(engine.availabilityLabelKey);
       };
 
+      const sharedUnsupported = t("sharedSession.dshUnsupported", {
+        defaultValue: "Not available in Shared Session",
+      });
       return {
         claude: resolveStatusLabel('claude'),
         codex: resolveStatusLabel('codex'),
@@ -1868,8 +1877,10 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         gemini: resolveStatusLabel('gemini'),
         grok: resolveStatusLabel('grok'),
         kimi: resolveStatusLabel('kimi'),
+        pi: resolveStatusLabel('pi'),
+        dsh: isSharedSession ? sharedUnsupported : resolveStatusLabel('dsh'),
       } as const;
-    }, [engines, t]);
+    }, [engines, isSharedSession, t]);
 
     const providerVersions = useMemo(() => {
       if (!engines || engines.length === 0) {
@@ -1883,6 +1894,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         grok: 'Grok CLI',
         kimi: 'Kimi CLI',
         opencode: 'OpenCode',
+        pi: 'PI CLI',
+        dsh: 'DeepSeek Harness',
       };
 
       const byEngine = new Map(engines.map((entry) => [entry.type, entry]));
@@ -1908,6 +1921,8 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         gemini: resolveVersion('gemini'),
         grok: resolveVersion('grok'),
         kimi: resolveVersion('kimi'),
+        pi: resolveVersion('pi'),
+        dsh: resolveVersion('dsh'),
       } as const;
     }, [engines]);
 

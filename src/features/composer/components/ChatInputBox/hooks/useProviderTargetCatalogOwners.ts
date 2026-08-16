@@ -15,12 +15,16 @@ import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_NAME,
   CODEX_DISK_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_NAME,
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
+  DSH_LOCAL_PROVIDER_PROFILE_NAME,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_NAME,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_NAME,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
   OPENCODE_LOCAL_PROVIDER_PROFILE_NAME,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
+  PI_LOCAL_PROVIDER_PROFILE_NAME,
   type EngineProviderProfileOption,
 } from "../../../../threads/constants/codexProviderProfiles";
 import type { ModelInfo, ProviderId } from "../types";
@@ -52,12 +56,12 @@ export type ProviderTargetGroup = {
 
 type ProfileCatalog = Partial<
   Record<
-    "claude" | "codex" | "kimi" | "grok" | "opencode",
+    "claude" | "codex" | "kimi" | "grok" | "opencode" | "pi",
     EngineProviderProfileOption[]
   >
 >;
 
-type ProviderProfileEngine = Exclude<ProviderId, "gemini">;
+type ProviderProfileEngine = Exclude<ProviderId, "gemini" | "dsh">;
 
 const PROVIDER_PROFILE_ENGINES: readonly ProviderProfileEngine[] = [
   "claude",
@@ -65,6 +69,7 @@ const PROVIDER_PROFILE_ENGINES: readonly ProviderProfileEngine[] = [
   "grok",
   "kimi",
   "opencode",
+  "pi",
 ];
 
 export function isProviderProfileEngine(
@@ -109,6 +114,13 @@ const DEFAULT_PROFILES: ProfileCatalog = {
       source: "disk",
     },
   ],
+  pi: [
+    {
+      id: PI_LOCAL_PROVIDER_PROFILE_ID,
+      name: PI_LOCAL_PROVIDER_PROFILE_NAME,
+      source: "disk",
+    },
+  ],
 };
 
 let profileCatalogCache: ProfileCatalog | null = null;
@@ -143,7 +155,7 @@ type AtomicProviderTargetCatalogOptions =
   };
 
 function normalizeProfiles(
-  engine: "claude" | "codex" | "kimi" | "grok" | "opencode",
+  engine: "claude" | "codex" | "kimi" | "grok" | "opencode" | "pi",
   providers: Array<{
     id: string;
     name: string;
@@ -224,6 +236,8 @@ async function loadProfileCatalog(): Promise<ProfileCatalog> {
             opencode.status === "fulfilled"
               ? normalizeProfiles("opencode", opencode.value)
               : DEFAULT_PROFILES.opencode,
+          // PI has no multi-provider store; always surface native ~/.pi profile.
+          pi: DEFAULT_PROFILES.pi,
         };
         return profileCatalogCache;
       })
@@ -253,6 +267,10 @@ function isLocalProviderProfile(
       return providerProfileId === GROK_LOCAL_PROVIDER_PROFILE_ID;
     case "opencode":
       return providerProfileId === OPENCODE_LOCAL_PROVIDER_PROFILE_ID;
+    case "pi":
+      return providerProfileId === PI_LOCAL_PROVIDER_PROFILE_ID;
+    case "dsh":
+      return providerProfileId === DSH_LOCAL_PROVIDER_PROFILE_ID;
     default:
       return false;
   }
@@ -477,7 +495,9 @@ function useProviderTargetCatalogOwner({
     ): Promise<ModelInfo[]> => {
       if (
         !enabled ||
-        !["claude", "codex", "kimi", "grok", "opencode"].includes(engine)
+        !["claude", "codex", "kimi", "grok", "opencode", "pi", "dsh"].includes(
+          engine,
+        )
       ) {
         return [];
       }
@@ -655,7 +675,7 @@ function useProviderTargetCatalogOwner({
       (engine) =>
         engine === currentProvider || !disabledCliEngineIds.has(engine),
     );
-    return engines.map((engine) => ({
+    const groups: ProviderTargetGroup[] = engines.map((engine) => ({
       providerId: engine,
       providerLabel: resolveProviderLabel(engine),
       enabled: true,
@@ -698,6 +718,38 @@ function useProviderTargetCatalogOwner({
         };
       }),
     }));
+    // DSH is a Native engine, not a Provider Profile engine. Shared stays
+    // fail-closed; Home create-session needs a picker row so models from the
+    // DSH host can be selected without embedding DSH Web UI.
+    const showDsh =
+      mode !== "shared" &&
+      (currentProvider === "dsh" || !disabledCliEngineIds.has("dsh"));
+    if (showDsh) {
+      const key = modelCatalogKey("dsh", DSH_LOCAL_PROVIDER_PROFILE_ID);
+      groups.push({
+        providerId: "dsh",
+        providerLabel: resolveProviderLabel("dsh"),
+        enabled: true,
+        disabledReason: undefined,
+        profiles: [
+          {
+            id: DSH_LOCAL_PROVIDER_PROFILE_ID,
+            label: DSH_LOCAL_PROVIDER_PROFILE_NAME,
+            source: "disk",
+            enabled: true,
+            disabledReason: undefined,
+            models:
+              loadedModels[key] ?? modelCatalogCache.get(key) ?? EMPTY_MODELS,
+            loading: loadingBindings.has(key),
+            reloadingConfig: catalogActions.has(`reload-config:${key}`),
+            discoveringModels: false,
+            discoverySupported: false,
+            error: modelErrors[key] ?? null,
+          },
+        ],
+      });
+    }
+    return groups;
   }, [
     currentProvider,
     catalogActions,

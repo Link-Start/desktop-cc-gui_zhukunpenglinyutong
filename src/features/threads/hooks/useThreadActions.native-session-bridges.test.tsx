@@ -8,12 +8,20 @@ import {
   deleteClaudeSession,
   deleteGeminiSession,
   deleteOpenCodeSession,
+  deletePiSession,
+  deleteWorkspaceSessions,
+  tombstoneSessionIndexRows,
   connectWorkspace,
   createWorkspaceDirectory,
   getOpenCodeSessionList,
   listWorkspaceSessions,
   listClaudeSessions,
   listGeminiSessions,
+  listKimiSessions,
+  listGrokSessions,
+  listDshSessions,
+  listPiSessions,
+  listSessionIndexForWorkspace,
   loadClaudeSession,
   loadGeminiSession,
   loadCodexSession,
@@ -47,8 +55,11 @@ vi.mock("../../../services/tauri", () => ({
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
   loadCodexSession: vi.fn(),
@@ -63,6 +74,9 @@ vi.mock("../../../services/tauri", () => ({
   deleteClaudeSession: vi.fn(),
   deleteGeminiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
+  deletePiSession: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
   trashWorkspaceItem: vi.fn(),
   writeWorkspaceFile: vi.fn(),
 }));
@@ -93,6 +107,21 @@ describe("useThreadActions native session bridges", () => {
     vi.useRealTimers();
     vi.mocked(listThreadTitles).mockResolvedValue({});
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
+    vi.mocked(listKimiSessions).mockResolvedValue([]);
+    vi.mocked(listGrokSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
@@ -115,6 +144,21 @@ describe("useThreadActions native session bridges", () => {
       deleted: true,
       method: "filesystem",
     });
+    vi.mocked(deletePiSession).mockResolvedValue(undefined);
+    vi.mocked(deleteWorkspaceSessions).mockImplementation(
+      async (_workspaceId: string, sessionIds: string[]) => ({
+        results: sessionIds.map((sessionId) => ({
+          sessionId,
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "SESSION_DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
+        })),
+      }),
+    );
+    vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
     vi.mocked(deleteCodexSession).mockResolvedValue({
       deleted: true,
       deletedCount: 1,
@@ -411,7 +455,9 @@ describe("useThreadActions native session bridges", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     await waitFor(() => {
@@ -448,7 +494,9 @@ describe("useThreadActions native session bridges", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     await waitFor(() => {
@@ -464,7 +512,7 @@ describe("useThreadActions native session bridges", () => {
     });
   });
 
-  it("routes opencode hard delete to backend adapter", async () => {
+  it("routes opencode delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
     await act(async () => {
@@ -475,10 +523,34 @@ describe("useThreadActions native session bridges", () => {
     });
 
     expect(archiveThread).not.toHaveBeenCalled();
-    expect(deleteOpenCodeSession).toHaveBeenCalledWith("ws-1", "ses_opc_1");
+    expect(deleteOpenCodeSession).not.toHaveBeenCalled();
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "opencode:ses_opc_1",
+    ]);
   });
 
-  it("routes codex delete to filesystem delete instead of archive", async () => {
+  it("routes pi delete to the unified backend delete", async () => {
+    const { result } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+      });
+    });
+
+    await act(async () => {
+      await result.current.deleteThreadForWorkspace("ws-1", "pi:ses_pi_1");
+    });
+
+    expect(archiveThread).not.toHaveBeenCalled();
+    expect(deleteCodexSession).not.toHaveBeenCalled();
+    expect(deletePiSession).not.toHaveBeenCalled();
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "pi:ses_pi_1",
+    ]);
+  });
+
+  it("routes codex delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
     await act(async () => {
@@ -489,10 +561,10 @@ describe("useThreadActions native session bridges", () => {
     });
 
     expect(archiveThread).not.toHaveBeenCalled();
-    expect(deleteCodexSession).toHaveBeenCalledWith(
-      "ws-1",
+    expect(deleteCodexSession).not.toHaveBeenCalled();
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
       "019d767b-5541-7010-a30d-a454864bccd8",
-    );
+    ]);
   });
 
   it("keeps deleted claude sessions absent after reload", async () => {
@@ -528,10 +600,9 @@ describe("useThreadActions native session bridges", () => {
       );
     });
 
-    expect(deleteClaudeSession).toHaveBeenCalledWith(
-      "/tmp/codex",
-      "session-delete-me",
-    );
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "claude:session-delete-me",
+    ]);
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {
@@ -653,7 +724,9 @@ describe("useThreadActions native session bridges", () => {
       await result.current.resumeThreadForWorkspace("ws-1", "claude:session-1");
     });
 
-    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1");
+    expect(loadClaudeSession).toHaveBeenCalledWith("/tmp/codex", "session-1", {
+      limit: 80,
+    });
 
     const setThreadItemsCall = dispatch.mock.calls.find(
       ([action]) =>
@@ -684,5 +757,63 @@ describe("useThreadActions native session bridges", () => {
         output: "permission denied",
       }),
     );
+  });
+
+  it("first-paint still lists DSH host sessions when Session Index has no dsh rows", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as never);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: true,
+      engines: ["claude", "codex", "grok"],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
+    vi.mocked(listDshSessions).mockResolvedValue([
+      {
+        sessionId: "session-dsh-history-1",
+        firstMessage: "无法查看DSH历史记录",
+        updatedAt: 1_786_896_696_172,
+      },
+    ]);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+        startupHydrationMode: "first-paint",
+      });
+    });
+
+    await waitFor(() => {
+      expect(listDshSessions).toHaveBeenCalledWith(workspace.path, 50);
+    });
+
+    await waitFor(() => {
+      const setThreadsCalls = dispatch.mock.calls.filter(
+        ([action]) =>
+          action?.type === "setThreads" &&
+          action.workspaceId === workspace.id,
+      );
+      const hasDshRow = setThreadsCalls.some(([action]) =>
+        Array.isArray(action.threads) &&
+        action.threads.some(
+          (thread: { id?: string; engineSource?: string }) =>
+            thread.id === "dsh:session-dsh-history-1" ||
+            thread.engineSource === "dsh",
+        ),
+      );
+      expect(hasDshRow).toBe(true);
+    });
   });
 });

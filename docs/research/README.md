@@ -14,6 +14,8 @@ status: active
 - [Desktop development fast-start runbook](./desktop-dev-fast-start-runbook.md) — Current runbook；`scripts/dev-local.sh`、`npm run tauri:dev`、port `1420` 已按 `0.7.16` 校准。
 - [Multi-CLI provider/session foundation design](./mossx-multi-cli-provider-session-foundation-design.md) — Active architectural reference；implementation status 以 main specs 为准。
 - [New CLI onboarding guide](./mossx-new-cli-onboarding-guide.md) — Current onboarding guide。
+- [DSH engine onboarding execution](./mossx-dsh-engine-onboarding-execution.md) — Draft execution plan：把 DeepSeek Harness 接成第 7 个 Native Engine（不内嵌 Web UI）。实现前先开 OpenSpec change；不是 current contract。
+- [DSH capability spike](./mossx-dsh-capability-spike.md) — Phase S 实测（`dsh 0.1.0-rc.6` Host RPC / WS mux）；Adapter contract 证据，不是产品 spec。
 
 ## Historical exploratory research
 

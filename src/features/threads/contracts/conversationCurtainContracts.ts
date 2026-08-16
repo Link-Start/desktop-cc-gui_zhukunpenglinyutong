@@ -5,7 +5,15 @@ import type {
   TurnPlan,
 } from "../../../types";
 
-export type ConversationEngine = "codex" | "claude" | "gemini" | "grok" | "kimi" | "opencode";
+export type ConversationEngine =
+  | "claude"
+  | "codex"
+  | "gemini"
+  | "grok"
+  | "kimi"
+  | "opencode"
+  | "pi"
+  | "dsh";
 
 export const NORMALIZED_ITEM_KINDS = [
   "message",
@@ -71,6 +79,8 @@ export type ConversationMeta = {
   isThinking: boolean;
   heartbeatPulse: number | null;
   historyRestoredAtMs: number | null;
+  historyHasMore?: boolean | null;
+  historyNextCursor?: string | null;
 };
 
 export type SnapshotFallbackWarning = {

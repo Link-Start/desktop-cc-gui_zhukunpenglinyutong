@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import {
-  deleteCodexSessions,
+  deleteWorkspaceSessions,
   listThreads,
   loadClaudeSession,
   resumeThread,
@@ -37,7 +37,7 @@ vi.mock("./useThreadAccountInfo", () => ({
 vi.mock("../../../services/tauri", () => ({
   respondToServerRequest: vi.fn(),
   respondToUserInputRequest: vi.fn(),
-  listThreadTitles: vi.fn(),
+  listThreadTitles: vi.fn().mockResolvedValue({}),
   setThreadTitle: vi.fn(),
   renameThreadTitleKey: vi.fn(),
   generateThreadTitle: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock("../../../services/tauri", () => ({
   loadClaudeSession: vi.fn(),
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
-  deleteCodexSessions: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
@@ -73,6 +73,11 @@ vi.mock("../../../services/tauri", () => ({
     nextCursor: null,
     partialSource: null,
   }),
+  listWorkspaceSessionArchiveEvidence: vi.fn().mockResolvedValue({
+    archivedAtBySessionId: {},
+    sourceStatuses: [],
+    partialSource: null,
+  }),
   listWorkspacePlugins: vi.fn(),
   addWorkspacePlugin: vi.fn(),
   removeWorkspacePlugin: vi.fn(),
@@ -87,6 +92,19 @@ vi.mock("../../../services/tauri", () => ({
   listGeminiSessions: vi.fn().mockResolvedValue([]),
   listGrokSessions: vi.fn().mockResolvedValue([]),
   listKimiSessions: vi.fn().mockResolvedValue([]),
+  listDshSessions: vi.fn().mockResolvedValue([]),
+  listPiSessions: vi.fn().mockResolvedValue([]),
+  listSessionIndexForWorkspace: vi.fn().mockResolvedValue({
+    data: [],
+    source: "session-index",
+    synced: false,
+    engines: [],
+    visibility: {
+      available: true,
+      freshness: "verified",
+      hiddenNativeIds: [],
+    },
+  }),
   listClaudeSessions: vi.fn().mockResolvedValue([]),
   getOpenCodeSessionList: vi.fn().mockResolvedValue([]),
   getEmailInboundListenerStatus: vi.fn().mockResolvedValue({
@@ -373,7 +391,6 @@ describe("useThreads sidebar cache", () => {
   });
 
   it("tracks Claude history loading while selecting an unloaded session", async () => {
-    vi.useFakeTimers();
     vi.mocked(listThreads).mockResolvedValue({
       result: { data: [], nextCursor: null },
     } as never);
@@ -385,18 +402,19 @@ describe("useThreads sidebar cache", () => {
         }) as never,
     );
 
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace);
+    });
+
+    vi.useFakeTimers();
     try {
-      const { result } = renderHook(() =>
-        useThreads({
-          activeWorkspace: workspace,
-          onWorkspaceConnected: vi.fn(),
-        }),
-      );
-
-      await act(async () => {
-        await result.current.listThreadsForWorkspace(workspace);
-      });
-
       act(() => {
         result.current.setActiveThreadId("claude:session-history");
       });
@@ -412,6 +430,7 @@ describe("useThreads sidebar cache", () => {
       expect(vi.mocked(loadClaudeSession)).toHaveBeenCalledWith(
         "/tmp/codex",
         "session-history",
+        { limit: 80 },
       );
       expect(
         result.current.historyLoadingByThreadId["claude:session-history"],
@@ -490,6 +509,7 @@ describe("useThreads sidebar cache", () => {
       expect(loadClaudeSession).toHaveBeenCalledWith(
         workspace.path,
         "cached-session",
+        { limit: 80 },
       );
       expect(
         result.current.historyLoadingByThreadId["claude:cached-session"],
@@ -628,19 +648,25 @@ describe("useThreads sidebar cache", () => {
         nextCursor: null,
       },
     } as never);
-    vi.mocked(deleteCodexSessions).mockResolvedValue({
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValue({
       results: [
         {
           sessionId: "thread-1",
-          deleted: true,
-          deletedCount: 1,
-          method: "filesystem",
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "SESSION_DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
         },
         {
           sessionId: "thread-2",
-          deleted: true,
-          deletedCount: 1,
-          method: "filesystem",
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "SESSION_DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
         },
       ],
     });
@@ -667,7 +693,7 @@ describe("useThreads sidebar cache", () => {
       ]);
     });
 
-    expect(deleteCodexSessions).toHaveBeenCalledWith("ws-1", [
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
       "thread-1",
       "thread-2",
     ]);
@@ -694,20 +720,25 @@ describe("useThreads sidebar cache", () => {
         nextCursor: null,
       },
     } as never);
-    vi.mocked(deleteCodexSessions).mockResolvedValue({
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValue({
       results: [
         {
           sessionId: "thread-missing",
-          deleted: false,
-          deletedCount: 0,
-          method: "filesystem",
+          ok: false,
+          archivedAt: null,
           error: "codex session file not found for session thread-missing",
+          code: "SESSION_DELETE_FAILED",
+          deletedFromDisk: false,
+          metadataCleaned: false,
         },
         {
           sessionId: "thread-ok",
-          deleted: true,
-          deletedCount: 1,
-          method: "filesystem",
+          ok: true,
+          archivedAt: null,
+          error: null,
+          code: "SESSION_DELETED",
+          deletedFromDisk: true,
+          metadataCleaned: true,
         },
       ],
     });

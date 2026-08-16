@@ -288,6 +288,7 @@ function looksLikeOpaqueToolRowId(id: string): boolean {
     raw.startsWith("kimi:") ||
     raw.startsWith("gemini:") ||
     raw.startsWith("opencode:") ||
+    raw.startsWith("dsh:") ||
     raw.startsWith("shared:")
   ) {
     return false;
@@ -514,6 +515,7 @@ export function resolveSubagentSessionThreadId(options: {
     agent.startsWith("kimi:") ||
     agent.startsWith("gemini:") ||
     agent.startsWith("opencode:") ||
+    agent.startsWith("dsh:") ||
     agent.startsWith("shared:")
   ) {
     return agent;
@@ -595,6 +597,7 @@ function inferEngineFromThreadId(
   if (id.startsWith("kimi:")) return "kimi";
   if (id.startsWith("gemini:")) return "gemini";
   if (id.startsWith("opencode:")) return "opencode";
+  if (id.startsWith("dsh:")) return "dsh";
   if (id.startsWith("shared:")) return "codex";
   return "codex";
 }

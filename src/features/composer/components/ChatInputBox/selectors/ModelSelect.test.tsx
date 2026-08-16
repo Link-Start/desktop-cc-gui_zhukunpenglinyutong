@@ -7,6 +7,7 @@ import {
   buildProviderExecutionTarget,
   isSameProviderExecutionProfile,
   ModelSelect,
+  normalizeExecutionProviderProfileId,
   resolveActiveProviderProfileId,
   resolveAtomicSelectedModelDisplay,
   resolveClaudeCatalogModelLabel,
@@ -40,6 +41,7 @@ vi.mock("../../../../vendors/providerBrandIcon", () => ({
     openai: "/icons/openai.svg",
     kimi: "/icons/kimi.svg",
     opencode: "/icons/opencode.svg",
+    deepseek: "/icons/deepseek.svg",
   },
   resolveProviderBrandIcon: ({ modelId }: { modelId?: string | null }) => {
     if (modelId === "kimi-k3" || modelId?.includes("kimi")) {
@@ -2001,6 +2003,15 @@ describe("resolveActiveProviderProfileId", () => {
         providerProfileId: null,
       }),
     ).toBe("__local_opencode_json__");
+    expect(
+      resolveActiveProviderProfileId("pi", {
+        engine: "claude",
+        providerProfileId: null,
+      }),
+    ).toBe("__local_pi__");
+    expect(
+      normalizeExecutionProviderProfileId("pi", "__local_pi__"),
+    ).toBeNull();
   });
 
   it("returns null for engines without provider profiles", () => {
@@ -2058,6 +2069,291 @@ describe("ModelSelect empty channel models and custom reasoning defaults", () =>
     ) as HTMLElement;
     expect(footer).toBeTruthy();
     expect(within(footer).getByRole("button", { name: "models.addModel" })).toBeTruthy();
+  });
+
+  it("renders DSH with the whale icon and hides add-model plus channel switcher", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const groups: ProviderTargetGroup[] = [
+      ...buildAtomicGroups(),
+      {
+        providerId: "dsh",
+        providerLabel: "DeepSeek Harness",
+        enabled: true,
+        profiles: [
+          {
+            id: "__dsh_host_catalog__",
+            label: "本地配置",
+            source: "disk",
+            loading: false,
+            error: null,
+            models: [
+              { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+            ],
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onAddModel={vi.fn()}
+        onOpenCliSettings={vi.fn()}
+        onExecutionTargetChange={vi.fn()}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /DeepSeek Harness/ });
+    openPickerSubmenu(/DeepSeek Harness/);
+
+    const dshTrigger = document.querySelector("[data-provider-id='dsh']");
+    expect(dshTrigger).toBeTruthy();
+    expect(dshTrigger?.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/deepseek.svg",
+    );
+    expect(document.querySelector("[data-submenu-footer='dsh']")).toBeNull();
+    expect(document.querySelector("[data-channel-select='dsh']")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "models.addModel" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("menuitem", { name: /DeepSeek V4 Pro/ }),
+    ).toBeTruthy();
+  });
+
+  it("emits a complete DSH host catalog target when picking grok-4.6 / Grok 4.5", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExecutionTargetChange = vi.fn();
+    const groups: ProviderTargetGroup[] = [
+      ...buildAtomicGroups(),
+      {
+        providerId: "dsh",
+        providerLabel: "DeepSeek Harness",
+        enabled: true,
+        profiles: [
+          {
+            id: "__dsh_host_catalog__",
+            label: "本地配置",
+            source: "disk",
+            loading: false,
+            error: null,
+            models: [
+              {
+                id: "grok-4.6/Grok 4.5",
+                model: "Grok 4.5",
+                label: "grok-4.6 / Grok 4.5",
+              },
+              {
+                id: "grok-4.6/Grok 4.6",
+                model: "Grok 4.6",
+                label: "grok-4.6 / Grok 4.6",
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={onExecutionTargetChange}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /DeepSeek Harness/ });
+    openPickerSubmenu(/DeepSeek Harness/);
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: /^Grok 4\.5$/ }),
+    );
+
+    expect(onExecutionTargetChange).toHaveBeenCalledWith({
+      engine: "dsh",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok-4.6/Grok 4.5",
+      model: "Grok 4.5",
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+      reasoning: null,
+    });
+  });
+
+  it("uses the Grok EngineIcon for DSH grok-4.6 catalog rows, not the DeepSeek whale", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const groups: ProviderTargetGroup[] = [
+      ...buildAtomicGroups(),
+      {
+        providerId: "dsh",
+        providerLabel: "DeepSeek Harness",
+        enabled: true,
+        profiles: [
+          {
+            id: "__dsh_host_catalog__",
+            label: "本地配置",
+            source: "disk",
+            loading: false,
+            error: null,
+            models: [
+              {
+                id: "deepseek/DeepSeek-V4-Flash",
+                model: "DeepSeek-V4-Flash",
+                label: "DeepSeek / DeepSeek-V4-Flash",
+              },
+              {
+                id: "vision-http/ovh/Qwen2.5-VL-72B-Instruct",
+                model: "ovh/Qwen2.5-VL-72B-Instruct",
+                label: "Vision HTTP / ovh/Qwen2.5-VL-72B-Instruct",
+              },
+              {
+                id: "grok-4.6/Grok 4.5",
+                model: "Grok 4.5",
+                label: "grok-4.6 / Grok 4.5",
+              },
+              {
+                id: "grok-4.6/Grok 4.6",
+                model: "Grok 4.6",
+                label: "grok-4.6 / Grok 4.6",
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const dshGrokTarget: ExecutionTarget = {
+      engine: "dsh",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok-4.6/Grok 4.6",
+      model: "Grok 4.6",
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+      reasoning: null,
+    };
+
+    render(
+      <ModelSelect
+        value="Grok 4.6"
+        currentProvider="dsh"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={vi.fn()}
+        executionTarget={dshGrokTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:Grok 4.6",
+    });
+    expect(within(trigger).getByTestId("grok-icon")).toBeTruthy();
+    expect(trigger.querySelector("img")).toBeNull();
+
+    await user.click(trigger);
+    await screen.findByRole("menuitem", { name: /DeepSeek Harness/ });
+    openPickerSubmenu(/DeepSeek Harness/);
+
+    const dshTrigger = document.querySelector("[data-provider-id='dsh']");
+    expect(dshTrigger?.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/deepseek.svg",
+    );
+
+    const deepseekItem = await screen.findByRole("menuitem", {
+      name: /^DeepSeek-V4-Flash$/,
+    });
+    expect(deepseekItem.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/deepseek.svg",
+    );
+    expect(within(deepseekItem).queryByTestId("grok-icon")).toBeNull();
+    expect(deepseekItem.textContent).not.toContain("DeepSeek /");
+
+    const qwenItem = await screen.findByRole("menuitem", {
+      name: /^Qwen2\.5-VL-72B-Instruct$/,
+    });
+    expect(qwenItem.textContent).not.toContain("Vision HTTP");
+    expect(qwenItem.textContent).not.toContain("ovh/");
+
+    const grok45Item = await screen.findByRole("menuitem", {
+      name: /^Grok 4\.5$/,
+    });
+    const grok46Item = await screen.findByRole("menuitem", {
+      name: /^Grok 4\.6$/,
+    });
+    expect(within(grok45Item).getByTestId("grok-icon")).toBeTruthy();
+    expect(grok45Item.querySelector("img")).toBeNull();
+    expect(within(grok46Item).getByTestId("grok-icon")).toBeTruthy();
+    expect(grok46Item.querySelector("img")).toBeNull();
+  });
+
+  it("opens CLI settings from the DSH empty catalog hint", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onOpenCliSettings = vi.fn();
+    const groups: ProviderTargetGroup[] = [
+      ...buildAtomicGroups(),
+      {
+        providerId: "dsh",
+        providerLabel: "DeepSeek Harness",
+        enabled: true,
+        profiles: [
+          {
+            id: "__dsh_host_catalog__",
+            label: "本地配置",
+            source: "disk",
+            loading: false,
+            error: null,
+            models: [],
+          },
+        ],
+      },
+    ];
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onAddModel={vi.fn()}
+        onOpenCliSettings={onOpenCliSettings}
+        onExecutionTargetChange={vi.fn()}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    await screen.findByRole("menuitem", { name: /DeepSeek Harness/ });
+    openPickerSubmenu(/DeepSeek Harness/);
+
+    const emptyRow = document.querySelector(
+      "[data-empty-channel-models='dsh']",
+    );
+    expect(emptyRow).toBeTruthy();
+    expect(emptyRow?.textContent).toContain("models.emptyDshHostHint");
+    expect(emptyRow?.textContent).not.toContain(
+      "models.emptyChannelModelsHint",
+    );
+    expect(emptyRow?.getAttribute("aria-disabled")).not.toBe("true");
+    expect(document.querySelector("[data-submenu-footer='dsh']")).toBeNull();
+
+    fireEvent.click(emptyRow as Element);
+    expect(onOpenCliSettings).toHaveBeenCalledTimes(1);
   });
 
   it("seeds default medium reasoning when a custom Codex model is picked", async () => {

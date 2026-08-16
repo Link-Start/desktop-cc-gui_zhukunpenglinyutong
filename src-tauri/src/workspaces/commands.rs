@@ -1298,6 +1298,7 @@ pub(crate) async fn add_workspace(
         None,
         None,
         None,
+        None,
     )
     .await;
 
@@ -1337,11 +1338,17 @@ pub(crate) async fn add_workspace(
             // Grok follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Grok, path, codex_bin, &state).await
         }
+        EngineType::Pi => {
+            add_workspace_for_cli_engine(EngineType::Pi, path, codex_bin, &state).await
+        }
+        EngineType::Dsh => {
+            add_workspace_for_cli_engine(EngineType::Dsh, path, codex_bin, &state).await
+        }
     }
 }
 
 /// Add workspace for a CLI-based engine (no persistent session needed).
-/// Supports Claude, Gemini, OpenCode, Kimi and Grok engines.
+/// Supports Claude, Gemini, OpenCode, Kimi, Grok, Pi and Dsh engines.
 async fn add_workspace_for_cli_engine(
     engine_type: EngineType,
     path: String,
@@ -1350,6 +1357,7 @@ async fn add_workspace_for_cli_engine(
 ) -> Result<WorkspaceInfo, String> {
     use crate::engine::status::{
         detect_claude_status, detect_grok_status, detect_kimi_status, detect_opencode_status,
+        detect_pi_status,
     };
     use std::path::PathBuf;
 
@@ -1363,6 +1371,8 @@ async fn add_workspace_for_cli_engine(
         EngineType::OpenCode => "opencode",
         EngineType::Kimi => "kimi",
         EngineType::Grok => "grok",
+        EngineType::Pi => "pi",
+        EngineType::Dsh => "dsh",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
     };
 
@@ -1408,6 +1418,15 @@ async fn add_workspace_for_cli_engine(
             };
             detect_grok_status(grok_bin.as_deref()).await.installed
         }
+        EngineType::Pi => {
+            let pi_bin = {
+                let settings = state.app_settings.lock().await;
+                settings.pi_bin.clone()
+            };
+            detect_pi_status(pi_bin.as_deref()).await.installed
+        }
+        // Host can start later; do not refuse the workspace if dsh is not installed yet.
+        EngineType::Dsh => true,
         _ => false,
     };
     if !cli_installed {
@@ -2783,7 +2802,8 @@ $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
 [Convert]::ToBase64String($ms.ToArray())
 "#
     );
-    let output = std::process::Command::new("powershell")
+    // std_command 携带 CREATE_NO_WINDOW：避免每次图标提取闪现控制台窗口。
+    let output = crate::utils::std_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -3136,7 +3156,8 @@ fn command_resolvable_on_path(name: &str) -> bool {
     }
     #[cfg(windows)]
     {
-        std::process::Command::new("where")
+        // std_command 携带 CREATE_NO_WINDOW：避免打开方式探测闪现控制台窗口。
+        crate::utils::std_command("where")
             .arg(name)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

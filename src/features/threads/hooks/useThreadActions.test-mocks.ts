@@ -8,17 +8,24 @@ import {
   deleteGrokSession,
   deleteKimiSession,
   deleteOpenCodeSession,
+  deletePiSession,
+  deleteWorkspaceSessions,
+  tombstoneSessionIndexRows,
   getOpenCodeSessionList,
   listClaudeSessions,
   listGeminiSessions,
   listGrokSessions,
   listKimiSessions,
+  listDshSessions,
+  listPiSessions,
   listThreadTitles,
   listWorkspaceSessionArchiveEvidence,
   listWorkspaceSessions,
+  listSessionIndexForWorkspace,
   loadGeminiSession,
   loadGrokSession,
   loadKimiSession,
+  loadPiSession,
   readWorkspaceFile,
   renameThreadTitleKey,
   setThreadTitle,
@@ -43,10 +50,14 @@ vi.mock("../../../services/tauri", () => ({
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listWorkspaceSessionArchiveEvidence: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
   loadGrokSession: vi.fn(),
   loadKimiSession: vi.fn(),
+  loadPiSession: vi.fn(),
   loadCodexSession: vi.fn(),
   listThreadTitles: vi.fn(),
   readWorkspaceFile: vi.fn(),
@@ -54,6 +65,7 @@ vi.mock("../../../services/tauri", () => ({
   setThreadTitle: vi.fn(),
   resumeThread: vi.fn(),
   listThreads: vi.fn(),
+  writeClientCreatedSessionIndex: vi.fn(),
   archiveThread: vi.fn(),
   deleteCodexSession: vi.fn(),
   deleteClaudeSession: vi.fn(),
@@ -61,6 +73,9 @@ vi.mock("../../../services/tauri", () => ({
   deleteGrokSession: vi.fn(),
   deleteKimiSession: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
+  deletePiSession: vi.fn(),
+  deleteWorkspaceSessions: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
   trashWorkspaceItem: vi.fn(),
   writeWorkspaceFile: vi.fn(),
 }));
@@ -101,6 +116,8 @@ export function resetUseThreadActionsTestMocks() {
   vi.mocked(listGeminiSessions).mockResolvedValue([]);
   vi.mocked(listGrokSessions).mockResolvedValue([]);
   vi.mocked(listKimiSessions).mockResolvedValue([]);
+  vi.mocked(listPiSessions).mockResolvedValue([]);
+  vi.mocked(listDshSessions).mockResolvedValue([]);
   vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
   vi.mocked(listWorkspaceSessions).mockResolvedValue({
     data: [],
@@ -111,6 +128,18 @@ export function resetUseThreadActionsTestMocks() {
     archivedAtBySessionId: {},
     partialSource: null,
     sourceStatuses: [],
+  });
+  vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+    data: [],
+    source: "session-index",
+    synced: false,
+    engines: [],
+    hasMore: false,
+    visibility: {
+      available: true,
+      freshness: "verified",
+      hiddenNativeIds: [],
+    },
   });
   vi.mocked(renameThreadTitleKey).mockResolvedValue(undefined);
   vi.mocked(setThreadTitle).mockResolvedValue("title");
@@ -127,6 +156,21 @@ export function resetUseThreadActionsTestMocks() {
     deleted: true,
     method: "filesystem",
   });
+  vi.mocked(deletePiSession).mockResolvedValue(undefined);
+  vi.mocked(deleteWorkspaceSessions).mockImplementation(
+    async (_workspaceId: string, sessionIds: string[]) => ({
+      results: sessionIds.map((sessionId) => ({
+        sessionId,
+        ok: true,
+        archivedAt: null,
+        error: null,
+        code: "SESSION_DELETED",
+        deletedFromDisk: true,
+        metadataCleaned: true,
+      })),
+    }),
+  );
+  vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
   vi.mocked(deleteCodexSession).mockResolvedValue({
     deleted: true,
     deletedCount: 1,
@@ -136,6 +180,7 @@ export function resetUseThreadActionsTestMocks() {
   vi.mocked(loadGeminiSession).mockResolvedValue({ messages: [] });
   vi.mocked(loadGrokSession).mockResolvedValue({ messages: [] });
   vi.mocked(loadKimiSession).mockResolvedValue({ messages: [] });
+  vi.mocked(loadPiSession).mockResolvedValue({ messages: [] });
   vi.mocked(readWorkspaceFile).mockResolvedValue({
     content: "",
     truncated: false,

@@ -108,7 +108,7 @@ export type AppServerEventHandlers = {
     workspaceId: string,
     threadId: string,
     sessionId: string,
-    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | null,
+    engine?: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onBackgroundThreadAction?: (
@@ -219,14 +219,14 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "grok" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onReasoningSummaryBoundary?: (
     workspaceId: string,
     threadId: string,
     itemId: string,
-    engineHint?: "gemini" | "grok" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onReasoningTextDelta?: (
@@ -234,7 +234,7 @@ export type AppServerEventHandlers = {
     threadId: string,
     itemId: string,
     delta: string,
-    engineHint?: "gemini" | "grok" | "kimi" | null,
+    engineHint?: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
     turnId?: string | null,
   ) => void;
   onCommandOutputDelta?: (
@@ -572,7 +572,9 @@ function extractAgentMessageDeltaPayload(
     !isClaudeThreadId(threadId) &&
     !isGeminiThreadId(threadId) &&
     !isGrokThreadId(threadId) &&
-    !isKimiThreadId(threadId)
+    !isKimiThreadId(threadId) &&
+    !isPiThreadId(threadId) &&
+    !isDshThreadId(threadId)
   ) {
     return null;
   }
@@ -719,15 +721,25 @@ function isKimiThreadId(threadId: string): boolean {
   );
 }
 
+function isPiThreadId(threadId: string): boolean {
+  return threadId.startsWith("pi:") || threadId.startsWith("pi-pending-");
+}
+
 function isGrokThreadId(threadId: string): boolean {
   return (
     threadId.startsWith("grok:") || threadId.startsWith("grok-pending-")
   );
 }
 
+function isDshThreadId(threadId: string): boolean {
+  return (
+    threadId.startsWith("dsh:") || threadId.startsWith("dsh-pending-")
+  );
+}
+
 function inferGeminiReasoningHintFromThreadId(
   threadId: string,
-): "gemini" | "grok" | "kimi" | null {
+): "gemini" | "grok" | "kimi" | "pi" | "dsh" | null {
   if (!threadId) {
     return null;
   }
@@ -737,12 +749,18 @@ function inferGeminiReasoningHintFromThreadId(
   if (isKimiThreadId(threadId)) {
     return "kimi";
   }
+  if (isPiThreadId(threadId)) {
+    return "pi";
+  }
+  if (isDshThreadId(threadId)) {
+    return "dsh";
+  }
   return isGeminiThreadId(threadId) ? "gemini" : null;
 }
 
 function inferRawMethodEngine(
   method: string,
-): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined {
+): "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh" | undefined {
   switch (method) {
     case "claude/raw":
       return "claude";
@@ -756,6 +774,10 @@ function inferRawMethodEngine(
       return "kimi";
     case "opencode/raw":
       return "opencode";
+    case "pi/raw":
+      return "pi";
+    case "dsh/raw":
+      return "dsh";
     default:
       return undefined;
   }
@@ -797,7 +819,7 @@ function isCodexRawGeneratedImageEvent(
 }
 
 function shouldRebindSharedNativeThreadOnStartedEvent(
-  engine: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi",
+  engine: "claude" | "opencode" | "codex" | "gemini" | "grok" | "kimi" | "pi",
 ): boolean {
   // Claude 与 local CLIs 在 thread/started 上可能从 pending 占位收敛到
   // `engine:{sessionId}`；Codex 使用 raw thread id，不在此路径做前缀 rebind。
@@ -805,6 +827,7 @@ function shouldRebindSharedNativeThreadOnStartedEvent(
     engine === "claude" ||
     engine === "kimi" ||
     engine === "grok" ||
+    engine === "pi" ||
     engine === "opencode"
   );
 }
@@ -993,7 +1016,7 @@ function emitReasoningSummaryDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "grok" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1025,7 +1048,7 @@ function emitReasoningSummaryBoundary(
   workspaceId: string,
   threadId: string,
   itemId: string,
-  engineHint: "gemini" | "grok" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1056,7 +1079,7 @@ function emitReasoningTextDelta(
   threadId: string,
   itemId: string,
   delta: string,
-  engineHint: "gemini" | "grok" | "kimi" | null,
+  engineHint: "gemini" | "grok" | "kimi" | "pi" | "dsh" | null,
   turnId: string | null,
 ): void {
   if (turnId) {
@@ -1348,7 +1371,7 @@ function routeNormalizedRealtimeEvent({
         threadId,
         itemId,
         delta,
-        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" || event.engine === "pi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1363,7 +1386,7 @@ function routeNormalizedRealtimeEvent({
         workspaceId,
         threadId,
         itemId,
-        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" || event.engine === "pi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1392,7 +1415,7 @@ function routeNormalizedRealtimeEvent({
         threadId,
         itemId,
         delta,
-        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" ? event.engine : null,
+        event.engine === "gemini" || event.engine === "grok" || event.engine === "kimi" || event.engine === "pi" ? event.engine : null,
         turnId,
       );
       return true;
@@ -1453,7 +1476,7 @@ function tryRouteNormalizedRealtimeEvent({
   handlers: AppServerEventHandlers;
   workspaceId: string;
   message: Record<string, unknown>;
-  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+  engineOverride?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
   threadIdOverride?: string;
   sharedBinding?: SharedSessionNativeBinding | null;
   threadAgentDeltaSeenRef: MutableRefObject<Record<string, true>>;
@@ -1637,6 +1660,8 @@ export function dispatchAppServerEvent(
         | "grok"
         | "kimi"
         | "opencode"
+        | "dsh"
+        | "pi"
         | undefined);
     if (
       tryRouteNormalizedRealtimeEvent({
@@ -1971,7 +1996,9 @@ export function dispatchAppServerEvent(
       rawEngine === "codex" ||
       rawEngine === "grok" ||
       rawEngine === "kimi" ||
-      rawEngine === "gemini"
+      rawEngine === "gemini" ||
+      rawEngine === "pi" ||
+      rawEngine === "dsh"
         ? rawEngine
         : null;
 
@@ -1983,6 +2010,7 @@ export function dispatchAppServerEvent(
         eventEngine === "claude" ||
         eventEngine === "kimi" ||
         eventEngine === "grok" ||
+        eventEngine === "pi" ||
         eventEngine === "opencode")
     ) {
       const pendingBinding = resolvePendingSharedSessionBindingForEngine(
@@ -2024,6 +2052,7 @@ export function dispatchAppServerEvent(
         sessionId &&
         sessionId !== "pending" &&
         eventEngine &&
+        eventEngine !== "dsh" &&
         shouldRebindSharedNativeThreadOnStartedEvent(eventEngine)
       ) {
         const finalizedNativeThreadId = `${eventEngine}:${sessionId}`;

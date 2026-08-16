@@ -17,11 +17,13 @@ import {
   deleteClaudeSession as deleteClaudeSessionService,
   deleteCodexSession as deleteCodexSessionService,
   forkClaudeSessionFromMessage as forkClaudeSessionFromMessageService,
+  forkDshSession as forkDshSessionService,
   forkThread as forkThreadService,
   loadClaudeSession as loadClaudeSessionService,
   rewindCodexThread as rewindCodexThreadService,
   setThreadTitle as setThreadTitleService,
   startThread as startThreadService,
+  writeClientCreatedSessionIndex,
 } from "../../../services/tauri";
 import { parseClaudeHistoryMessagesWithShadowRecovery } from "../loaders/claudeHistoryLoader";
 import {
@@ -361,7 +363,7 @@ export function useThreadActionsSessionRuntime({
       workspaceId: string,
       options?: {
         activate?: boolean;
-        engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode";
+        engine?: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
         folderId?: string | null;
         autoSession?: AutoSessionMetadata | null;
         providerProfileId?: string | null;
@@ -406,7 +408,14 @@ export function useThreadActionsSessionRuntime({
         selectedProviderBinding,
       });
 
-      if (engine === "claude" || engine === "grok" || engine === "kimi" || engine === "opencode") {
+      if (
+        engine === "claude" ||
+        engine === "grok" ||
+        engine === "kimi" ||
+        engine === "opencode" ||
+        engine === "pi" ||
+        engine === "dsh"
+      ) {
         const prefix = engine;
         const threadId = `${prefix}-pending-${Date.now()}-${Math.random()
           .toString(36)
@@ -426,6 +435,11 @@ export function useThreadActionsSessionRuntime({
           ...(folderId ? { folderId } : {}),
           ...autoSessionPayload,
           ...selectedProviderBinding,
+        });
+        writeClientCreatedSessionIndex({
+          engine,
+          sessionId: threadId,
+          workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
         });
         if (shouldActivate) {
           dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -460,6 +474,11 @@ export function useThreadActionsSessionRuntime({
           engine: "codex",
           ...(folderId ? { folderId } : {}),
           ...selectedProviderBinding,
+        });
+        writeClientCreatedSessionIndex({
+          engine: "codex",
+          sessionId: threadId,
+          workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
         });
         // Mirrors createSessionLifecycleThreadStarter so the pending thread
         // survives background thread-list refreshes like a real codex thread.
@@ -497,7 +516,15 @@ export function useThreadActionsSessionRuntime({
             label: "thread/start response",
             payload: response,
           });
-          return resolveStartedThread(response);
+          const startedId = resolveStartedThread(response);
+          if (startedId) {
+            writeClientCreatedSessionIndex({
+              engine: "codex",
+              sessionId: startedId,
+              workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+            });
+          }
+          return startedId;
         } catch (error) {
           if (isWorkspaceNotConnectedError(error)) {
             try {
@@ -510,7 +537,15 @@ export function useThreadActionsSessionRuntime({
                 label: "thread/start retry response",
                 payload: retryResponse,
               });
-              return resolveStartedThread(retryResponse);
+              const retryStartedId = resolveStartedThread(retryResponse);
+              if (retryStartedId) {
+                writeClientCreatedSessionIndex({
+                  engine: "codex",
+                  sessionId: retryStartedId,
+                  workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+                });
+              }
+              return retryStartedId;
             } catch (retryError) {
               onDebug?.({
                 id: `${Date.now()}-client-thread-start-error`,
@@ -633,6 +668,15 @@ export function useThreadActionsSessionRuntime({
           threadId.startsWith("kimi-pending-")
         ) {
           return null;
+        } else if (threadId.startsWith("dsh-pending-")) {
+          return null;
+        } else if (threadId.startsWith("dsh:")) {
+          const sessionId = threadId.slice("dsh:".length).trim();
+          const workspacePath = workspacePathsByIdRef.current[workspaceId];
+          if (!sessionId || !workspacePath) {
+            return null;
+          }
+          response = await forkDshSessionService(workspacePath, sessionId);
         } else {
           response = await forkThreadService(workspaceId, threadId, null, {
             providerProfileId,
@@ -655,7 +699,9 @@ export function useThreadActionsSessionRuntime({
             ? "gemini"
             : forkedThreadId.startsWith("kimi:")
               ? "kimi"
-              : "codex";
+              : forkedThreadId.startsWith("dsh:")
+                ? "dsh"
+                : "codex";
         dispatch({
           type: "ensureThread",
           workspaceId,
@@ -715,6 +761,7 @@ export function useThreadActionsSessionRuntime({
       onDebug,
       resumeThreadForWorkspace,
       threadsByWorkspace,
+      workspacePathsByIdRef,
     ],
   );
 

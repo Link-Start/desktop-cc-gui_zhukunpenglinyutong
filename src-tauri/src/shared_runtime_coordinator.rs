@@ -2570,7 +2570,11 @@ fn normalize_native_session_identity(engine: EngineType, value: Option<&str>) ->
     // Codex 保持 raw thread id（无前缀）。pending 占位原样保留，避免误写成
     // `grok:grok-pending-shared-*`。
     match engine {
-        EngineType::Claude | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => {
+        EngineType::Claude
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Grok
+        | EngineType::OpenCode => {
             let token = engine_token(engine);
             let prefix = format!("{token}:");
             if crate::shared_sessions::is_pending_shared_binding_thread_id(engine, normalized) {
@@ -2588,7 +2592,7 @@ fn normalize_native_session_identity(engine: EngineType, value: Option<&str>) ->
             }
             Some(format!("{prefix}{raw}"))
         }
-        EngineType::Codex | EngineType::Gemini => Some(normalized.to_string()),
+        EngineType::Codex | EngineType::Gemini | EngineType::Dsh => Some(normalized.to_string()),
     }
 }
 
@@ -2605,7 +2609,9 @@ fn engine_token(engine: EngineType) -> &'static str {
         EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
         EngineType::Kimi => "kimi",
+        EngineType::Pi => "pi",
         EngineType::Grok => "grok",
+        EngineType::Dsh => "dsh",
     }
 }
 
@@ -2661,7 +2667,12 @@ mod tests {
 
     #[test]
     fn provider_engine_events_settle_exact_shared_attempts() {
-        for engine in [EngineType::Kimi, EngineType::Grok, EngineType::OpenCode] {
+        for engine in [
+            EngineType::Kimi,
+            EngineType::Grok,
+            EngineType::OpenCode,
+            EngineType::Pi,
+        ] {
             let coordinator = SharedRuntimeCoordinator::default();
             let runtime_turn_id = format!("{}-turn-1", engine_token(engine));
             let native_session_id = format!("{}-session-1", engine_token(engine));

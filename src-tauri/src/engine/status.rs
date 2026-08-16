@@ -38,6 +38,8 @@ struct GeneratedModelCatalogEngines {
     kimi: Vec<GeneratedModelEntry>,
     #[serde(default)]
     opencode: Vec<GeneratedModelEntry>,
+    #[serde(default)]
+    pi: Vec<GeneratedModelEntry>,
 }
 
 #[derive(Deserialize)]
@@ -66,6 +68,7 @@ fn get_generated_fallback_models(engine: EngineType) -> Vec<ModelInfo> {
         EngineType::Gemini => catalog.engines.gemini,
         EngineType::Grok => catalog.engines.grok,
         EngineType::Kimi => catalog.engines.kimi,
+        EngineType::Pi => catalog.engines.pi,
         EngineType::OpenCode => catalog.engines.opencode,
         _ => return Vec::new(),
     };
@@ -107,7 +110,8 @@ fn public_models_for_engine(engine_type: EngineType) -> Vec<ModelInfo> {
         EngineType::Codex | EngineType::Grok | EngineType::Kimi | EngineType::OpenCode => {
             get_generated_fallback_models(engine_type)
         }
-        EngineType::Gemini => Vec::new(),
+        EngineType::Pi => get_generated_fallback_models(engine_type),
+        EngineType::Gemini | EngineType::Dsh => Vec::new(),
     }
 }
 
@@ -192,12 +196,14 @@ pub(crate) fn get_local_engine_models_for_validation(
         }
         EngineType::Codex => Some(get_codex_models()),
         EngineType::Kimi => Some(get_kimi_models(get_kimi_home_dir().as_deref()).0),
+        // PI models are async CLI-probed; callers use detect_pi_status / refresh path.
+        EngineType::Pi => Some(get_generated_fallback_models(EngineType::Pi)),
         EngineType::Grok => Some(get_grok_models(get_grok_home_dir().as_deref()).0),
         EngineType::OpenCode => Some(resolve_opencode_validation_catalog(
             cached_opencode_runtime_models(),
             public_models_for_engine(EngineType::OpenCode),
         )),
-        EngineType::Gemini => None,
+        EngineType::Gemini | EngineType::Dsh => None,
     }
 }
 
@@ -468,7 +474,7 @@ pub(crate) fn get_provider_scoped_engine_models(
                 &provider,
             )));
         }
-        EngineType::Gemini => return Ok(None),
+        EngineType::Gemini | EngineType::Pi | EngineType::Dsh => return Ok(None),
     };
     Ok(Some(merge_provider_models_with_public(
         provider_models,
@@ -822,6 +828,171 @@ pub async fn detect_kimi_status(custom_bin: Option<&str>) -> EngineStatus {
         default_model,
         features: EngineFeatures::kimi(),
         error: config_diagnostic,
+    }
+}
+
+pub async fn detect_pi_status(custom_bin: Option<&str>) -> EngineStatus {
+    let bin_path = resolve_bin_path("pi", custom_bin);
+    let bin = bin_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "pi".to_string());
+    let path_env = build_codex_path_env(custom_bin);
+    let (installed, version, error) = probe_cli_version(&bin, "pi", path_env.as_ref()).await;
+    if !installed {
+        return not_installed_status(EngineType::Pi, error);
+    }
+    let home_dir = get_pi_home_dir();
+    let (models, config_diagnostic) = get_pi_models(&bin, path_env.as_ref()).await;
+    let default_model = models.iter().find(|m| m.default).map(|m| m.id.clone());
+    EngineStatus {
+        engine_type: EngineType::Pi,
+        installed: true,
+        version,
+        bin_path: Some(bin.to_string()),
+        home_dir: home_dir.map(|p| p.to_string_lossy().to_string()),
+        models,
+        default_model,
+        features: EngineFeatures::pi(),
+        error: config_diagnostic,
+    }
+}
+
+fn get_pi_home_dir() -> Option<PathBuf> {
+    if let Ok(agent_dir) = std::env::var("PI_CODING_AGENT_DIR") {
+        let trimmed = agent_dir.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+    dirs::home_dir().map(|home| home.join(".pi").join("agent"))
+}
+
+/// Parse `pi --list-models` fixed-width table into ModelInfo entries.
+pub(crate) fn parse_pi_models_output(stdout: &str) -> Vec<ModelInfo> {
+    let mut models = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for raw_line in stdout.lines() {
+        let line = {
+            let mut out = String::new();
+            let mut chars = raw_line.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if ch == '\u{1b}' {
+                    if chars.peek() == Some(&'[') {
+                        chars.next();
+                        while let Some(c) = chars.next() {
+                            if c.is_ascii_alphabetic() {
+                                break;
+                            }
+                        }
+                    }
+                    continue;
+                }
+                out.push(ch);
+            }
+            out.trim().to_string()
+        };
+        if line.is_empty() {
+            continue;
+        }
+        let parts: Vec<String> = line
+            .split(|c: char| c.is_whitespace())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let provider = &parts[0];
+        let model = &parts[1];
+        if provider == "provider" && model == "model" {
+            continue;
+        }
+        if provider
+            .chars()
+            .any(|c| !c.is_ascii_alphanumeric() && c != '-' && c != '_')
+        {
+            continue;
+        }
+        let id = format!("{provider}/{model}");
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        let thinking = parts.get(4).map(|s| s.as_str()) == Some("yes");
+        let images = parts.get(5).map(|s| s.as_str()) == Some("yes");
+        let mut details = Vec::new();
+        if let Some(ctx) = parts.get(2) {
+            details.push(format!("ctx {ctx}"));
+        }
+        if thinking {
+            details.push("thinking".to_string());
+        }
+        if images {
+            details.push("vision".to_string());
+        }
+        let description = if details.is_empty() {
+            id.clone()
+        } else {
+            details.join(" · ")
+        };
+        models.push(
+            ModelInfo::new(id.clone(), id.clone())
+                .with_description(description)
+                .with_provider(provider.clone())
+                .with_protocol("pi")
+                .with_provenance("cli:pi-list-models")
+                .with_source("detected"),
+        );
+    }
+    if models.is_empty() {
+        models.push(
+            ModelInfo::new("auto", "PI Auto")
+                .with_description("Use PI CLI default model")
+                .with_provider("pi")
+                .with_protocol("pi")
+                .with_source("fallback")
+                .as_default(),
+        );
+    } else if let Some(first) = models.first_mut() {
+        first.default = true;
+    }
+    models
+}
+
+async fn get_pi_models(bin: &str, path_env: Option<&String>) -> (Vec<ModelInfo>, Option<String>) {
+    let mut cmd = crate::backend::app_server::build_command_for_binary(bin);
+    cmd.arg("--list-models");
+    if let Some(path) = path_env {
+        cmd.env("PATH", path);
+    }
+    match timeout(DETECTION_TIMEOUT, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let models = parse_pi_models_output(&stdout);
+            if models.is_empty() {
+                (
+                    get_generated_fallback_models(EngineType::Pi),
+                    Some("pi --list-models returned no models".to_string()),
+                )
+            } else {
+                (models, None)
+            }
+        }
+        Ok(Ok(output)) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            (
+                get_generated_fallback_models(EngineType::Pi),
+                Some(format!("pi --list-models failed: {}", stderr.trim())),
+            )
+        }
+        Ok(Err(error)) => (
+            get_generated_fallback_models(EngineType::Pi),
+            Some(format!("failed to run pi --list-models: {error}")),
+        ),
+        Err(_) => (
+            get_generated_fallback_models(EngineType::Pi),
+            Some("pi --list-models timed out".to_string()),
+        ),
     }
 }
 
@@ -1663,10 +1834,21 @@ pub async fn detect_all_engines(
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
+    pi_bin: Option<&str>,
+    dsh_settings: &crate::engine::dsh::supervisor::DshRuntimeSettings,
     gemini_enabled: bool,
 ) -> Vec<EngineStatus> {
     // Run detections in parallel
-    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
+    let (
+        claude_status,
+        codex_status,
+        gemini_status,
+        opencode_status,
+        kimi_status,
+        grok_status,
+        pi_status,
+        dsh_status,
+    ) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
         async {
@@ -1679,6 +1861,8 @@ pub async fn detect_all_engines(
         detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
+        detect_pi_status(pi_bin),
+        crate::engine::dsh::detect_dsh_status(dsh_settings),
     );
 
     vec![
@@ -1688,6 +1872,8 @@ pub async fn detect_all_engines(
         opencode_status,
         kimi_status,
         grok_status,
+        pi_status,
+        dsh_status,
     ]
 }
 
@@ -1700,8 +1886,21 @@ pub async fn detect_preferred_engine(
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
+    pi_bin: Option<&str>,
+    dsh_settings: Option<&crate::engine::dsh::supervisor::DshRuntimeSettings>,
 ) -> EngineType {
-    let (claude_status, codex_status, gemini_status, opencode_status, kimi_status, grok_status) = tokio::join!(
+    let default_dsh = crate::engine::dsh::supervisor::DshRuntimeSettings::default();
+    let dsh_settings = dsh_settings.unwrap_or(&default_dsh);
+    let (
+        claude_status,
+        codex_status,
+        gemini_status,
+        opencode_status,
+        kimi_status,
+        grok_status,
+        pi_status,
+        dsh_status,
+    ) = tokio::join!(
         detect_claude_status(claude_bin),
         detect_codex_status(codex_bin),
         async {
@@ -1714,6 +1913,8 @@ pub async fn detect_preferred_engine(
         detect_opencode_status(opencode_bin),
         detect_kimi_status(kimi_bin),
         detect_grok_status(grok_bin),
+        detect_pi_status(pi_bin),
+        crate::engine::dsh::detect_dsh_status(dsh_settings),
     );
 
     // Priority: Claude first (more users have it installed)
@@ -1735,6 +1936,12 @@ pub async fn detect_preferred_engine(
     if grok_status.installed {
         return EngineType::Grok;
     }
+    if pi_status.installed {
+        return EngineType::Pi;
+    }
+    if dsh_status.installed {
+        return EngineType::Dsh;
+    }
 
     // Default to Claude so error message is helpful
     EngineType::Claude
@@ -1754,6 +1961,7 @@ pub async fn resolve_engine_type(
     opencode_bin: Option<&str>,
     kimi_bin: Option<&str>,
     grok_bin: Option<&str>,
+    pi_bin: Option<&str>,
 ) -> EngineType {
     // 1. Check workspace-specific setting
     if let Some(engine) = workspace_engine.filter(|s| !s.is_empty()) {
@@ -1765,6 +1973,8 @@ pub async fn resolve_engine_type(
             "opencode" => return EngineType::OpenCode,
             "kimi" => return EngineType::Kimi,
             "grok" => return EngineType::Grok,
+            "pi" => return EngineType::Pi,
+            "dsh" => return EngineType::Dsh,
             _ => {} // Invalid value, fall through
         }
     }
@@ -1779,19 +1989,24 @@ pub async fn resolve_engine_type(
             "opencode" => return EngineType::OpenCode,
             "kimi" => return EngineType::Kimi,
             "grok" => return EngineType::Grok,
+            "pi" => return EngineType::Pi,
+            "dsh" => return EngineType::Dsh,
             _ => {} // Invalid value, fall through
         }
     }
 
     // 3. Auto-detect based on installed CLIs
-    detect_preferred_engine(
+    // Box 到堆：tokio::join! 并发持有多路 CLI 探测，内联会放大调用方栈帧。
+    Box::pin(detect_preferred_engine(
         claude_bin,
         codex_bin,
         gemini_bin,
         opencode_bin,
         kimi_bin,
         grok_bin,
-    )
+        pi_bin,
+        None,
+    ))
     .await
 }
 
@@ -1804,6 +2019,32 @@ mod tests {
 
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn parse_pi_models_output_keeps_thinking_vision_and_default() {
+        let models = parse_pi_models_output(
+            "provider model          ctx  max     thinking images
+openai   gpt-5.2        400k  128k    yes      yes
+anthropic claude-opus    200k   32k    no       yes
+",
+        );
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].id, "openai/gpt-5.2");
+        assert!(models[0].default);
+        assert_eq!(models[0].description, "ctx 400k · thinking · vision");
+        assert_eq!(models[1].id, "anthropic/claude-opus");
+        assert!(!models[1].default);
+        assert_eq!(models[1].description, "ctx 200k · vision");
+    }
+
+    #[test]
+    fn parse_pi_models_output_falls_back_to_auto_when_table_is_empty() {
+        let models = parse_pi_models_output("provider model ctx max thinking images\n");
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].id, "auto");
+        assert!(models[0].default);
+        assert_eq!(models[0].source, "fallback");
+    }
 
     #[test]
     fn model_catalog_pair_separates_selection_id_from_runtime_model() {
@@ -2252,6 +2493,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
         assert_eq!(resolved, EngineType::OpenCode);
@@ -2262,6 +2504,7 @@ mod tests {
         let resolved = resolve_engine_type(
             Some("gemini"),
             Some("claude"),
+            None,
             None,
             None,
             None,
@@ -2293,6 +2536,8 @@ mod tests {
             None,
             None,
             Some(script_path.to_string_lossy().as_ref()),
+            None,
+            None,
             None,
             None,
             None,
@@ -2334,6 +2579,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
 
@@ -2358,6 +2604,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .await;
         assert_eq!(resolved, EngineType::Kimi);
@@ -2368,6 +2615,7 @@ mod tests {
         let resolved = resolve_engine_type(
             Some("grok"),
             Some("claude"),
+            None,
             None,
             None,
             None,

@@ -41,6 +41,7 @@ export type TimelineSnapshotModel = {
       exploreCount: number;
     };
     insertBeforeItemId: string;
+    collapsedAnchorItemId?: string;
     assistantItemId: string;
     hiddenItemIds: readonly string[];
   }>;
@@ -141,6 +142,7 @@ export type TimelineInteractionModel = {
     | RuntimeReconnectRecoveryCallbackResult;
   onToggleProcessPhaseExpanded: (phaseKey: string) => void;
   openFileLink?: (path: string) => void;
+  openHtmlFileInBrowser?: (path: string) => void;
   showFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
   toggleExpanded: (id: string) => void;
 };

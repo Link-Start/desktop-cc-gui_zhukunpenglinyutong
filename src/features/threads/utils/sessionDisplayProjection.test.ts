@@ -4,6 +4,7 @@ import {
   isWeakSessionDisplayTitle,
   mergeSessionDisplaySummary,
   projectSessionDisplaySummaries,
+  sanitizeNativeSessionTitle,
 } from "./sessionDisplayProjection";
 
 describe("sessionDisplayProjection", () => {
@@ -80,6 +81,39 @@ describe("sessionDisplayProjection", () => {
         updatedAt: 130,
       }).name,
     ).toBe("");
+  });
+
+  it("classifies DSH injected runtime-context titles as weak", () => {
+    const snapshotTitle =
+      "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.";
+    expect(sanitizeNativeSessionTitle(snapshotTitle)).toBe("");
+    expect(
+      sanitizeNativeSessionTitle(
+        "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>",
+      ),
+    ).toBe("");
+    expect(
+      sanitizeNativeSessionTitle(
+        "<system-reminder>\n<available_skills>\n- deploy-to-vercel\n</available_skills>\n</system-reminder>",
+      ),
+    ).toBe("");
+    expect(isWeakSessionDisplayTitle(snapshotTitle)).toBe(true);
+    expect(sanitizeNativeSessionTitle("你好")).toBe("你好");
+
+    const previous: ThreadSummary = {
+      id: "dsh:session-1",
+      name: "你好",
+      updatedAt: 100,
+      engineSource: "dsh",
+      threadKind: "native",
+    };
+    expect(
+      mergeSessionDisplaySummary(previous, {
+        ...previous,
+        name: snapshotTitle,
+        updatedAt: 130,
+      }).name,
+    ).toBe("你好");
   });
 
   it("treats context protocol titles as weak and ignores mapped protocol titles", () => {

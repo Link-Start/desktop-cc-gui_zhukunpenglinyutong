@@ -6,7 +6,9 @@ export type SessionIndexEngine =
   | "gemini"
   | "grok"
   | "kimi"
+  | "pi"
   | "opencode"
+  | "dsh"
   | string;
 
 export type SessionIndexRow = {
@@ -23,6 +25,14 @@ export type SessionIndexRow = {
   sizeBytes?: number | null;
 };
 
+export type SharedNativeVisibilityProjection = {
+  available: boolean;
+  freshness?: string | null;
+  hiddenNativeIds?: string[] | null;
+  protocolHiddenNativeIds?: string[] | null;
+  reason?: string | null;
+};
+
 export type SessionIndexListPage = {
   data: SessionIndexRow[];
   source: string;
@@ -30,6 +40,8 @@ export type SessionIndexListPage = {
   syncMs?: number | null;
   engines: string[];
   partialSource?: string | null;
+  hasMore?: boolean;
+  visibility?: SharedNativeVisibilityProjection | null;
 };
 
 export type SessionIndexSyncReport = {
@@ -46,13 +58,17 @@ export async function listSessionIndexForWorkspace(
     limit?: number | null;
     syncIfNeeded?: boolean | null;
     forceSync?: boolean | null;
+    beforeUpdatedAt?: number | null;
+    beforeSessionId?: string | null;
   },
 ): Promise<SessionIndexListPage> {
   return invoke<SessionIndexListPage>("list_session_index_for_workspace", {
     workspaceId,
-    limit: options?.limit ?? null,
+    limit: options?.limit ?? 20,
     syncIfNeeded: options?.syncIfNeeded ?? true,
     forceSync: options?.forceSync ?? false,
+    beforeUpdatedAt: options?.beforeUpdatedAt ?? null,
+    beforeSessionId: options?.beforeSessionId ?? null,
   });
 }
 
@@ -76,5 +92,57 @@ export async function invalidateSessionIndexForWorkspace(
 ): Promise<number> {
   return invoke<number>("invalidate_session_index_for_workspace", {
     workspaceId,
+  });
+}
+
+/** Hide Index rows so sidebar hydrate cannot resurrect a deleted session. */
+export function writeClientCreatedSessionIndex(input: {
+  engine: string;
+  sessionId: string;
+  workspacePath: string;
+  title?: string;
+}): void {
+  const engine = input.engine.trim().toLowerCase();
+  const rawId = input.sessionId.trim();
+  const workspacePath = input.workspacePath.trim();
+  if (!engine || engine === "shared" || !rawId || !workspacePath) {
+    return;
+  }
+  const sessionId = rawId.includes(":")
+    ? rawId.slice(rawId.indexOf(":") + 1).trim()
+    : rawId;
+  if (!sessionId) {
+    return;
+  }
+  void upsertSessionIndexRows([
+    {
+      engine,
+      sessionId,
+      title: input.title?.trim() || `${engine} session`,
+      updatedAt: Date.now(),
+      workspacePath,
+      cwd: workspacePath,
+    },
+  ]).catch(() => 0);
+}
+
+export async function upsertSessionIndexRows(
+  rows: SessionIndexRow[],
+): Promise<number> {
+  if (rows.length === 0) {
+    return 0;
+  }
+  return invoke<number>("upsert_session_index_rows", { rows });
+}
+
+export async function tombstoneSessionIndexRows(
+  sessionIds: string[],
+): Promise<number> {
+  const ids = sessionIds.map((id) => id.trim()).filter(Boolean);
+  if (ids.length === 0) {
+    return 0;
+  }
+  return invoke<number>("tombstone_session_index_rows", {
+    sessionIds: ids,
   });
 }

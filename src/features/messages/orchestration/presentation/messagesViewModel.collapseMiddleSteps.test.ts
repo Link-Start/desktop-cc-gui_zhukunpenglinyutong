@@ -235,6 +235,34 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.phases[0]!.count).toBeGreaterThanOrEqual(2);
   });
 
+  it("folds a long trailing live process window into a chip plus the last three cards", () => {
+    const items = [
+      user("u1"),
+      assistant("a1", "先做这个"),
+      reasoning("r1"),
+      tool("t1", "running"),
+      reasoning("r2"),
+      tool("t2", "running"),
+      reasoning("r3"),
+      tool("t3", "running"),
+    ];
+    const result = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      timelineSourceItems: items,
+    });
+
+    expect(result.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "a1",
+      "t2",
+      "r3",
+      "t3",
+    ]);
+    const trailing = result.phases.find((phase) => phase.phaseKey.startsWith("trailing:"));
+    expect(trailing?.hiddenItemIds).toEqual(["r1", "t1", "r2"]);
+    expect(trailing?.collapsedAnchorItemId).toBe("t2");
+  });
+
   it("absorbs leading orphan reasoning across mid-turn assistant plan text", () => {
     // Native Claude/Grok stream shape (fig1/fig2):
     //   reasoning → assistant(plan) → tools/reasoning → assistant(final)

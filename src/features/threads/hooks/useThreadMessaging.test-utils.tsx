@@ -54,6 +54,9 @@ vi.mock("../../../services/tauri", () => ({
   getGitLog: vi.fn(),
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
+  invalidateSessionIndexForWorkspace: vi.fn(),
   listGrokSessions: vi.fn(),
   loadClaudeSession: vi.fn(),
   engineSendMessage: vi.fn(),
@@ -150,7 +153,7 @@ export function resetThreadMessagingTestMocks() {
 }
 
 export function makeThreadMessagingHook(
-  activeEngine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode",
+  activeEngine: "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi",
   overrides: {
     workspace?: WorkspaceInfo;
     activeThreadId?: string | null;
@@ -160,7 +163,7 @@ export function makeThreadMessagingHook(
     codexAcceptedTurnByThread?: Record<string, CodexAcceptedTurnRecord>;
     threadEngineById?: Record<
       string,
-      "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | undefined
+      "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | undefined
     >;
     providerProfileByThread?: Record<string, string | null | undefined>;
     itemsByThread?: Record<string, ConversationItem[]>;

@@ -165,6 +165,46 @@ describe("useMessagesCanvasFollow (jetbrains P0)", () => {
     expect(container.classList.contains("scroll-anchor-enabled")).toBe(false);
   });
 
+  it("does not chase followSignal or ResizeObserver until history-open pins", () => {
+    const { container, getScrollTop, setScrollHeight, setScrollTop } =
+      createScrollableContainer();
+    const end = document.createElement("div");
+    container.appendChild(end);
+    const { result, rerender } = mountFollow({
+      followSignal: "s0",
+      isThinking: false,
+      renderScopeKey: "scope-0",
+    });
+
+    act(() => {
+      result.current.containerRef.current = container;
+      result.current.messagesEndRef.current = end;
+      setScrollTop(0);
+      rerender({
+        followSignal: "hydrate-1",
+        isThinking: false,
+        renderScopeKey: "scope-1",
+      });
+    });
+
+    act(() => {
+      setScrollHeight(1400);
+      resizeObserverCallback?.([], {} as ResizeObserver);
+      rerender({
+        followSignal: "hydrate-2",
+        isThinking: false,
+        renderScopeKey: "scope-1",
+      });
+    });
+
+    expect(getScrollTop()).toBe(0);
+
+    act(() => {
+      result.current.resumeFollowAndPin();
+    });
+    expect(getScrollTop()).toBe(1000);
+  });
+
   it("keeps following when content grows while armed", () => {
     const { container, getScrollTop, setScrollHeight } = createScrollableContainer();
     const end = document.createElement("div");

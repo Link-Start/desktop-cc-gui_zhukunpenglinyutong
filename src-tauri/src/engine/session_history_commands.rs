@@ -59,6 +59,19 @@ pub(super) fn remote_delete_grok_session_request(
     )
 }
 
+pub(super) fn remote_delete_dsh_session_request(
+    workspace_path: String,
+    session_id: String,
+) -> (&'static str, Value) {
+    (
+        "delete_dsh_session",
+        json!({
+            "workspacePath": crate::remote_backend::normalize_path_for_remote(workspace_path),
+            "sessionId": session_id,
+        }),
+    )
+}
+
 /// List Claude Code session history for a workspace path.
 /// Reads JSONL files from `<effective-claude-home>/projects/{encoded-path}/`.
 #[tauri::command]
@@ -94,6 +107,8 @@ pub async fn list_claude_sessions(
 pub async fn load_claude_session(
     workspace_path: String,
     session_id: String,
+    limit: Option<usize>,
+    before: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -103,7 +118,12 @@ pub async fn load_claude_session(
             &*state,
             app,
             "load_claude_session",
-            json!({ "workspacePath": workspace_path, "sessionId": session_id }),
+            json!({
+                "workspacePath": workspace_path,
+                "sessionId": session_id,
+                "limit": limit,
+                "before": before,
+            }),
         )
         .await;
     }
@@ -112,9 +132,14 @@ pub async fn load_claude_session(
         .engine_manager
         .get_engine_config(EngineType::Claude)
         .await;
-    let result =
-        super::claude_history::load_claude_session_with_config(&path, &session_id, config.as_ref())
-            .await?;
+    let result = super::claude_history::load_claude_session_with_config_window(
+        &path,
+        &session_id,
+        config.as_ref(),
+        limit,
+        before.as_deref(),
+    )
+    .await?;
     serde_json::to_value(result).map_err(|error| error.to_string())
 }
 
@@ -388,6 +413,91 @@ pub async fn delete_kimi_session(
     .await
 }
 
+#[tauri::command]
+pub async fn list_pi_sessions(
+    workspace_path: String,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let workspace_path = remote_backend::normalize_path_for_remote(workspace_path);
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "list_pi_sessions",
+            json!({ "workspacePath": workspace_path, "limit": limit }),
+        )
+        .await;
+    }
+    let path = std::path::PathBuf::from(&workspace_path);
+    let config = state
+        .engine_manager
+        .get_engine_config(EngineType::Pi)
+        .await;
+    let sessions = super::pi_history::list_pi_sessions(
+        &path,
+        limit,
+        config.as_ref().and_then(|item| item.home_dir.as_deref()),
+    )
+    .await?;
+    serde_json::to_value(sessions).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn load_pi_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let workspace_path = remote_backend::normalize_path_for_remote(workspace_path);
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "load_pi_session",
+            json!({ "workspacePath": workspace_path, "sessionId": session_id }),
+        )
+        .await;
+    }
+    let path = std::path::PathBuf::from(&workspace_path);
+    let config = state
+        .engine_manager
+        .get_engine_config(EngineType::Pi)
+        .await;
+    let result = super::pi_history::load_pi_session(
+        &path,
+        &session_id,
+        config.as_ref().and_then(|item| item.home_dir.as_deref()),
+    )
+    .await?;
+    serde_json::to_value(result).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_pi_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return Err("delete_pi_session is unavailable through the remote backend".to_string());
+    }
+    let path = std::path::PathBuf::from(&workspace_path);
+    let config = state
+        .engine_manager
+        .get_engine_config(EngineType::Pi)
+        .await;
+    super::pi_history::delete_pi_session(
+        &path,
+        &session_id,
+        config.as_ref().and_then(|item| item.home_dir.as_deref()),
+    )
+    .await
+}
+
 /// List Grok CLI session history for a workspace path.
 #[tauri::command]
 pub async fn list_grok_sessions(
@@ -476,6 +586,117 @@ pub async fn delete_grok_session(
         config.as_ref().and_then(|item| item.home_dir.as_deref()),
     )
     .await
+}
+
+/// List DSH host sessions for a workspace path.
+#[tauri::command]
+pub async fn list_dsh_sessions(
+    workspace_path: String,
+    limit: Option<usize>,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let workspace_path = remote_backend::normalize_path_for_remote(workspace_path);
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "list_dsh_sessions",
+            json!({ "workspacePath": workspace_path, "limit": limit }),
+        )
+        .await;
+    }
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+    let path = std::path::PathBuf::from(&workspace_path);
+    let sessions = crate::engine::dsh::history::list_dsh_sessions(&client, &path, limit).await?;
+    serde_json::to_value(sessions).map_err(|error| error.to_string())
+}
+
+/// Load DSH session history. Does not resume the agent.
+#[tauri::command]
+pub async fn load_dsh_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let workspace_path = remote_backend::normalize_path_for_remote(workspace_path);
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "load_dsh_session",
+            json!({ "workspacePath": workspace_path, "sessionId": session_id }),
+        )
+        .await;
+    }
+    let _ = workspace_path;
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+    let result = crate::engine::dsh::history::load_dsh_session(&client, &session_id).await?;
+    serde_json::to_value(result).map_err(|error| error.to_string())
+}
+
+/// Archive a DSH session via workspace.archiveSession.
+#[tauri::command]
+pub async fn delete_dsh_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let (method, params) = remote_delete_dsh_session_request(workspace_path, session_id);
+        let _: Value = call_remote_typed(&*state, &app, method, params).await?;
+        return Ok(());
+    }
+    let _ = workspace_path;
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    let (_snapshot, client) = crate::engine::dsh::ensure_ready(&runtime).await?;
+    crate::engine::dsh::history::archive_dsh_session(&client, &session_id).await
+}
+
+/// Fork a completed DSH session via `session.fork`. Incomplete turns fail closed.
+#[tauri::command]
+pub async fn fork_dsh_session(
+    workspace_path: String,
+    session_id: String,
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let workspace_path = remote_backend::normalize_path_for_remote(workspace_path);
+        return remote_backend::call_remote(
+            &*state,
+            app,
+            "fork_dsh_session",
+            json!({ "workspacePath": workspace_path, "sessionId": session_id }),
+        )
+        .await;
+    }
+    let _ = workspace_path;
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    let forked_session_id = crate::engine::dsh::fork_session(&runtime, &session_id)
+        .await
+        .map_err(|error| {
+            if error.contains("fork-unavailable") || error.contains("incomplete") {
+                format!("DSH cannot fork an incomplete turn: {error}")
+            } else {
+                error
+            }
+        })?;
+    Ok(json!({
+        "thread": {
+            "id": crate::engine::dsh::session::thread_id_for_session(&forked_session_id)
+        },
+        "sessionId": forked_session_id,
+        "parentSessionId": session_id,
+    }))
 }
 
 #[cfg(test)]

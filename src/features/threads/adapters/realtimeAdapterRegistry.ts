@@ -4,7 +4,9 @@ import { codexRealtimeAdapter } from "./codexRealtimeAdapter";
 import { geminiRealtimeAdapter } from "./geminiRealtimeAdapter";
 import { grokRealtimeAdapter } from "./grokRealtimeAdapter";
 import { kimiRealtimeAdapter } from "./kimiRealtimeAdapter";
+import { dshRealtimeAdapter } from "./dshRealtimeAdapter";
 import { opencodeRealtimeAdapter } from "./opencodeRealtimeAdapter";
+import { piRealtimeAdapter } from "./piRealtimeAdapter";
 import { inferEngineFromThreadId } from "./sharedRealtimeAdapter";
 
 const ADAPTERS: Record<ConversationEngine, RealtimeAdapter> = {
@@ -13,7 +15,9 @@ const ADAPTERS: Record<ConversationEngine, RealtimeAdapter> = {
   gemini: geminiRealtimeAdapter,
   grok: grokRealtimeAdapter,
   kimi: kimiRealtimeAdapter,
+  dsh: dshRealtimeAdapter,
   opencode: opencodeRealtimeAdapter,
+  pi: piRealtimeAdapter,
 };
 
 export function getRealtimeAdapterByEngine(engine: ConversationEngine): RealtimeAdapter {

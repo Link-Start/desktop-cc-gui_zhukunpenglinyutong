@@ -379,20 +379,21 @@ describe("VendorSettingsPanel", () => {
         (button) =>
           button.querySelector(".min-w-0")?.textContent?.trim() ?? "",
       )
-      .filter((label) => label.endsWith("CLI"));
-    expect(navLabels.slice(0, 9)).toEqual([
+      .filter((label) => label.endsWith("CLI") || label === "DeepSeek Harness");
+    expect(navLabels.slice(0, 10)).toEqual([
       "Claude Code CLI",
       "Codex CLI",
       "Kimi CLI",
       "Grok CLI",
       "OpenCode CLI",
+      "PI CLI",
+      "DeepSeek Harness",
       "Gemini CLI",
       "GLM CLI",
       "Trae CLI",
-      "Cursor CLI",
     ]);
     expect(navLabels).toEqual(
-      expect.arrayContaining(["瑞幸 CLI", "DevEco CLI", "PI CLI", "iFlow CLI"]),
+      expect.arrayContaining(["瑞幸 CLI", "DevEco CLI", "Cursor CLI", "iFlow CLI"]),
     );
     expect(screen.queryByRole("button", { name: /Droid CLI/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Goose CLI/ })).toBeNull();
@@ -439,6 +440,14 @@ describe("VendorSettingsPanel", () => {
     );
     expect(openCodeIcon).toBeTruthy();
     expect((openCodeIcon as HTMLElement).className).toContain("mono");
+
+    const dshNavButton = screen.getByRole("button", {
+      name: /DeepSeek Harness/,
+    });
+    expect((dshNavButton as HTMLButtonElement).disabled).toBe(false);
+    const dshIcon = dshNavButton.querySelector(".vendor-engine-icon img");
+    expect(dshIcon).toBeTruthy();
+    expect((dshIcon as HTMLElement).className).not.toContain("mono");
 
     const unsupportedButtons = [
       "Gemini CLI",
@@ -516,6 +525,34 @@ describe("VendorSettingsPanel", () => {
     );
     expect(screen.queryByTestId("provider-list-stub")).toBeNull();
     expect(screen.queryByTestId("current-codex-config-stub")).toBeNull();
+  });
+
+  it("renders the PI CLI tab with lifecycle and custom path instead of coming-soon", async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+      expect(readGlobalCodexAuthJsonMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /PI CLI/ }));
+
+    const brandHeader = screen
+      .getByRole("heading", { name: "PI CLI" })
+      .closest(".vendor-brand-header") as HTMLElement;
+    expect(brandHeader).toBeTruthy();
+    const docsLink = within(brandHeader).getByRole("link", {
+      name: "Official docs",
+    });
+    expect(docsLink.getAttribute("href")).toBe(
+      "https://pi.dev/docs/latest/usage",
+    );
+    expect(screen.queryByText("正在适配此CLI，即将开放")).toBeNull();
+    expect(screen.queryByTestId("provider-list-stub")).toBeNull();
+    expect(screen.queryByTestId("kimi-provider-list-stub")).toBeNull();
+    // Custom path entry is present for supported engines.
+    expect(
+      screen.getByRole("button", { name: /自定义路径|Custom path|Configure/i }),
+    ).toBeTruthy();
   });
 
   it("renders the Grok CLI tab with official config row and provider list", async () => {
@@ -1227,7 +1264,7 @@ describe("VendorSettingsPanel", () => {
   it("shows the empty hint when every supported CLI is disabled", async () => {
     renderPanel({
       appSettings: {
-        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode"],
+        disabledCliEngines: ["claude", "codex", "kimi", "grok", "opencode", "pi", "dsh"],
       },
     });
 
@@ -1237,5 +1274,38 @@ describe("VendorSettingsPanel", () => {
 
     expect(screen.getByText("没有已启用的 CLI")).toBeTruthy();
     expect(screen.getByRole("button", { name: "未启用" })).toBeTruthy();
+  });
+
+  it("renders the DeepSeek Harness tab with host settings and open-UI action", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderPanel({
+      appSettings: {
+        dshHost: "127.0.0.1",
+        dshPort: 3080,
+        dshAutoStart: true,
+      },
+      onUpdateAppSettings,
+    });
+
+    await waitFor(() => {
+      expect(readGlobalCodexConfigTomlMock).toHaveBeenCalled();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /DeepSeek Harness/ }));
+
+    expect(screen.getByRole("heading", { name: "DeepSeek Harness" })).toBeTruthy();
+    expect(screen.getByLabelText("settings.vendor.dshHost")).toBeTruthy();
+    expect(screen.getByLabelText("settings.vendor.dshPort")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings.vendor.dshOpenUi" }),
+    );
+    expect(openUrlMock).toHaveBeenCalledWith("http://127.0.0.1:3080");
+
+    const hostInput = screen.getByLabelText("settings.vendor.dshHost");
+    fireEvent.change(hostInput, { target: { value: "10.0.0.8" } });
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
+    fireEvent.blur(hostInput);
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ dshHost: "10.0.0.8" }),
+    );
   });
 });

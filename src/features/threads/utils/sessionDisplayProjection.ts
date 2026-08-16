@@ -3,6 +3,7 @@ import {
   classifyContextProtocolText,
   isMossxProgramControlTitle,
 } from "../../../utils/contextProtocol";
+import { isDshRuntimeContextText } from "../../../utils/dshRuntimeContext";
 
 const GENERIC_SESSION_TITLE_PATTERN =
   /^(codex session|claude session|gemini session|opencode session|grok session|kimi session)$/i;
@@ -46,6 +47,7 @@ export function sanitizeNativeSessionTitle(
   if (
     PROJECT_MEMORY_TAG_TITLE_PATTERN.test(normalized) ||
     GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(normalized) ||
+    isDshRuntimeContextText(normalized) ||
     COMMAND_TAG_TITLE_PATTERN.test(normalized) ||
     isMossxProgramControlTitle(normalized) ||
     classifyContextProtocolText(normalized) !== null
@@ -66,6 +68,7 @@ function getSessionDisplayTitleStrength(
     || COMMAND_TAG_TITLE_PATTERN.test(normalized)
     || PROJECT_MEMORY_TAG_TITLE_PATTERN.test(normalized)
     || GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(normalized)
+    || isDshRuntimeContextText(normalized)
     || isMossxProgramControlTitle(normalized)
     || classifyContextProtocolText(normalized) !== null
   ) {
@@ -118,13 +121,15 @@ export function selectProjectedSessionDisplayName(
   // 注入包 / Grok bootstrap 残片不能落成侧栏名（无 previous 时回退空，由调用方 fallback）
   if (
     PROJECT_MEMORY_TAG_TITLE_PATTERN.test(nextName) ||
-    GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(nextName)
+    GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(nextName) ||
+    isDshRuntimeContextText(nextName)
   ) {
     const previousName = normalizeSessionDisplayTitle(params.previous?.name);
     if (
       previousName &&
       !PROJECT_MEMORY_TAG_TITLE_PATTERN.test(previousName) &&
-      !GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(previousName)
+      !GROK_RUNTIME_CONTEXT_TAG_TITLE_PATTERN.test(previousName) &&
+      !isDshRuntimeContextText(previousName)
     ) {
       return previousName;
     }

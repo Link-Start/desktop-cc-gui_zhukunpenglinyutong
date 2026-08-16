@@ -8,7 +8,8 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use super::store::{
-    mark_source_synced, normalize_path_key, source_is_fresh, upsert_rows, SessionIndexRow,
+    load_backfill_state, mark_source_synced, normalize_path_key, save_backfill_state,
+    source_is_fresh, upsert_rows, BackfillState, SessionIndexRow,
 };
 use crate::engine::claude_history::encode_project_path;
 
@@ -43,6 +44,447 @@ fn file_mtime_ms(path: &Path) -> i64 {
         .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or(0)
+}
+
+/// Result of one bounded historical-backfill batch (import daemon tail).
+#[derive(Debug, Default)]
+pub(crate) struct BackfillBatchResult {
+    pub upserted: usize,
+    pub complete: bool,
+}
+
+/// Claude backfill: page through project-dir files (mtime desc) by offset.
+pub(crate) const CLAUDE_BACKFILL_BATCH_SIZE: usize = 100;
+/// Codex backfill: distinct partition days processed per tick.
+pub(crate) const CODEX_BACKFILL_PARTITIONS_PER_BATCH: usize = 3;
+/// Codex non-partitioned fallback root cap (one-shot, first batch only).
+pub(crate) const CODEX_BACKFILL_PLAIN_FILE_CAP: usize = 1_000;
+/// Kimi backfill: matched index lines per tick.
+pub(crate) const KIMI_BACKFILL_BATCH_SIZE: usize = 100;
+
+fn list_claude_project_session_files(project_dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = fs::read_dir(project_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort_by(|left, right| {
+        file_mtime_ms(right)
+            .cmp(&file_mtime_ms(left))
+            .then_with(|| left.to_string_lossy().cmp(&right.to_string_lossy()))
+    });
+    files
+}
+
+fn claude_index_row_from_file(
+    path: &Path,
+    workspace_path: &Path,
+    titles: &HashMap<String, String>,
+) -> Option<SessionIndexRow> {
+    let session_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if session_id.is_empty() {
+        return None;
+    }
+    let updated_at = file_mtime_ms(path);
+    let title_from_history = titles.get(&session_id).cloned();
+    let title = title_from_history
+        .clone()
+        .or_else(|| peek_claude_first_user_preview(path))
+        .unwrap_or_else(|| "Claude Session".to_string());
+    let size_bytes = fs::metadata(path).ok().map(|metadata| metadata.len());
+    let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
+    Some(SessionIndexRow {
+        engine: "claude".into(),
+        session_id: session_id.clone(),
+        title: title.clone(),
+        native_title: title_from_history,
+        updated_at,
+        created_at: None,
+        cwd: Some(workspace_key.clone()),
+        workspace_path: Some(workspace_key),
+        physical_path: Some(path.to_string_lossy().to_string()),
+        parent_session_id: super::shared_visibility::extract_claude_parent_session_id(
+            &session_id,
+        ),
+        size_bytes,
+    })
+}
+
+fn codex_summary_to_index_row(
+    summary: crate::types::LocalUsageSessionSummary,
+    workspace_key: &str,
+) -> SessionIndexRow {
+    let title = summary
+        .native_title
+        .clone()
+        .or(summary.summary.clone())
+        .unwrap_or_else(|| "Codex Session".to_string());
+    SessionIndexRow {
+        engine: "codex".into(),
+        session_id: summary.session_id,
+        title: title.clone(),
+        native_title: summary.native_title.or(summary.summary),
+        updated_at: summary.timestamp,
+        created_at: None,
+        cwd: summary
+            .cwd
+            .as_deref()
+            .map(normalize_path_key)
+            .or_else(|| Some(workspace_key.to_string())),
+        workspace_path: Some(workspace_key.to_string()),
+        physical_path: summary.physical_path,
+        parent_session_id: summary.parent_session_id,
+        size_bytes: summary.file_size_bytes,
+    }
+}
+
+fn kimi_session_index_path() -> Option<PathBuf> {
+    let home = dirs::home_dir().map(|home| home.join(".kimi"))?;
+    let home = std::env::var("KIMI_HOME")
+        .ok()
+        .and_then(|value| {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(trimmed))
+            }
+        })
+        .unwrap_or(home);
+    Some(home.join("session_index.jsonl"))
+}
+
+fn parse_kimi_index_line(line: &str, target: &str) -> Option<SessionIndexRow> {
+    if line.len() > 256_000 {
+        return None;
+    }
+    let value = serde_json::from_str::<Value>(line).ok()?;
+    let work_dir = value
+        .get("workDir")
+        .or_else(|| value.get("work_dir"))
+        .or_else(|| value.get("cwd"))
+        .and_then(Value::as_str)
+        .map(normalize_path_key)
+        .unwrap_or_default();
+    if work_dir.is_empty() || work_dir != target {
+        return None;
+    }
+    let session_id = value
+        .get("sessionId")
+        .or_else(|| value.get("session_id"))
+        .or_else(|| value.get("id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let session_dir = value
+        .get("sessionDir")
+        .or_else(|| value.get("session_dir"))
+        .and_then(Value::as_str)
+        .map(PathBuf::from);
+    let updated_at = session_dir
+        .as_ref()
+        .map(|path| file_mtime_ms(path))
+        .filter(|value| *value > 0)
+        .unwrap_or_else(|| now_ms_fallback());
+    let title = value
+        .get("title")
+        .or_else(|| value.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "Kimi Session".to_string());
+    Some(SessionIndexRow {
+        engine: "kimi".into(),
+        session_id: session_id.to_string(),
+        title,
+        native_title: None,
+        updated_at,
+        created_at: None,
+        cwd: Some(target.to_string()),
+        workspace_path: Some(target.to_string()),
+        physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
+        parent_session_id: None,
+        size_bytes: None,
+    })
+}
+
+pub(crate) fn backfill_claude_for_workspace(
+    connection: &Connection,
+    workspace_path: &Path,
+    batch_size: usize,
+) -> Result<BackfillBatchResult, String> {
+    let source_key = format!(
+        "claude:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
+    let state = load_backfill_state(connection, &source_key)?;
+    if state.complete {
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    }
+    let Some(claude_home) = crate::claude_home::resolve_effective_claude_home(None) else {
+        save_backfill_state(
+            connection,
+            &source_key,
+            &BackfillState {
+                cursor: state.cursor.clone(),
+                complete: true,
+            },
+        )?;
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    };
+    let encoded = encode_project_path(&workspace_path.to_string_lossy());
+    let project_dir = claude_home.join("projects").join(&encoded);
+    if !project_dir.is_dir() {
+        save_backfill_state(
+            connection,
+            &source_key,
+            &BackfillState {
+                cursor: state.cursor.clone(),
+                complete: true,
+            },
+        )?;
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    }
+    let history_path = claude_home.join("history.jsonl");
+    let titles = read_claude_history_titles(&history_path, workspace_path);
+    let files = list_claude_project_session_files(&project_dir);
+    let offset: usize = state.cursor.trim().parse().unwrap_or(0);
+    if offset >= files.len() {
+        save_backfill_state(
+            connection,
+            &source_key,
+            &BackfillState {
+                cursor: state.cursor.clone(),
+                complete: true,
+            },
+        )?;
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    }
+    let end = offset.saturating_add(batch_size).min(files.len());
+    let mut rows = Vec::new();
+    for path in &files[offset..end] {
+        if let Some(row) = claude_index_row_from_file(path, workspace_path, &titles) {
+            rows.push(row);
+        }
+    }
+    let upserted = upsert_rows(connection, &rows)?;
+    let complete = end >= files.len();
+    save_backfill_state(
+        connection,
+        &source_key,
+        &BackfillState {
+            cursor: end.to_string(),
+            complete,
+        },
+    )?;
+    Ok(BackfillBatchResult { upserted, complete })
+}
+
+pub(crate) fn backfill_codex_for_workspace(
+    connection: &Connection,
+    workspace_path: &Path,
+    sessions_roots: &[PathBuf],
+    max_partitions: usize,
+) -> Result<BackfillBatchResult, String> {
+    let source_key = format!(
+        "codex:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
+    let state = load_backfill_state(connection, &source_key)?;
+    if state.complete {
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    }
+    let parsed = serde_json::from_str::<Value>(&state.cursor).ok();
+    let cursor_day = parsed
+        .as_ref()
+        .and_then(|value| value.get("day"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let mut plain_done = parsed
+        .as_ref()
+        .and_then(|value| value.get("plainDone"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
+    let mut upserted = 0usize;
+
+    if !plain_done {
+        let files = crate::local_usage::collect_codex_jsonl_candidates_capped(
+            sessions_roots,
+            CODEX_BACKFILL_PLAIN_FILE_CAP,
+        );
+        if !files.is_empty() {
+            let summaries = crate::local_usage::scan_codex_session_summaries_for_files(
+                Some(workspace_path),
+                files,
+            )?;
+            let rows: Vec<SessionIndexRow> = summaries
+                .into_iter()
+                .map(|summary| codex_summary_to_index_row(summary, &workspace_key))
+                .collect();
+            upserted += upsert_rows(connection, &rows)?;
+        }
+        plain_done = true;
+    }
+
+    let partitions = crate::local_usage::list_codex_day_partitions(sessions_roots);
+    let mut dates: Vec<String> = Vec::new();
+    for partition in &partitions {
+        if !dates.iter().any(|key| key == &partition.key) {
+            dates.push(partition.key.clone());
+        }
+    }
+    let remaining: Vec<String> = dates
+        .iter()
+        .filter(|key| cursor_day.is_empty() || *key < &cursor_day)
+        .cloned()
+        .collect();
+    let batch_dates: Vec<String> = remaining.iter().take(max_partitions).cloned().collect();
+
+    let save_state = |day: &str, plain: bool, complete: bool| {
+        save_backfill_state(
+            connection,
+            &source_key,
+            &BackfillState {
+                cursor: format!("{{\"day\":{:?},\"plainDone\":{}}}", day, plain),
+                complete,
+            },
+        )
+    };
+
+    if batch_dates.is_empty() {
+        save_state(&cursor_day, plain_done, true)?;
+        return Ok(BackfillBatchResult {
+            upserted,
+            complete: true,
+        });
+    }
+
+    let selected: Vec<_> = partitions
+        .into_iter()
+        .filter(|partition| batch_dates.contains(&partition.key))
+        .collect();
+    let summaries = crate::local_usage::scan_codex_session_summaries_for_day_dirs(
+        Some(workspace_path),
+        &selected,
+    )?;
+    let rows: Vec<SessionIndexRow> = summaries
+        .into_iter()
+        .map(|summary| codex_summary_to_index_row(summary, &workspace_key))
+        .collect();
+    upserted += upsert_rows(connection, &rows)?;
+
+    let oldest = batch_dates.last().cloned().unwrap_or_default();
+    let complete = !dates.iter().any(|key| *key < oldest);
+    save_state(&oldest, plain_done, complete)?;
+    Ok(BackfillBatchResult { upserted, complete })
+}
+
+pub(crate) fn backfill_kimi_for_workspace(
+    connection: &Connection,
+    workspace_path: &Path,
+    batch_size: usize,
+) -> Result<BackfillBatchResult, String> {
+    let source_key = format!(
+        "kimi:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
+    let state = load_backfill_state(connection, &source_key)?;
+    if state.complete {
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    }
+    let Some(index_path) = kimi_session_index_path() else {
+        save_backfill_state(
+            connection,
+            &source_key,
+            &BackfillState {
+                cursor: state.cursor.clone(),
+                complete: true,
+            },
+        )?;
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    };
+    if !index_path.is_file() {
+        save_backfill_state(
+            connection,
+            &source_key,
+            &BackfillState {
+                cursor: state.cursor.clone(),
+                complete: true,
+            },
+        )?;
+        return Ok(BackfillBatchResult {
+            upserted: 0,
+            complete: true,
+        });
+    }
+    let offset: usize = state.cursor.trim().parse().unwrap_or(0);
+    let target = normalize_path_key(&workspace_path.to_string_lossy());
+    let file = File::open(&index_path).map_err(|error| error.to_string())?;
+    let mut matched = 0usize;
+    let mut rows = Vec::new();
+    let mut hit_batch_limit = false;
+    for line in BufReader::new(file).lines() {
+        let Ok(line) = line else {
+            continue;
+        };
+        let Some(row) = parse_kimi_index_line(&line, &target) else {
+            continue;
+        };
+        matched += 1;
+        if matched <= offset {
+            continue;
+        }
+        if rows.len() >= batch_size {
+            hit_batch_limit = true;
+            break;
+        }
+        rows.push(row);
+    }
+    let upserted = upsert_rows(connection, &rows)?;
+    let covered = offset + rows.len();
+    let complete = !hit_batch_limit;
+    save_backfill_state(
+        connection,
+        &source_key,
+        &BackfillState {
+            cursor: covered.to_string(),
+            complete,
+        },
+    )?;
+    Ok(BackfillBatchResult { upserted, complete })
 }
 
 /// Sync Claude sessions for one workspace via project-dir mtime + history.jsonl titles.
@@ -109,7 +551,7 @@ pub(crate) fn sync_claude_for_workspace(
             let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
             rows.push(SessionIndexRow {
                 engine: "claude".into(),
-                session_id,
+                session_id: session_id.clone(),
                 title: title.clone(),
                 native_title: title_from_history,
                 updated_at,
@@ -117,7 +559,9 @@ pub(crate) fn sync_claude_for_workspace(
                 cwd: Some(workspace_key.clone()),
                 workspace_path: Some(workspace_key),
                 physical_path: Some(path.to_string_lossy().to_string()),
-                parent_session_id: None,
+                parent_session_id: super::shared_visibility::extract_claude_parent_session_id(
+                    &session_id,
+                ),
                 size_bytes,
             });
             if rows.len() >= limit {
@@ -531,6 +975,37 @@ pub(crate) fn gemini_home_fingerprint() -> String {
     mtime_fingerprint(&home)
 }
 
+pub(crate) fn pi_home_fingerprint() -> String {
+    let sessions = crate::engine::pi_history::resolve_pi_sessions_root(None);
+    let home = sessions
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| sessions.clone());
+    let mut parts = vec![mtime_fingerprint(&home), mtime_fingerprint(&sessions)];
+    // New jsonl lives in sessions/<encoded-cwd>/; parent mtime often stays
+    // unchanged, so include each cwd-dir fingerprint.
+    if let Ok(entries) = fs::read_dir(&sessions) {
+        let mut child_prints = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path
+                .file_name()
+                .map(|value| value.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if name.starts_with('.') {
+                continue;
+            }
+            child_prints.push(format!("{name}:{}", mtime_fingerprint(&path)));
+        }
+        child_prints.sort();
+        parts.extend(child_prints);
+    }
+    parts.join("|")
+}
+
 pub(crate) fn grok_home_fingerprint() -> String {
     let home = std::env::var("GROK_HOME")
         .ok()
@@ -552,6 +1027,23 @@ pub(crate) fn opencode_source_fingerprint(workspace_path: &Path) -> String {
     format!(
         "opencode:{}:{}",
         normalize_path_key(&workspace_path.to_string_lossy()),
+        bucket
+    )
+}
+
+pub(crate) fn dsh_source_fingerprint(workspace_path: &Path) -> String {
+    // DSH sessions live in the host process / $DSH_HOME. Home mtime catches
+    // durable writes; a short wall-clock bucket still re-probes live host
+    // sessions created without immediate disk churn (same idea as OpenCode).
+    let home = std::env::var_os("DSH_HOME")
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".dsh")))
+        .unwrap_or_else(|| PathBuf::from(".dsh"));
+    let bucket = now_ms_fallback() / 15_000;
+    format!(
+        "dsh:{}:{}:{}",
+        normalize_path_key(&workspace_path.to_string_lossy()),
+        mtime_fingerprint(&home),
         bucket
     )
 }
@@ -584,6 +1076,72 @@ pub(crate) fn rows_from_gemini_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: session.file_size_bytes,
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn rows_from_pi_summaries(
+    workspace_path: &Path,
+    sessions: &[crate::engine::pi_history::PiSessionSummary],
+) -> Vec<SessionIndexRow> {
+    let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
+    sessions
+        .iter()
+        .map(|session| {
+            let title = {
+                let trimmed = session.first_message.trim();
+                if trimmed.is_empty() {
+                    "PI Session".to_string()
+                } else {
+                    truncate_title(trimmed, 80)
+                }
+            };
+            SessionIndexRow {
+                engine: "pi".into(),
+                session_id: session.session_id.clone(),
+                title,
+                native_title: None,
+                updated_at: session.updated_at,
+                created_at: Some(session.created_at).filter(|value| *value > 0),
+                cwd: Some(workspace_key.clone()),
+                workspace_path: Some(workspace_key.clone()),
+                physical_path: None,
+                parent_session_id: None,
+                size_bytes: session.file_size_bytes,
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn rows_from_dsh_summaries(
+    workspace_path: &Path,
+    sessions: &[crate::engine::dsh::history::DshSessionSummary],
+) -> Vec<SessionIndexRow> {
+    let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
+    sessions
+        .iter()
+        .map(|session| {
+            let title = {
+                let trimmed = session.first_message.trim();
+                if trimmed.is_empty() {
+                    "DeepSeek Harness Session".to_string()
+                } else {
+                    truncate_title(trimmed, 80)
+                }
+            };
+            SessionIndexRow {
+                engine: "dsh".into(),
+                session_id: session.session_id.clone(),
+                title,
+                native_title: None,
+                updated_at: session.updated_at,
+                created_at: Some(session.created_at).filter(|value| *value > 0),
+                cwd: Some(workspace_key.clone()),
+                workspace_path: Some(workspace_key.clone()),
+                physical_path: None,
+                parent_session_id: None,
+                size_bytes: None,
             }
         })
         .collect()
@@ -680,4 +1238,118 @@ pub(crate) fn invalidate_workspace_sources(
         )
         .map_err(|error| error.to_string())?;
     Ok(changed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::super::store::mark_source_synced;
+
+    #[test]
+    fn rows_from_pi_summaries_prefix_engine_and_title() {
+        let rows = rows_from_pi_summaries(
+            Path::new("/Users/chenxiangning/code/AI/reach/ai-reach"),
+            &[crate::engine::pi_history::PiSessionSummary {
+                session_id: "019ffb7b-dedc-7b36-8d2f-f85f35501036".into(),
+                first_message: "你在干什么".into(),
+                updated_at: 10,
+                created_at: 9,
+                message_count: 2,
+                file_size_bytes: Some(128),
+                engine: Some("pi".into()),
+                canonical_session_id: None,
+                attribution_status: None,
+            }],
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].engine, "pi");
+        assert_eq!(rows[0].session_id, "019ffb7b-dedc-7b36-8d2f-f85f35501036");
+        assert_eq!(rows[0].title, "你在干什么");
+        assert_eq!(rows[0].size_bytes, Some(128));
+    }
+
+    #[test]
+    fn rows_from_dsh_summaries_prefix_engine_and_title() {
+        let rows = rows_from_dsh_summaries(
+            Path::new("/Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui"),
+            &[crate::engine::dsh::history::DshSessionSummary {
+                session_id: "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into(),
+                first_message: "无法查看DSH历史记录".into(),
+                updated_at: 1_786_896_696_172,
+                created_at: 1_786_896_696_172,
+                message_count: 0,
+                engine: Some("dsh".into()),
+                canonical_session_id: Some(
+                    "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into(),
+                ),
+            }],
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].engine, "dsh");
+        assert_eq!(
+            rows[0].session_id,
+            "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d"
+        );
+        assert_eq!(rows[0].title, "无法查看DSH历史记录");
+        assert!(rows[0]
+            .workspace_path
+            .as_deref()
+            .is_some_and(|path| path.contains("desktop-cc-gui")));
+    }
+
+    #[test]
+    fn pi_fingerprint_changes_when_cwd_subdir_gets_new_jsonl() {
+        let dir = std::env::temp_dir().join(format!(
+            "pi-fp-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let sessions = dir.join("sessions");
+        let cwd = sessions.join("--tmp-ws--");
+        std::fs::create_dir_all(&cwd).expect("mkdir");
+        std::fs::write(cwd.join("a.jsonl"), "x").expect("write a");
+        let previous = std::env::var("PI_CODING_AGENT_DIR").ok();
+        std::env::set_var("PI_CODING_AGENT_DIR", &dir);
+        let first = pi_home_fingerprint();
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        std::fs::write(cwd.join("b.jsonl"), "y").expect("write b");
+        let second = pi_home_fingerprint();
+        match previous {
+            Some(value) => std::env::set_var("PI_CODING_AGENT_DIR", value),
+            None => std::env::remove_var("PI_CODING_AGENT_DIR"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_ne!(first, second, "cwd jsonl must change PI fingerprint");
+    }
+
+    #[test]
+    fn incremental_sync_helper_treats_missing_mismatch_and_invalidate() {
+        let connection = Connection::open_in_memory().expect("db");
+        connection
+            .execute_batch(
+                "CREATE TABLE session_index_sources (
+                   source_key TEXT PRIMARY KEY,
+                   fingerprint TEXT NOT NULL,
+                   last_sync_ms INTEGER NOT NULL,
+                   row_count INTEGER NOT NULL DEFAULT 0
+                 );",
+            )
+            .expect("ddl");
+        let workspace = Path::new("/tmp/ccgui-pi-stale-ws");
+        assert!(!engine_source_is_fresh(&connection, "pi", workspace, "fp-a").expect("missing"));
+        mark_source_synced(&connection, "pi:/tmp/ccgui-pi-stale-ws", "fp-a", 1).expect("mark");
+        assert!(engine_source_is_fresh(&connection, "pi", workspace, "fp-a").expect("match"));
+        assert!(!engine_source_is_fresh(&connection, "pi", workspace, "fp-b").expect("mismatch"));
+        connection
+            .execute(
+                "UPDATE session_index_sources SET last_sync_ms = 0 WHERE source_key = ?1",
+                ["pi:/tmp/ccgui-pi-stale-ws"],
+            )
+            .expect("invalidate");
+        assert!(
+            !engine_source_is_fresh(&connection, "pi", workspace, "fp-a").expect("invalidated")
+        );
+    }
 }

@@ -65,6 +65,8 @@ export const PromptEnhancerDialog = ({
         return 'Gemini';
       case 'opencode':
         return 'OpenCode';
+      case 'dsh':
+        return 'DSH';
       default:
         return 'AI';
     }

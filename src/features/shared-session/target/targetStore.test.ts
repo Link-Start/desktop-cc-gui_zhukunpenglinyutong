@@ -195,7 +195,7 @@ describe("freezeTurnSnapshot", () => {
 });
 
 describe("resolved Execution Target contract", () => {
-  it.each(["codex", "kimi", "grok", "opencode"] as const)(
+  it.each(["codex", "kimi", "grok", "opencode", "pi"] as const)(
     "accepts explicit managed %s identity",
     (engine) => {
       expect(
@@ -224,6 +224,19 @@ describe("resolved Execution Target contract", () => {
     ).toBe(true);
   });
 
+  it("accepts PI local target as a resolved Shared engine", () => {
+    expect(
+      isResolvedExecutionTarget({
+        engine: "pi",
+        providerProfileId: null,
+        modelCatalogEntryId: "kimi-coding/k3",
+        model: "kimi-coding/k3",
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "disk",
+      }),
+    ).toBe(true);
+  });
+
   it("rejects unsupported Gemini targets", () => {
     expect(
       isResolvedExecutionTarget({
@@ -231,6 +244,19 @@ describe("resolved Execution Target contract", () => {
         providerProfileId: null,
         modelCatalogEntryId: "catalog-local",
         model: "runtime-local",
+        providerProfileNameSnapshot: "本地配置",
+        providerProfileSource: "disk",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps DSH fail-closed for Shared even with a complete host catalog identity", () => {
+    expect(
+      isResolvedExecutionTarget({
+        engine: "dsh",
+        providerProfileId: null,
+        modelCatalogEntryId: "grok-4.6/Grok 4.5",
+        model: "Grok 4.5",
         providerProfileNameSnapshot: "本地配置",
         providerProfileSource: "disk",
       }),

@@ -4,7 +4,7 @@
  * UX：
  * - 必须有 sendReadiness，才能渲染 ReadinessBar（模型位所在行）
  * - 不传 onExecutionTargetChange，避免 atomic catalog 冷启重路径导致假死
- * - 模型未就绪：modelLabel 为「加载中」；就绪后替换真名（同位置）
+ * - 模型未就绪：静态模型位只显示「加载中」；就绪后只替换为模型名（都不带 CLI）
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentProps } from "react";

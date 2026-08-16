@@ -189,11 +189,15 @@ export type {
   SessionIndexListPage,
   SessionIndexRow,
   SessionIndexSyncReport,
+  SharedNativeVisibilityProjection,
 } from "./tauri/sessionIndex";
 export {
   invalidateSessionIndexForWorkspace,
   listSessionIndexForWorkspace,
   syncSessionIndexForWorkspace,
+  tombstoneSessionIndexRows,
+  upsertSessionIndexRows,
+  writeClientCreatedSessionIndex,
 } from "./tauri/sessionIndex";
 export type { CodexRuntimeReloadResult, DockIconApplyResult, SettingsRecoveryNotice } from "./tauri/settings";
 export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, setDockIcon, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";
@@ -253,6 +257,9 @@ export {
   routeBrowserAgentProvider,
   runBrowserAgentAction,
   syncBrowserAgentWebviewBounds,
+  showBrowserAgentTabContextMenuOverlay,
+  startBrowserAgentElementSelect,
+  stopBrowserAgentElementSelect,
   updateBrowserAgentSession,
   validateBrowserAgentUrl,
 } from "./tauri/browserAgent";
@@ -286,7 +293,7 @@ export type {
   BrowserSnapshotBudget,
   BrowserTextNode,
 } from "../features/browser-agent/types";
-export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor } from "./tauri/doctor";
+export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runDshDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor, runPiDoctor } from "./tauri/doctor";
 export { getCliInstallPlan, getCliVersionStatus, runCliInstaller } from "./tauri/cliInstaller";
 export type {
   ComputerUseActivationFailureKind,
@@ -634,8 +641,11 @@ export {
   deleteGeminiSession,
   deleteGrokSession,
   deleteKimiSession,
+  deleteDshSession,
   deleteOpenCodeSession,
+  deletePiSession,
   forkClaudeSession,
+  forkDshSession,
   forkClaudeSessionFromMessage,
   forkThread,
   hydrateClaudeDeferredImage,
@@ -645,6 +655,8 @@ export {
   setGlobalMcpServerEnabled,
   listGrokSessions,
   listKimiSessions,
+  listPiSessions,
+  listDshSessions,
   listMcpServerStatus,
   listThreads,
   loadClaudeSession,
@@ -652,6 +664,8 @@ export {
   loadGeminiSession,
   loadGrokSession,
   loadKimiSession,
+  loadPiSession,
+  loadDshSession,
   resumeThread,
   rewindCodexThread,
   startThread,

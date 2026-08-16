@@ -19,6 +19,7 @@ const models = {
     "discoveringModels": "正在探索模型…",
     "emptyChannelModelsTitle": "該供應商暫無可用模型",
     "emptyChannelModelsHint": "可點擊下方「新增模型」，在自訂模型中新增後使用",
+    "emptyDshHostHint": "請在 DeepSeek Harness 中設定模型。點此開啟設定。",
     "refreshConfigFailed": "重新整理失敗：{{message}}",
         "claude": {
       "fable5": {

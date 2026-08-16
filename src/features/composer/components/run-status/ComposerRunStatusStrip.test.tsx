@@ -6,6 +6,16 @@ import { describe, expect, it, vi } from "vitest";
 import { ComposerRunStatusStrip } from "./ComposerRunStatusStrip";
 
 describe("ComposerRunStatusStrip styles", () => {
+  it("loads deferred todo/plan list styles from the strip host", () => {
+    const stripSource = readFileSync(
+      resolve(process.cwd(), "src/features/composer/components/run-status/ComposerRunStatusStrip.tsx"),
+      "utf8",
+    );
+    expect(stripSource).toContain("loadComposerRunStatusListStyles");
+    expect(stripSource).toContain("useFeatureStylesReady");
+    expect(stripSource).toContain("listStylesReady");
+  });
+
   it("keeps expanded panels out of document flow (absolute overlay)", () => {
     const css = readFileSync(
       resolve(process.cwd(), "src/styles/composer-run-status.css"),

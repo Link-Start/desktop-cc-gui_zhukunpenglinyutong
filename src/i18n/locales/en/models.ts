@@ -16,6 +16,8 @@ const models = {
     refreshConfigFailed: "Refresh failed: {{message}}",
     emptyChannelModelsTitle: "No models for this provider yet",
     emptyChannelModelsHint: "Click \u201cAdd Model\u201d below to add a custom model",
+    emptyDshHostHint:
+      "Configure models in DeepSeek Harness. Click here to open settings.",
     claude: {
       fable5: {
         label: "Fable 5",
