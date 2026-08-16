@@ -31,8 +31,23 @@ pub struct DshRpcError {
 
 impl std::fmt::Display for DshRpcError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+        write!(f, "{}", format_dsh_rpc_error(self))
     }
+}
+
+/// DSH Host admits images from `resolveModelInfo().inputModalities`,
+/// not from whether the upstream API can see. Custom `llm-pi-ai` routes
+/// fall back to `defaultInput: [text]` when neither the model entry nor
+/// the installed catalog declares modalities.
+fn format_dsh_rpc_error(error: &DshRpcError) -> String {
+    let reason = error.details.get("reason").and_then(Value::as_str);
+    if error.code == "attachment-error" && reason == Some("MODEL_DOES_NOT_SUPPORT_IMAGES") {
+        return format!(
+            "{}: {} DSH resolved this model as text-only (custom llm-pi-ai routes fall back to `defaultInput: [text]`). If this endpoint actually accepts images, set `input: [text, image]` on the model or `defaultInput: [text, image]` on that provider route in DSH settings, then retry.",
+            error.code, error.message
+        );
+    }
+    format!("{}: {}", error.code, error.message)
 }
 
 impl std::error::Error for DshRpcError {}
@@ -207,6 +222,39 @@ mod tests {
         let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":false,"error":{"code":"fork-unavailable","message":"turn open","details":{}}}}"#;
         let err = parse_server_response(body, "rpc-1", "session.fork").unwrap_err();
         assert!(err.contains("fork-unavailable"));
+    }
+
+    #[test]
+    fn explains_model_does_not_support_images_as_resolved_declaration() {
+        let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":false,"error":{"code":"attachment-error","message":"Model \"grok-4.5\" does not support image input.","details":{"reason":"MODEL_DOES_NOT_SUPPORT_IMAGES"}}}}"#;
+        let err = parse_server_response(body, "rpc-1", "session.prompt").unwrap_err();
+        assert!(
+            err.contains("attachment-error"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            err.contains("grok-4.5"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            err.contains("resolved this model as text-only"),
+            "unexpected error: {err}"
+        );
+        assert!(
+            err.contains("defaultInput"),
+            "actionable DSH settings hint missing: {err}"
+        );
+        assert!(
+            err.contains("input: [text, image]"),
+            "actionable model input hint missing: {err}"
+        );
+    }
+
+    #[test]
+    fn other_attachment_errors_stay_unmapped() {
+        let body = r#"{"type":"server-response","rpcId":"rpc-1","result":{"ok":false,"error":{"code":"attachment-error","message":"too many","details":{"reason":"TOO_MANY_IMAGES"}}}}"#;
+        let err = parse_server_response(body, "rpc-1", "session.prompt").unwrap_err();
+        assert_eq!(err, "attachment-error: too many");
     }
 
     #[test]

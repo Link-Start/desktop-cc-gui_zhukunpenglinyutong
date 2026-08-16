@@ -88,7 +88,10 @@ pub async fn select_model(
         "provider": provider,
         "model": model,
     });
-    if let Some(effort) = reasoning_effort.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(effort) = reasoning_effort
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         payload["reasoningEffort"] = json!(effort);
     }
     client.call("session.selectModel", payload).await
@@ -100,25 +103,41 @@ pub async fn prompt(
     text: &str,
     images: &[DshPromptImage],
 ) -> Result<Value, String> {
-    let mut content = vec![json!({ "type": "text", "text": text })];
-    for image in images {
-        content.push(json!({
-            "type": "image",
-            "mediaType": image.media_type,
-            "data": image.data,
-            "name": image.name,
-        }));
-    }
     client
         .call(
             "session.prompt",
             json!({
                 "sessionId": session_id,
                 "mode": "queue",
-                "content": content,
+                "content": build_prompt_content(text, images),
             }),
         )
         .await
+}
+
+/// DSH `session.prompt` content parts.
+///
+/// Host Zod (`promptContentPartSchema`) is `$strip` + `name?: string`.
+/// `name: null` is **not** optional — it is `invalid payload for session.prompt`.
+pub(crate) fn build_prompt_content(text: &str, images: &[DshPromptImage]) -> Vec<Value> {
+    let mut content = vec![json!({ "type": "text", "text": text })];
+    for image in images {
+        let mut part = json!({
+            "type": "image",
+            "mediaType": image.media_type,
+            "data": image.data,
+        });
+        if let Some(name) = image
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            part["name"] = json!(name);
+        }
+        content.push(part);
+    }
+    content
 }
 
 pub async fn cancel(client: &DshHostClient, session_id: &str) -> Result<Value, String> {
@@ -184,64 +203,191 @@ pub struct DshPromptImage {
     pub name: Option<String>,
 }
 
-pub async fn prompt_images_from_paths(images: Option<&[String]>) -> Vec<DshPromptImage> {
-    let Some(images) = images else {
-        return Vec::new();
-    };
-    let mut decoded = Vec::with_capacity(images.len());
-    for entry in images {
-        if let Some(image) = decode_image_entry(entry).await {
-            decoded.push(image);
+/// DSH host default (`dsh-attachment-local`) is 5 MiB per image.
+const DSH_MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+
+/// Load composer attachments into DSH `PromptContentPart.image` values.
+///
+/// Follows the Grok / PI path: `file://`, workspace-relative paths, and
+/// pasted data URLs all resolve. Any attached-but-unreadable image fails
+/// the send instead of being silently dropped.
+pub fn load_prompt_images(
+    images: Option<&[String]>,
+    workspace_path: &Path,
+) -> Result<Vec<DshPromptImage>, String> {
+    let raw_paths = crate::engine::cli_image_input::collect_non_empty_image_paths(images);
+    if raw_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut loaded = Vec::with_capacity(raw_paths.len());
+    let mut errors = Vec::new();
+    for raw in &raw_paths {
+        match load_one_prompt_image(raw, workspace_path) {
+            Ok(image) => loaded.push(image),
+            Err(error) => errors.push(format!("{}: {error}", describe_image_ref(raw))),
         }
     }
-    decoded
+
+    if !errors.is_empty() {
+        return Err(format!(
+            "DSH image input failed: {} of {} attached images could not be loaded ({})",
+            errors.len(),
+            raw_paths.len(),
+            errors.join("; ")
+        ));
+    }
+    Ok(loaded)
 }
 
-async fn decode_image_entry(entry: &str) -> Option<DshPromptImage> {
-    let trimmed = entry.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    if let Some(rest) = trimmed.strip_prefix("data:") {
-        let (header, data) = rest.split_once(',')?;
-        let media_type = header
-            .split(';')
-            .next()
+fn describe_image_ref(raw: &str) -> String {
+    if is_data_url(raw) {
+        let media = raw
+            .get(5..)
+            .and_then(|rest| rest.split_once(','))
+            .map(|(meta, _)| meta.split(';').next().unwrap_or("image").trim())
             .filter(|value| !value.is_empty())
-            .unwrap_or("image/png")
-            .to_string();
-        return Some(DshPromptImage {
-            media_type,
-            data: data.to_string(),
-            name: None,
-        });
+            .unwrap_or("image");
+        format!("data URL ({media}, {} bytes)", raw.len())
+    } else {
+        raw.to_string()
     }
-    let path = Path::new(trimmed);
-    let bytes = tokio::fs::read(path).await.ok()?;
-    let media_type = media_type_for_path(path)?;
+}
+
+fn load_one_prompt_image(raw: &str, workspace_path: &Path) -> Result<DshPromptImage, String> {
+    if is_data_url(raw) {
+        return load_data_url_image(raw);
+    }
+
+    let path = crate::engine::cli_image_input::normalize_local_image_path(raw)?;
+    let path = if path.is_absolute() {
+        path
+    } else {
+        workspace_path.join(path)
+    };
+    let metadata = std::fs::metadata(&path).map_err(|error| format!("stat failed: {error}"))?;
+    if !metadata.is_file() {
+        return Err("not a regular file".to_string());
+    }
+    if metadata.len() > DSH_MAX_IMAGE_BYTES {
+        return Err(format!(
+            "exceeds {} byte limit ({})",
+            DSH_MAX_IMAGE_BYTES,
+            metadata.len()
+        ));
+    }
+    let bytes = std::fs::read(&path).map_err(|error| format!("read failed: {error}"))?;
+    if bytes.is_empty() {
+        return Err("empty image data".to_string());
+    }
+    let declared = media_type_for_path(&path)?;
+    let media_type = sniff_dsh_media_type(&bytes, declared)?;
     use base64::Engine as _;
-    Some(DshPromptImage {
+    Ok(DshPromptImage {
         media_type: media_type.to_string(),
         data: base64::engine::general_purpose::STANDARD.encode(bytes),
         name: path
             .file_name()
-            .map(|name| name.to_string_lossy().to_string()),
+            .map(|name| name.to_string_lossy().to_string())
+            .filter(|name| !name.is_empty()),
     })
 }
 
-fn media_type_for_path(path: &Path) -> Option<&'static str> {
-    match path
+fn is_data_url(raw: &str) -> bool {
+    raw.get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
+}
+
+fn load_data_url_image(raw: &str) -> Result<DshPromptImage, String> {
+    let rest = raw.get(5..).ok_or_else(|| "invalid data URL".to_string())?;
+    let (meta, payload) = rest
+        .split_once(',')
+        .ok_or_else(|| "invalid data URL".to_string())?;
+    if !meta.to_ascii_lowercase().contains(";base64") {
+        return Err("data URL must be base64".to_string());
+    }
+    let declared = meta
+        .split(';')
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("image/png");
+    let declared = canonical_dsh_media_type(declared)?;
+    let encoded: String = payload
+        .chars()
+        .filter(|ch| !ch.is_ascii_whitespace())
+        .collect();
+    if encoded.is_empty() {
+        return Err("empty image data".to_string());
+    }
+    let max_encoded_bytes = DSH_MAX_IMAGE_BYTES
+        .saturating_add(2)
+        .saturating_div(3)
+        .saturating_mul(4) as usize;
+    if encoded.len() > max_encoded_bytes {
+        return Err(format!("exceeds {} byte limit", DSH_MAX_IMAGE_BYTES));
+    }
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&encoded)
+        .map_err(|error| format!("invalid base64 data URL: {error}"))?;
+    if bytes.is_empty() {
+        return Err("empty image data".to_string());
+    }
+    if bytes.len() as u64 > DSH_MAX_IMAGE_BYTES {
+        return Err(format!(
+            "exceeds {} byte limit ({})",
+            DSH_MAX_IMAGE_BYTES,
+            bytes.len()
+        ));
+    }
+    let media_type = sniff_dsh_media_type(&bytes, declared)?;
+    Ok(DshPromptImage {
+        media_type: media_type.to_string(),
+        data: base64::engine::general_purpose::STANDARD.encode(bytes),
+        name: None,
+    })
+}
+
+fn sniff_dsh_media_type(bytes: &[u8], declared: &str) -> Result<&'static str, String> {
+    let sniffed = match bytes {
+        [0x89, b'P', b'N', b'G', ..] => "image/png",
+        [0xFF, 0xD8, 0xFF, ..] => "image/jpeg",
+        [b'G', b'I', b'F', b'8', ..] => "image/gif",
+        [b'R', b'I', b'F', b'F', ..] if bytes.get(8..12) == Some(b"WEBP") => "image/webp",
+        _ => {
+            return Err("unsupported or malformed image data".to_string());
+        }
+    };
+    let _ = canonical_dsh_media_type(declared)?;
+    Ok(sniffed)
+}
+
+fn canonical_dsh_media_type(raw: &str) -> Result<&'static str, String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "image/png" => Ok("image/png"),
+        "image/jpeg" | "image/jpg" => Ok("image/jpeg"),
+        "image/webp" => Ok("image/webp"),
+        "image/gif" => Ok("image/gif"),
+        other => Err(format!("unsupported image media type: {other}")),
+    }
+}
+
+fn media_type_for_path(path: &Path) -> Result<&'static str, String> {
+    let ext = path
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("")
-        .to_ascii_lowercase()
-        .as_str()
-    {
-        "jpg" | "jpeg" => Some("image/jpeg"),
-        "gif" => Some("image/gif"),
-        "webp" => Some("image/webp"),
-        "png" => Some("image/png"),
-        _ => None,
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "jpg" | "jpeg" => Ok("image/jpeg"),
+        "gif" => Ok("image/gif"),
+        "webp" => Ok("image/webp"),
+        "png" => Ok("image/png"),
+        other => Err(format!(
+            "unsupported image extension: {}",
+            if other.is_empty() { "(none)" } else { other }
+        )),
     }
 }
 
@@ -254,7 +400,9 @@ pub fn split_model_selection(
     if trimmed.is_empty() {
         return None;
     }
-    if let Some(provider) = explicit_provider.map(str::trim).filter(|value| !value.is_empty())
+    if let Some(provider) = explicit_provider
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
     {
         let model = trimmed
             .strip_prefix(&format!("{provider}/"))
@@ -298,15 +446,15 @@ mod tests {
             strip_windows_verbatim_prefix(r"C:\Users\foo"),
             r"C:\Users\foo"
         );
-        assert_eq!(strip_windows_verbatim_prefix("/tmp/project"), "/tmp/project");
+        assert_eq!(
+            strip_windows_verbatim_prefix("/tmp/project"),
+            "/tmp/project"
+        );
     }
 
     #[test]
     fn thread_roundtrip() {
-        assert_eq!(
-            session_id_from_thread("dsh:session-abc"),
-            "session-abc"
-        );
+        assert_eq!(session_id_from_thread("dsh:session-abc"), "session-abc");
         assert!(is_pending_thread("dsh-pending-1"));
         assert_eq!(thread_id_for_session("session-abc"), "dsh:session-abc");
     }
@@ -335,5 +483,185 @@ mod tests {
             )
         );
         assert_eq!(split_model_selection("deepseek-v4-flash", None), None);
+    }
+
+    const TINY_PNG_BASE64: &str =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+    fn tiny_png_bytes() -> Vec<u8> {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD
+            .decode(TINY_PNG_BASE64)
+            .expect("fixture png")
+    }
+
+    fn tiny_jpeg_bytes() -> Vec<u8> {
+        vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, b'J', b'F', b'I', b'F']
+    }
+
+    #[test]
+    fn prompt_content_omits_null_name_for_pasted_data_url() {
+        let content = build_prompt_content(
+            "看图",
+            &[DshPromptImage {
+                media_type: "image/png".to_string(),
+                data: TINY_PNG_BASE64.to_string(),
+                name: None,
+            }],
+        );
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "看图");
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["mediaType"], "image/png");
+        assert_eq!(content[1]["data"], TINY_PNG_BASE64);
+        assert!(
+            content[1].get("name").is_none(),
+            "DSH Zod optional string rejects name:null: {}",
+            content[1]
+        );
+    }
+
+    #[test]
+    fn prompt_content_keeps_filename_when_present() {
+        let content = build_prompt_content(
+            "",
+            &[DshPromptImage {
+                media_type: "image/jpeg".to_string(),
+                data: "abcd".to_string(),
+                name: Some("shot.jpg".to_string()),
+            }],
+        );
+        assert_eq!(content[1]["name"], "shot.jpg");
+    }
+
+    #[test]
+    fn prompt_content_omits_blank_filename() {
+        let content = build_prompt_content(
+            "hi",
+            &[DshPromptImage {
+                media_type: "image/png".to_string(),
+                data: TINY_PNG_BASE64.to_string(),
+                name: Some("   ".to_string()),
+            }],
+        );
+        assert!(content[1].get("name").is_none());
+    }
+
+    #[test]
+    fn loads_pasted_data_url_without_filename() {
+        let data_url = format!("data:image/png;base64,{TINY_PNG_BASE64}");
+        let images =
+            load_prompt_images(Some(&[data_url]), Path::new(".")).expect("data URL should load");
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].media_type, "image/png");
+        assert_eq!(images[0].data, TINY_PNG_BASE64);
+        assert_eq!(images[0].name, None);
+    }
+
+    #[test]
+    fn normalizes_browser_jpg_alias_on_data_url() {
+        use base64::Engine as _;
+        let jpeg = base64::engine::general_purpose::STANDARD.encode(tiny_jpeg_bytes());
+        let data_url = format!("data:image/jpg;base64,{jpeg}");
+        let images = load_prompt_images(Some(&[data_url]), Path::new("."))
+            .expect("image/jpg should canonicalize");
+        assert_eq!(images[0].media_type, "image/jpeg");
+        let content = build_prompt_content("", &images);
+        assert_eq!(content[1]["mediaType"], "image/jpeg");
+        assert!(content[1].get("name").is_none());
+    }
+
+    #[test]
+    fn normalizes_jpg_alias_and_file_url() {
+        let dir = std::env::temp_dir().join(format!("dsh-image-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("shot.jpg");
+        std::fs::write(&path, tiny_jpeg_bytes()).unwrap();
+        let file_url = format!("file://{}", path.display());
+
+        let images = load_prompt_images(Some(&[file_url]), &dir).expect("file URL should load");
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0].media_type, "image/jpeg");
+        assert_eq!(images[0].name.as_deref(), Some("shot.jpg"));
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn sniffs_png_bytes_even_when_filename_says_jpg() {
+        let dir = std::env::temp_dir().join(format!("dsh-image-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("misnamed.jpg");
+        std::fs::write(&path, tiny_png_bytes()).unwrap();
+
+        let images = load_prompt_images(Some(&[path.to_string_lossy().to_string()]), &dir)
+            .expect("sniff should correct media type");
+        assert_eq!(images[0].media_type, "image/png");
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn rejects_unreadable_attachments_instead_of_dropping_them() {
+        let error = load_prompt_images(
+            Some(&["/definitely-missing-dsh-image.png".to_string()]),
+            Path::new("."),
+        )
+        .expect_err("missing files must fail the send");
+        assert!(
+            error.contains("could not be loaded"),
+            "unexpected error: {error}"
+        );
+        assert!(
+            error.contains("/definitely-missing-dsh-image.png"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn rejects_mixed_good_and_bad_attachments() {
+        let data_url = format!("data:image/png;base64,{TINY_PNG_BASE64}");
+        let error = load_prompt_images(
+            Some(&[data_url, "/definitely-missing-dsh-image.png".to_string()]),
+            Path::new("."),
+        )
+        .expect_err("partial failure must fail the send");
+        assert!(error.contains("1 of 2"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn error_does_not_dump_data_url_payload() {
+        let data_url = format!("data:image/png;base64,not-valid-base64-{TINY_PNG_BASE64}");
+        let error = load_prompt_images(Some(&[data_url.clone()]), Path::new("."))
+            .expect_err("invalid base64 must fail");
+        assert!(
+            !error.contains("not-valid-base64"),
+            "data URL leaked into error: {error}"
+        );
+        assert!(error.contains("data URL"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn rejects_unsupported_heic() {
+        let error = load_prompt_images(
+            Some(&["data:image/heic;base64,AAAA".to_string()]),
+            Path::new("."),
+        )
+        .expect_err("HEIC must be rejected");
+        assert!(
+            error.contains("unsupported image media type"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn empty_or_blank_image_list_stays_text_only() {
+        assert!(load_prompt_images(None, Path::new(".")).unwrap().is_empty());
+        assert!(
+            load_prompt_images(Some(&["  ".to_string()]), Path::new("."))
+                .unwrap()
+                .is_empty()
+        );
     }
 }

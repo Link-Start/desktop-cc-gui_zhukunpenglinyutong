@@ -123,7 +123,10 @@ pub async fn detect_dsh_status(settings: &DshRuntimeSettings) -> EngineStatus {
             )),
         ),
     };
-    let default_model = models.iter().find(|model| model.default).map(|model| model.id.clone());
+    let default_model = models
+        .iter()
+        .find(|model| model.default)
+        .map(|model| model.id.clone());
 
     EngineStatus {
         engine_type: EngineType::Dsh,
@@ -237,21 +240,14 @@ pub async fn send_user_turn(
                 "DSH model must be a provider/model catalog id, got `{model}`"
             ));
         };
-        session::select_model(
-            &client,
-            &native_session_id,
-            &provider,
-            &model_id,
-            effort,
-        )
-        .await?;
+        session::select_model(&client, &native_session_id, &provider, &model_id, effort).await?;
     }
 
     // Subscribe immediately before prompt so this turn's `turn/end` cannot
     // race past the waiter. Do not inspect history first: a resumed
     // session already has a previous `turn/end`.
     let turn_waiter = events::subscribe_turn_end(&native_session_id).await;
-    let prompt_images = session::prompt_images_from_paths(images).await;
+    let prompt_images = session::load_prompt_images(images, workspace_path)?;
     session::prompt(&client, &native_session_id, text, &prompt_images).await?;
     Ok(DshSendOutcome {
         native_session_id,
@@ -671,7 +667,9 @@ mod tests {
         let describe = json!({ "provider": "grok", "model": "grok-4.6" });
         let models = flatten_llm_models_with_describe(&catalog, Some(&describe));
         assert!(!models[0].default);
-        assert!(models.iter().any(|model| model.id == "grok/grok-4.6" && model.default));
+        assert!(models
+            .iter()
+            .any(|model| model.id == "grok/grok-4.6" && model.default));
     }
 
     #[test]
