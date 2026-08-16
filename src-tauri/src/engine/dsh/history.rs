@@ -38,6 +38,8 @@ pub struct DshSessionMessage {
     pub tool_input: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_output: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_kind: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -164,10 +166,9 @@ fn summary_from_list_item(item: &Value) -> Option<DshSessionSummary> {
     let title = item
         .pointer("/projections/values/title")
         .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
+        .unwrap_or("");
     Some(DshSessionSummary {
-        first_message: title,
+        first_message: sanitize_dsh_sidebar_title(title),
         updated_at,
         created_at: updated_at,
         message_count: 0,
@@ -203,7 +204,7 @@ pub fn fold_history_events(entries: &[Value]) -> Vec<DshSessionMessage> {
                     })
                     .unwrap_or("")
                     .to_string();
-                if !text.is_empty() {
+                if !text.is_empty() && !is_dsh_injected_user_message(&data, &text) {
                     index += 1;
                     messages.push(DshSessionMessage {
                         id: format!("dsh-user-{index}"),
@@ -215,6 +216,7 @@ pub fn fold_history_events(entries: &[Value]) -> Vec<DshSessionMessage> {
                         title: None,
                         tool_input: None,
                         tool_output: None,
+                        source_kind: dsh_source_kind(&data).map(str::to_string),
                     });
                 }
             }
@@ -260,6 +262,7 @@ pub fn fold_history_events(entries: &[Value]) -> Vec<DshSessionMessage> {
                         .map(str::to_string),
                     tool_input: data.get("arguments").cloned().or_else(|| data.get("args").cloned()),
                     tool_output: None,
+                    source_kind: None,
                 });
             }
             "tool/result" => {
@@ -275,6 +278,78 @@ pub fn fold_history_events(entries: &[Value]) -> Vec<DshSessionMessage> {
     }
     flush_assistant(&mut messages, &mut assistant_buf, &mut reasoning_buf, &mut index);
     messages
+}
+
+fn dsh_source_kind(data: &Value) -> Option<&str> {
+    data.get("source")
+        .and_then(|source| source.get("kind"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|kind| !kind.is_empty())
+}
+
+fn strip_dsh_runtime_xml_block(text: &str, tag: &str) -> String {
+    let open = format!("<{tag}");
+    let close = format!("</{tag}>");
+    let lower = text.to_ascii_lowercase();
+    let open_lower = open.to_ascii_lowercase();
+    let close_lower = close.to_ascii_lowercase();
+    let Some(start) = lower.find(&open_lower) else {
+        return text.to_string();
+    };
+    let after_open = &text[start + open.len()..];
+    let after_open_lower = after_open.to_ascii_lowercase();
+    let Some(tag_end) = after_open_lower.find('>') else {
+        return text[..start].to_string();
+    };
+    let inner_start = start + open.len() + tag_end + 1;
+    let Some(rel_end) = text[inner_start..].to_ascii_lowercase().find(&close_lower) else {
+        return text[..start].to_string();
+    };
+    let end = inner_start + rel_end + close.len();
+    let mut out = String::with_capacity(text.len().saturating_sub(end - start));
+    out.push_str(&text[..start]);
+    out.push_str(&text[end..]);
+    out
+}
+
+fn is_dsh_runtime_context_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("current runtime context.") || lower.starts_with("current runtime context:")
+    {
+        return true;
+    }
+    let mut rest = trimmed.to_string();
+    for _ in 0..12 {
+        let before = rest.clone();
+        for tag in ["system-reminder", "available_skills", "agent_skills"] {
+            rest = strip_dsh_runtime_xml_block(&rest, tag);
+        }
+        if rest == before {
+            break;
+        }
+    }
+    rest.trim().is_empty()
+}
+
+fn is_dsh_injected_user_message(data: &Value, text: &str) -> bool {
+    match dsh_source_kind(data) {
+        Some(kind) if kind.eq_ignore_ascii_case("user") => false,
+        Some(_) => true,
+        None => is_dsh_runtime_context_text(text),
+    }
+}
+
+fn sanitize_dsh_sidebar_title(title: &str) -> String {
+    if is_dsh_runtime_context_text(title) {
+        String::new()
+    } else {
+        title.to_string()
+    }
 }
 
 fn flush_assistant(
@@ -295,6 +370,7 @@ fn flush_assistant(
             title: None,
             tool_input: None,
             tool_output: None,
+            source_kind: None,
         });
     }
     if !assistant_buf.is_empty() {
@@ -309,6 +385,7 @@ fn flush_assistant(
             title: None,
             tool_input: None,
             tool_output: None,
+            source_kind: None,
         });
     }
 }
@@ -322,9 +399,7 @@ fn usage_from_projection(value: &Value) -> Option<DshSessionUsage> {
 }
 
 fn normalize_path(path: &Path) -> String {
-    path.canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf())
-        .to_string_lossy()
+    session::canonicalize_host_path(path)
         .replace('\\', "/")
         .trim_end_matches('/')
         .to_string()
@@ -362,7 +437,10 @@ fn paths_equal_exact(left: &str, right: &str) -> bool {
 }
 
 fn normalize_path_text(value: &str) -> String {
-    value.replace('\\', "/").trim_end_matches('/').to_lowercase()
+    session::strip_windows_verbatim_prefix(value)
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_lowercase()
 }
 
 #[cfg(test)]
@@ -403,5 +481,148 @@ mod tests {
         assert!(paths_equal_exact("/Users/foo/app", "/Users/foo/app"));
         assert!(!paths_equal_exact("/Users/foo/app", "/app"));
         assert!(!paths_equal_exact("", "/Users/foo/app"));
+    }
+
+    #[test]
+    fn exact_path_match_strips_windows_verbatim_prefix() {
+        assert!(paths_equal_exact(
+            r"\\?\C:\Users\foo\app",
+            r"C:\Users\foo\app"
+        ));
+        assert!(paths_equal_exact(
+            r"\\?\UNC\server\share\app",
+            r"\\server\share\app"
+        ));
+    }
+
+    #[test]
+    fn skips_injected_instruction_snapshot_and_skill_catalog() {
+        let entries = vec![
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "你好",
+                        "source": { "kind": "user" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>",
+                        "source": { "kind": "agent-instructions", "form": "instructions" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: workspace-write.",
+                        "source": { "kind": "plugin", "plugin": "dsh-system-prompt", "form": "snapshot" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "content": [{
+                            "type": "text",
+                            "text": "<system-reminder>\n<available_skills>\n- deploy-to-vercel\n</available_skills>\n</system-reminder>"
+                        }],
+                        "source": { "kind": "plugin", "plugin": "dsh-tool-skill", "form": "catalog" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "assistant/chunk",
+                    "data": { "chunk": { "type": "text-delta", "text": "你好" } }
+                }
+            }),
+            json!({ "event": { "type": "turn/end", "data": { "reason": { "kind": "completed" } } } }),
+        ];
+        let messages = fold_history_events(&entries);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[0].text, "你好");
+        assert_eq!(messages[0].source_kind.as_deref(), Some("user"));
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(messages[1].text, "你好");
+        assert_eq!(messages[1].source_kind, None);
+    }
+
+    #[test]
+    fn keeps_real_user_prompt_that_mentions_system_reminder() {
+        let entries = vec![json!({
+            "event": {
+                "type": "user/message",
+                "data": {
+                    "text": "what is a <system-reminder>?",
+                    "source": { "kind": "user" }
+                }
+            }
+        })];
+        let messages = fold_history_events(&entries);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].text, "what is a <system-reminder>?");
+    }
+
+    #[test]
+    fn skips_sourceless_runtime_context_text() {
+        let entries = vec![
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nApproval policy: ask."
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>"
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "<system-reminder>\n<available_skills>\n- deploy-to-vercel\n</available_skills>\n</system-reminder>"
+                    }
+                }
+            }),
+        ];
+        let messages = fold_history_events(&entries);
+        assert!(messages.is_empty());
+    }
+
+    #[test]
+    fn sidebar_title_drops_injected_runtime_context() {
+        assert_eq!(
+            sanitize_dsh_sidebar_title(
+                "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>"
+            ),
+            ""
+        );
+        assert_eq!(
+            sanitize_dsh_sidebar_title(
+                "Current runtime context. This snapshot supersedes earlier runtime-context snapshots."
+            ),
+            ""
+        );
+        assert_eq!(
+            sanitize_dsh_sidebar_title(
+                "<system-reminder>\n<available_skills>\n- deploy-to-vercel\n</available_skills>\n</system-reminder>"
+            ),
+            ""
+        );
+        assert_eq!(sanitize_dsh_sidebar_title("你好"), "你好");
     }
 }

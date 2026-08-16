@@ -73,6 +73,28 @@ describe("threadItemsUserMessage", () => {
     );
   });
 
+  it("does not name threads from DSH injected runtime-context firstMessage", () => {
+    expect(
+      previewThreadName(
+        "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>",
+        "DSH Session",
+      ),
+    ).toBe("DSH Session");
+    expect(
+      previewThreadName(
+        "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.",
+        "DSH Session",
+      ),
+    ).toBe("DSH Session");
+    expect(
+      previewThreadName(
+        "<system-reminder>\n<available_skills>\n- deploy-to-vercel\n</available_skills>\n</system-reminder>",
+        "DSH Session",
+      ),
+    ).toBe("DSH Session");
+    expect(previewThreadName("你好", "DSH Session")).toBe("你好");
+  });
+
   it("normalizes shared-session and mode fallback wrappers", () => {
     const sharedSessionText = [
       "Shared session context sync. Continue from these recent turns before answering the new request:",

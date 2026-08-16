@@ -27,6 +27,7 @@
 - [x] 3.2 `list_dsh_sessions` / `load_dsh_session` / archive
 - [x] 3.3 sessionIndex / Sidebar badge / i18n 10 语言
 - [x] 3.4 重启后续上同一 `dsh:<id>`
+- [x] 3.5 历史/幕布隐藏 DSH 注入的 instructions / runtime snapshot / skill catalog
 
 ## P3 — 审批 / 图 / reasoning / fork
 

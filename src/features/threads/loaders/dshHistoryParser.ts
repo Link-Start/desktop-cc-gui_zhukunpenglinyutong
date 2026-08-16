@@ -1,4 +1,8 @@
 import type { ConversationItem } from "../../../types";
+import {
+  isDshInjectedContextMessage,
+  readDshMessageSourceKind,
+} from "../../../utils/dshRuntimeContext";
 import { asRecord, asString } from "./historyLoaderUtils";
 
 function stringifyValue(value: unknown): string {
@@ -39,6 +43,15 @@ export function parseDshHistoryMessages(messagesData: unknown): ConversationItem
         : "assistant";
       const text = asString(message.text ?? "");
       if (!text.trim()) {
+        continue;
+      }
+      if (
+        role === "user" &&
+        isDshInjectedContextMessage({
+          text,
+          sourceKind: readDshMessageSourceKind(message),
+        })
+      ) {
         continue;
       }
       items.push({

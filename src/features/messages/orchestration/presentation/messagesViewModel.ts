@@ -20,6 +20,7 @@ import {
   parseReasoning,
 } from "../../presentation/messagesReasoning";
 import { filterMultiAgentCanvasItems } from "../../../multi-agent/utils/canvasItems";
+
 export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
   copyTextByAssistantId: Map<string, string>;

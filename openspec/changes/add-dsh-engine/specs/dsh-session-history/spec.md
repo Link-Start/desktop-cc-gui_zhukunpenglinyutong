@@ -17,6 +17,40 @@ mossx SHALL list and load DSH conversations through `session.list` /
 - **THEN** mossx SHALL load `session.history` into the curtain via `dshHistoryLoader`
 - **AND** SHALL NOT fall through to the Codex history loader
 
+### Requirement: DSH history hides producer-injected context
+
+DSH persists workspace instructions, runtime snapshots, and skill catalogs as
+durable `user/message` events. mossx SHALL treat these as control-plane context,
+not as user-authored chat bubbles.
+
+Classification MUST follow DSH `source.kind`:
+
+- `source.kind === "user"` is a real human prompt and MUST stay visible
+- any other present `source.kind` (`agent-instructions`, `plugin`, …) MUST be hidden
+- when `source` is absent, mossx MAY hide rows whose text is only a
+  `<system-reminder>` / `<available_skills>` envelope or a
+  `Current runtime context.` snapshot
+
+#### Scenario: Injected AGENTS.md / runtime snapshot / skill catalog stay off the curtain
+
+- **WHEN** a DSH session history contains the user's `你好` plus three injected
+  `user/message` rows for workspace instructions, runtime context snapshot, and
+  available skills
+- **THEN** the curtain MUST show the real user prompt and later assistant text
+- **AND** MUST NOT render those three injected rows as chat bubbles
+
+#### Scenario: Real user text that mentions system-reminder stays visible
+
+- **WHEN** a DSH `user/message` has `source.kind === "user"` and the text
+  mentions `<system-reminder>`
+- **THEN** mossx MUST keep that row visible
+
+#### Scenario: Injected runtime context must not become the sidebar title
+
+- **WHEN** DSH session title / `first_message` is only a
+  `<system-reminder>` envelope or a `Current runtime context.` snapshot
+- **THEN** mossx MUST NOT use that string as the sidebar display name
+
 ### Requirement: Delete archives instead of erasing logs
 
 The first-wave Host RPC MUST NOT expose a physical session-file delete. mossx

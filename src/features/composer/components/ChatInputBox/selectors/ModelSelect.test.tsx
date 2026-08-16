@@ -2180,7 +2180,7 @@ describe("ModelSelect empty channel models and custom reasoning defaults", () =>
     await screen.findByRole("menuitem", { name: /DeepSeek Harness/ });
     openPickerSubmenu(/DeepSeek Harness/);
     fireEvent.click(
-      await screen.findByRole("menuitem", { name: /grok-4.6 \/ Grok 4.5/ }),
+      await screen.findByRole("menuitem", { name: /^Grok 4\.5$/ }),
     );
 
     expect(onExecutionTargetChange).toHaveBeenCalledWith({
@@ -2192,6 +2192,111 @@ describe("ModelSelect empty channel models and custom reasoning defaults", () =>
       providerProfileSource: "disk",
       reasoning: null,
     });
+  });
+
+  it("uses the Grok EngineIcon for DSH grok-4.6 catalog rows, not the DeepSeek whale", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const groups: ProviderTargetGroup[] = [
+      ...buildAtomicGroups(),
+      {
+        providerId: "dsh",
+        providerLabel: "DeepSeek Harness",
+        enabled: true,
+        profiles: [
+          {
+            id: "__dsh_host_catalog__",
+            label: "本地配置",
+            source: "disk",
+            loading: false,
+            error: null,
+            models: [
+              {
+                id: "deepseek/DeepSeek-V4-Flash",
+                model: "DeepSeek-V4-Flash",
+                label: "DeepSeek / DeepSeek-V4-Flash",
+              },
+              {
+                id: "vision-http/ovh/Qwen2.5-VL-72B-Instruct",
+                model: "ovh/Qwen2.5-VL-72B-Instruct",
+                label: "Vision HTTP / ovh/Qwen2.5-VL-72B-Instruct",
+              },
+              {
+                id: "grok-4.6/Grok 4.5",
+                model: "Grok 4.5",
+                label: "grok-4.6 / Grok 4.5",
+              },
+              {
+                id: "grok-4.6/Grok 4.6",
+                model: "Grok 4.6",
+                label: "grok-4.6 / Grok 4.6",
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const dshGrokTarget: ExecutionTarget = {
+      engine: "dsh",
+      providerProfileId: null,
+      modelCatalogEntryId: "grok-4.6/Grok 4.6",
+      model: "Grok 4.6",
+      providerProfileNameSnapshot: "本地配置",
+      providerProfileSource: "disk",
+      reasoning: null,
+    };
+
+    render(
+      <ModelSelect
+        value="Grok 4.6"
+        currentProvider="dsh"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={vi.fn()}
+        executionTarget={dshGrokTarget}
+        targetGroups={groups}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", {
+      name: "chat.currentModel:Grok 4.6",
+    });
+    expect(within(trigger).getByTestId("grok-icon")).toBeTruthy();
+    expect(trigger.querySelector("img")).toBeNull();
+
+    await user.click(trigger);
+    await screen.findByRole("menuitem", { name: /DeepSeek Harness/ });
+    openPickerSubmenu(/DeepSeek Harness/);
+
+    const dshTrigger = document.querySelector("[data-provider-id='dsh']");
+    expect(dshTrigger?.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/deepseek.svg",
+    );
+
+    const deepseekItem = await screen.findByRole("menuitem", {
+      name: /^DeepSeek-V4-Flash$/,
+    });
+    expect(deepseekItem.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/deepseek.svg",
+    );
+    expect(within(deepseekItem).queryByTestId("grok-icon")).toBeNull();
+    expect(deepseekItem.textContent).not.toContain("DeepSeek /");
+
+    const qwenItem = await screen.findByRole("menuitem", {
+      name: /^Qwen2\.5-VL-72B-Instruct$/,
+    });
+    expect(qwenItem.textContent).not.toContain("Vision HTTP");
+    expect(qwenItem.textContent).not.toContain("ovh/");
+
+    const grok45Item = await screen.findByRole("menuitem", {
+      name: /^Grok 4\.5$/,
+    });
+    const grok46Item = await screen.findByRole("menuitem", {
+      name: /^Grok 4\.6$/,
+    });
+    expect(within(grok45Item).getByTestId("grok-icon")).toBeTruthy();
+    expect(grok45Item.querySelector("img")).toBeNull();
+    expect(within(grok46Item).getByTestId("grok-icon")).toBeTruthy();
+    expect(grok46Item.querySelector("img")).toBeNull();
   });
 
   it("opens CLI settings from the DSH empty catalog hint", async () => {

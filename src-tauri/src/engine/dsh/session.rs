@@ -26,12 +26,24 @@ pub fn is_pending_thread(thread_id: &str) -> bool {
     thread_id.trim().starts_with(PENDING_PREFIX)
 }
 
+pub fn strip_windows_verbatim_prefix(path: &str) -> String {
+    let raw = path.replace('/', "\\");
+    if let Some(stripped) = raw.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{stripped}");
+    }
+    if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+        return stripped.to_string();
+    }
+    path.to_string()
+}
+
+pub fn canonicalize_host_path(path: &Path) -> String {
+    let canonical = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    strip_windows_verbatim_prefix(&canonical.to_string_lossy())
+}
+
 pub async fn create_workspace(client: &DshHostClient, path: &Path) -> Result<Value, String> {
-    let path = path
-        .canonicalize()
-        .unwrap_or_else(|_| path.to_path_buf())
-        .to_string_lossy()
-        .to_string();
+    let path = canonicalize_host_path(path);
     client
         .call("workspace.create", json!({ "path": path }))
         .await
@@ -267,6 +279,27 @@ pub fn split_model_selection(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strips_windows_verbatim_prefix() {
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\C:\Users\foo"),
+            r"C:\Users\foo"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"\\?\UNC\server\share\proj"),
+            r"\\server\share\proj"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix("//?/C:/Users/foo"),
+            r"C:\Users\foo"
+        );
+        assert_eq!(
+            strip_windows_verbatim_prefix(r"C:\Users\foo"),
+            r"C:\Users\foo"
+        );
+        assert_eq!(strip_windows_verbatim_prefix("/tmp/project"), "/tmp/project");
+    }
 
     #[test]
     fn thread_roundtrip() {

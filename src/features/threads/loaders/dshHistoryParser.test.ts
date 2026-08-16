@@ -122,4 +122,90 @@ describe("parseDshHistoryMessages", () => {
     ]);
     expect(items).toEqual([]);
   });
+
+  it("skips DSH injected instruction, snapshot, and skill catalog messages", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "dsh-user-1",
+        kind: "message",
+        role: "user",
+        text: "你好",
+        source: { kind: "user" },
+      },
+      {
+        id: "dsh-instructions",
+        kind: "message",
+        role: "user",
+        text: "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>",
+        source: { kind: "agent-instructions", form: "instructions" },
+      },
+      {
+        id: "dsh-snapshot",
+        kind: "message",
+        role: "user",
+        text: "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: workspace-write.",
+        source: { kind: "plugin", plugin: "dsh-system-prompt", form: "snapshot" },
+      },
+      {
+        id: "dsh-skills",
+        kind: "message",
+        role: "user",
+        text: "<system-reminder>\n<available_skills>\n- deploy-to-vercel\n</available_skills>\n</system-reminder>",
+        source: { kind: "plugin", plugin: "dsh-tool-skill", form: "catalog" },
+      },
+      {
+        id: "dsh-assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "你好，需要我做什么？",
+      },
+    ]);
+
+    expect(items.map((item) => item.id)).toEqual(["dsh-user-1", "dsh-assistant-1"]);
+  });
+
+  it("skips sourceless runtime-context text and camelCase sourceKind from fold", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "dsh-user-1",
+        kind: "message",
+        role: "user",
+        text: "你好",
+        sourceKind: "user",
+      },
+      {
+        id: "dsh-snapshot",
+        kind: "message",
+        role: "user",
+        text: "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.",
+      },
+      {
+        id: "dsh-plugin",
+        kind: "message",
+        role: "user",
+        text: "skill catalog leftover",
+        sourceKind: "plugin",
+      },
+    ]);
+    expect(items.map((item) => item.id)).toEqual(["dsh-user-1"]);
+  });
+
+  it("keeps a real user prompt that mentions system-reminder", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "dsh-user-ask",
+        kind: "message",
+        role: "user",
+        text: "what is a <system-reminder>?",
+        source: { kind: "user" },
+      },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        id: "dsh-user-ask",
+        role: "user",
+      }),
+    );
+  });
 });

@@ -389,10 +389,11 @@ pub fn project_session_event(
                 .and_then(Value::as_str)
                 .unwrap_or("completed");
             if matches!(kind, "cancelled" | "aborted" | "error" | "failed") {
+                let (error, code) = turn_end_failure(&data, kind);
                 vec![EngineEvent::TurnError {
                     workspace_id,
-                    error: kind.to_string(),
-                    code: Some(kind.to_string()),
+                    error,
+                    code,
                 }]
             } else {
                 vec![EngineEvent::TurnCompleted {
@@ -527,6 +528,25 @@ fn project_stream_chunk(workspace_id: &str, data: &Value) -> Vec<EngineEvent> {
     }
 }
 
+fn turn_end_failure(data: &Value, kind: &str) -> (String, Option<String>) {
+    let failure = data.pointer("/reason/error");
+    let code = failure
+        .and_then(|value| value.get("code"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let message = failure
+        .and_then(|value| value.get("message"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let error = message.or(code).unwrap_or(kind).to_string();
+    let code = code
+        .map(str::to_string)
+        .or_else(|| Some(kind.to_string()).filter(|value| !value.is_empty()));
+    (error, code)
+}
+
 fn int_field(value: &Value, keys: &[&str]) -> Option<i64> {
     keys.iter().find_map(|key| value.get(*key).and_then(Value::as_i64))
 }
@@ -575,6 +595,68 @@ mod tests {
         });
         let events = project_session_event(&event, &binding(), "session-1");
         assert!(matches!(events.first(), Some(EngineEvent::TurnCompleted { .. })));
+    }
+
+    #[test]
+    fn projects_turn_end_error_with_llm_failure() {
+        let event = json!({
+            "type": "turn/end",
+            "data": {
+                "reason": {
+                    "kind": "error",
+                    "error": {
+                        "message": "unable to get local issuer certificate",
+                        "code": "TLS_ERROR",
+                        "status": 0
+                    }
+                }
+            }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::TurnError { error, code, .. }) => {
+                assert_eq!(error, "unable to get local issuer certificate");
+                assert_eq!(code.as_deref(), Some("TLS_ERROR"));
+            }
+            other => panic!("expected TurnError with LlmFailure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_turn_end_error_falls_back_to_kind() {
+        let event = json!({
+            "type": "turn/end",
+            "data": { "reason": { "kind": "error" } }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::TurnError { error, code, .. }) => {
+                assert_eq!(error, "error");
+                assert_eq!(code.as_deref(), Some("error"));
+            }
+            other => panic!("expected TurnError fallback, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_turn_end_error_uses_code_when_message_missing() {
+        let event = json!({
+            "type": "turn/end",
+            "data": {
+                "reason": {
+                    "kind": "error",
+                    "error": { "code": "EMPTY_RESPONSE" }
+                }
+            }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::TurnError { error, code, .. }) => {
+                assert_eq!(error, "EMPTY_RESPONSE");
+                assert_eq!(code.as_deref(), Some("EMPTY_RESPONSE"));
+            }
+            other => panic!("expected TurnError from code, got {other:?}"),
+        }
     }
 
     #[test]

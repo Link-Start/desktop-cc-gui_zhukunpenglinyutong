@@ -7,6 +7,7 @@ import type { ModelInfo, ProviderId } from '../types';
 import {
   resolveAtomicReasoningEffort,
 } from '../../../../models/atomicModelReasoning';
+import { formatDshModelDisplayLabel } from './dshModelDisplayLabel';
 import type { ProviderModelGroup } from '../modelOptions';
 import type { ProviderTargetGroup } from '../hooks/useProviderTargetCatalogOwners';
 import type { ExecutionTarget } from '../../../../shared-session/target/types';
@@ -444,6 +445,14 @@ const ModelIcon = ({
     modelIdForIcon?.trim() ||
     (model ? resolveRuntimeModel(model) ?? model.id : null);
 
+  // DSH host catalog (and remapped slots) can expose Grok models. Those
+  // must use the same theme-aware Grok glyph as Grok CLI, not the host
+  // CLI's DeepSeek whale. Match only the resolved runtime id so a later
+  // remap away from Grok still follows the brand-icon path.
+  if (resolvedModelId && /grok/i.test(resolvedModelId)) {
+    return <EngineIcon engine="grok" size={size} style={imgStyle} />;
+  }
+
   // Cross-vendor remap only — do not pass presetId, otherwise every Kimi model
   // without "kimi" in its id would short-circuit through brand while the
   // provider row still used EngineIcon (or vice versa).
@@ -712,6 +721,10 @@ export const ModelSelect = memo(({
         }
         return claudeLabel;
       }
+    }
+
+    if (providerId === 'dsh') {
+      return formatDshModelDisplayLabel(model);
     }
 
     const parentLabel = model.label?.trim() || "";
