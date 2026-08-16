@@ -267,6 +267,7 @@ fn item_id_for_event(
         ),
         EngineEvent::ToolStarted { tool_id, .. }
         | EngineEvent::ToolCompleted { tool_id, .. }
+        | EngineEvent::ToolInputUpdated { tool_id, .. }
         | EngineEvent::ToolOutputDelta { tool_id, .. } => tool_id.clone(),
         _ => binding
             .item_id
@@ -419,6 +420,8 @@ pub fn project_session_event(
                 .and_then(Value::as_str)
                 .unwrap_or("tool")
                 .to_string();
+            // DSH stores `arguments` as the raw model JSON string (unparsed).
+            // Pass through as-is; FE normalizes string vs object for path display.
             vec![EngineEvent::ToolStarted {
                 workspace_id,
                 tool_id,
@@ -427,13 +430,50 @@ pub fn project_session_event(
             }]
         }
         "tool/result" => {
+            // DSH pairs results via `data.message.source.callId`, not top-level id.
             let tool_id = data
                 .get("id")
                 .or_else(|| data.get("callId"))
                 .or_else(|| data.get("toolCallId"))
+                .or_else(|| data.pointer("/message/source/callId"))
+                .or_else(|| data.pointer("/message/content/0/toolCallId"))
                 .and_then(Value::as_str)
                 .unwrap_or("tool")
                 .to_string();
+            let output = data
+                .get("result")
+                .cloned()
+                .or_else(|| data.get("output").cloned())
+                .or_else(|| extract_dsh_tool_result_output(&data));
+            let error = data
+                .get("error")
+                .and_then(|value| {
+                    value
+                        .as_str()
+                        .map(str::to_string)
+                        .or_else(|| {
+                            value
+                                .get("message")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                        })
+                        .or_else(|| {
+                            value
+                                .get("code")
+                                .and_then(Value::as_str)
+                                .map(str::to_string)
+                        })
+                })
+                .or_else(|| {
+                    data.pointer("/message/content/0")
+                        .and_then(|block| {
+                            if block.get("isError").and_then(Value::as_bool) == Some(true) {
+                                extract_dsh_content_text(block)
+                            } else {
+                                None
+                            }
+                        })
+                });
             vec![EngineEvent::ToolCompleted {
                 workspace_id,
                 tool_id,
@@ -441,11 +481,8 @@ pub fn project_session_event(
                     .get("name")
                     .and_then(Value::as_str)
                     .map(str::to_string),
-                output: data.get("result").cloned().or_else(|| data.get("output").cloned()),
-                error: data
-                    .get("error")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
+                output,
+                error,
             }]
         }
         "user/message" | "step/start" | "step/end" | "goal/change" | "llm/retry"
@@ -482,29 +519,35 @@ fn project_stream_chunk(workspace_id: &str, data: &Value) -> Vec<EngineEvent> {
             })
             .unwrap_or_default(),
         "tool-call-delta" => {
+            // Streaming tool *arguments* (not tool output). DSH emits raw JSON
+            // fragments; the durable `tool/call` event already carries the full
+            // `arguments` string, so we only project a complete JSON object here
+            // (rare single-chunk case). Misrouting to ToolOutputDelta previously
+            // polluted tool output and left Read rows as "读取 · ...".
             let tool_id = chunk
                 .get("id")
+                .or_else(|| chunk.get("callId"))
                 .and_then(Value::as_str)
                 .unwrap_or("tool")
                 .to_string();
             let delta = chunk
                 .get("argumentsDelta")
                 .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            if delta.is_empty() {
-                Vec::new()
-            } else {
-                vec![EngineEvent::ToolOutputDelta {
-                    workspace_id: workspace_id.to_string(),
-                    tool_id,
-                    tool_name: chunk
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .map(str::to_string),
-                    delta,
-                }]
+                .unwrap_or("");
+            let tool_name = chunk
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            let input = parse_complete_json_object(delta);
+            if input.is_none() && tool_name.is_none() {
+                return Vec::new();
             }
+            vec![EngineEvent::ToolInputUpdated {
+                workspace_id: workspace_id.to_string(),
+                tool_id,
+                tool_name,
+                input,
+            }]
         }
         "usage" => {
             let usage = chunk.get("usage").unwrap_or(chunk);
@@ -549,6 +592,59 @@ fn turn_end_failure(data: &Value, kind: &str) -> (String, Option<String>) {
 
 fn int_field(value: &Value, keys: &[&str]) -> Option<i64> {
     keys.iter().find_map(|key| value.get(*key).and_then(Value::as_i64))
+}
+
+/// Pull model-facing text out of DSH `tool/result` message content blocks.
+fn extract_dsh_content_text(block: &Value) -> Option<String> {
+    if let Some(text) = block.get("text").and_then(Value::as_str) {
+        let trimmed = text.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    let content = block.get("content")?;
+    if let Some(text) = content.as_str() {
+        let trimmed = text.trim();
+        return (!trimmed.is_empty()).then(|| trimmed.to_string());
+    }
+    let arr = content.as_array()?;
+    let mut parts = Vec::new();
+    for entry in arr {
+        if let Some(text) = entry.get("text").and_then(Value::as_str) {
+            if !text.is_empty() {
+                parts.push(text.to_string());
+            }
+        } else if let Some(text) = entry.as_str() {
+            if !text.is_empty() {
+                parts.push(text.to_string());
+            }
+        }
+    }
+    let joined = parts.join("\n");
+    let trimmed = joined.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+fn extract_dsh_tool_result_output(data: &Value) -> Option<Value> {
+    if let Some(block) = data.pointer("/message/content/0") {
+        if let Some(text) = extract_dsh_content_text(block) {
+            return Some(Value::String(text));
+        }
+        // Fall back to the whole block so structured meta is not lost.
+        return Some(block.clone());
+    }
+    data.get("message").cloned()
+}
+
+fn parse_complete_json_object(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match serde_json::from_str::<Value>(trimmed) {
+        Ok(value) if value.is_object() || value.is_array() => Some(value),
+        _ => None,
+    }
 }
 
 pub fn default_binding(workspace_id: &str, session_id: &str) -> DshSessionBinding {
@@ -717,5 +813,121 @@ mod tests {
             "data": { "text": "hello already streamed" }
         });
         assert!(project_session_event(&event, &binding(), "session-1").is_empty());
+    }
+
+    #[test]
+    fn projects_tool_call_with_raw_json_string_arguments() {
+        let event = json!({
+            "type": "tool/call",
+            "data": {
+                "callId": "call-read-1",
+                "name": "read",
+                "arguments": "{\"file_path\":\"src/main.ts\"}"
+            }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::ToolStarted {
+                tool_id,
+                tool_name,
+                input,
+                ..
+            }) => {
+                assert_eq!(tool_id, "call-read-1");
+                assert_eq!(tool_name, "read");
+                assert_eq!(
+                    input.as_ref().and_then(Value::as_str),
+                    Some(r#"{"file_path":"src/main.ts"}"#)
+                );
+            }
+            other => panic!("expected ToolStarted, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_tool_result_using_message_source_call_id() {
+        let event = json!({
+            "type": "tool/result",
+            "data": {
+                "message": {
+                    "source": { "callId": "call-read-1" },
+                    "content": [{
+                        "type": "tool-result",
+                        "toolCallId": "call-read-1",
+                        "content": [{ "type": "text", "text": "1\tline" }]
+                    }]
+                }
+            }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::ToolCompleted {
+                tool_id,
+                output,
+                error,
+                ..
+            }) => {
+                assert_eq!(tool_id, "call-read-1");
+                assert!(error.is_none());
+                assert_eq!(
+                    output.as_ref().and_then(Value::as_str),
+                    Some("1\tline")
+                );
+            }
+            other => panic!("expected ToolCompleted, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tool_call_delta_projects_complete_json_as_input_not_output() {
+        let event = json!({
+            "type": "assistant/chunk",
+            "data": {
+                "chunk": {
+                    "type": "tool-call-delta",
+                    "id": "call-read-2",
+                    "name": "read",
+                    "argumentsDelta": "{\"file_path\":\"a.ts\"}"
+                }
+            }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        match events.first() {
+            Some(EngineEvent::ToolInputUpdated {
+                tool_id,
+                tool_name,
+                input,
+                ..
+            }) => {
+                assert_eq!(tool_id, "call-read-2");
+                assert_eq!(tool_name.as_deref(), Some("read"));
+                assert_eq!(
+                    input.as_ref().and_then(|value| value.get("file_path")).and_then(Value::as_str),
+                    Some("a.ts")
+                );
+            }
+            other => panic!("expected ToolInputUpdated, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tool_call_delta_partial_json_is_not_forced_as_output() {
+        let event = json!({
+            "type": "assistant/chunk",
+            "data": {
+                "chunk": {
+                    "type": "tool-call-delta",
+                    "id": "call-read-3",
+                    "argumentsDelta": "{\"file_path\":"
+                }
+            }
+        });
+        let events = project_session_event(&event, &binding(), "session-1");
+        assert!(
+            events
+                .iter()
+                .all(|event| !matches!(event, EngineEvent::ToolOutputDelta { .. })),
+            "partial args must not become tool output"
+        );
     }
 }

@@ -2122,10 +2122,26 @@ export function useThreadActions({
           (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
         const hasAttemptedDshRefresh =
           dshRefreshAttemptedRef.current[workspace.id] === true;
+        // DSH is host-RPC only and is often missing from Session Index.
+        // First-paint (and the post-first-paint index soft refresh, which
+        // reuses first-paint mode) must still probe the live host once, or
+        // the sidebar permanently loses native DSH history after cold start
+        // marks full-catalog "fresh" without ever listing DSH sessions.
+        const indexHasDshRows = Boolean(
+          sessionIndexPage?.data?.some((row) => {
+            const engine = String(row.engine ?? "")
+              .trim()
+              .toLowerCase();
+            return engine === "dsh";
+          }),
+        );
         const shouldRefreshDshSessions =
           isLatestThreadListRequest() &&
-          !isFirstPaintHydration &&
-          (hasDshSignal || !!cachedDsh || !hasAttemptedDshRefresh);
+          ((includeEngineDiskLists &&
+            (hasDshSignal || !!cachedDsh || !hasAttemptedDshRefresh)) ||
+            (isFirstPaintHydration &&
+              !indexHasDshRows &&
+              !hasAttemptedDshRefresh));
         if (shouldRefreshGrokSessions) {
           void (async () => {
             grokRefreshAttemptedRef.current[workspace.id] = true;

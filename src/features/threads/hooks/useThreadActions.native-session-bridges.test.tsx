@@ -455,7 +455,9 @@ describe("useThreadActions native session bridges", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     await waitFor(() => {
@@ -492,7 +494,9 @@ describe("useThreadActions native session bridges", () => {
     const { result, dispatch } = renderActions();
 
     await act(async () => {
-      await result.current.listThreadsForWorkspace(workspace);
+      await result.current.listThreadsForWorkspace(workspace, {
+        includeEngineDiskLists: true,
+      });
     });
 
     await waitFor(() => {
@@ -753,5 +757,63 @@ describe("useThreadActions native session bridges", () => {
         output: "permission denied",
       }),
     );
+  });
+
+  it("first-paint still lists DSH host sessions when Session Index has no dsh rows", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as never);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: true,
+      engines: ["claude", "codex", "grok"],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
+    vi.mocked(listDshSessions).mockResolvedValue([
+      {
+        sessionId: "session-dsh-history-1",
+        firstMessage: "无法查看DSH历史记录",
+        updatedAt: 1_786_896_696_172,
+      },
+    ]);
+
+    const { result, dispatch } = renderActions();
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+        startupHydrationMode: "first-paint",
+      });
+    });
+
+    await waitFor(() => {
+      expect(listDshSessions).toHaveBeenCalledWith(workspace.path, 50);
+    });
+
+    await waitFor(() => {
+      const setThreadsCalls = dispatch.mock.calls.filter(
+        ([action]) =>
+          action?.type === "setThreads" &&
+          action.workspaceId === workspace.id,
+      );
+      const hasDshRow = setThreadsCalls.some(([action]) =>
+        Array.isArray(action.threads) &&
+        action.threads.some(
+          (thread: { id?: string; engineSource?: string }) =>
+            thread.id === "dsh:session-dsh-history-1" ||
+            thread.engineSource === "dsh",
+        ),
+      );
+      expect(hasDshRow).toBe(true);
+    });
   });
 });

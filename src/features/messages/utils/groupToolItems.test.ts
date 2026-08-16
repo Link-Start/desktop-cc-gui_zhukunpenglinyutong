@@ -49,7 +49,7 @@ describe("groupToolItems", () => {
     }
   });
 
-  it("groups Grok-style flat tool names into read/search/bash/edit scenes", () => {
+  it("groups Grok-style flat tool names into read/search/edit scenes; bash stays single cards", () => {
     const entries = groupToolItems([
       createToolItem("r1", "read_file"),
       createToolItem("r2", "list_dir"),
@@ -60,18 +60,27 @@ describe("groupToolItems", () => {
       createToolItem("e1", "search_replace"),
     ]);
 
+    // Terminal tools intentionally stay ungrouped so each row is a normal
+    // BashToolBlock (single terminal card), not the legacy batch-terminal UI.
     expect(entries.map((entry) => entry.kind)).toEqual([
       "readGroup",
       "searchGroup",
-      "bashGroup",
+      "item",
+      "item",
       "editGroup",
     ]);
     if (entries[0]?.kind === "readGroup") {
       expect(entries[0].items.map((item) => item.id)).toEqual(["r1", "r2"]);
     }
-    if (entries[3]?.kind === "editGroup") {
-      expect(entries[3].items).toHaveLength(1);
-      expect(entries[3].items[0]?.title).toBe("search_replace");
+    if (entries[2]?.kind === "item" && entries[2].item.kind === "tool") {
+      expect(entries[2].item.id).toBe("b1");
+    }
+    if (entries[3]?.kind === "item" && entries[3].item.kind === "tool") {
+      expect(entries[3].item.id).toBe("b2");
+    }
+    if (entries[4]?.kind === "editGroup") {
+      expect(entries[4].items).toHaveLength(1);
+      expect(entries[4].items[0]?.title).toBe("search_replace");
     }
   });
 

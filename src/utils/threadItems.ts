@@ -111,6 +111,29 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+/**
+ * Parse tool `input` / `arguments` whether the engine already gave an object
+ * or (DSH-style) a raw JSON string. Returns null for arrays / scalars / junk.
+ */
+function parseToolArgumentsRecord(value: unknown): Record<string, unknown> | null {
+  const direct = asRecord(value);
+  if (direct) {
+    return direct;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    return asRecord(JSON.parse(trimmed));
+  } catch {
+    return null;
+  }
+}
+
 function isIntentCanvasContextAttachment(
   value: unknown,
 ): value is IntentCanvasContextSendAttachment {
@@ -385,6 +408,33 @@ function stringifyUnknown(value: unknown): string {
     }
   }
   return String(value);
+}
+
+/**
+ * Normalize tool arguments into a JSON object string for `detail`.
+ * DSH (and some providers) already emit `arguments` as a raw JSON string;
+ * re-stringifying would double-encode and break path extraction in Read/Edit rows.
+ */
+function stringifyToolArguments(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "";
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (parsed && typeof parsed === "object") {
+        return JSON.stringify(parsed, null, 2);
+      }
+    } catch {
+      // Keep raw text for incomplete streaming fragments.
+    }
+    return trimmed;
+  }
+  return stringifyUnknown(value);
 }
 
 function extractWebSearchQuery(item: Record<string, unknown>): string {
@@ -967,8 +1017,10 @@ export function buildConversationItem(
     };
   }
   if (type === "commandExecution") {
-    const input = asRecord(item.input);
-    const nestedArgs = asRecord(item.arguments);
+    // DSH (and some hosts) pass `arguments`/`input` as a raw JSON string, not an object.
+    // Parse both shapes so bash command/description survive into canvas terminal cards.
+    const input = parseToolArgumentsRecord(item.input);
+    const nestedArgs = parseToolArgumentsRecord(item.arguments);
     const commandKeys = [
       "command",
       "cmd",
@@ -977,36 +1029,35 @@ export function buildConversationItem(
       "bash",
       "argv",
     ];
-    const descriptionKeys = [
-      "description",
-      "summary",
-      "label",
-      "title",
-      "task",
-    ];
+    // Do not treat item.title/tool as description — DSH sets those to the tool
+    // name ("bash"), which used to produce "Command: bash" and hide the real
+    // command/description from arguments.
+    const descriptionKeys = ["description", "summary", "label", "task"];
     const cwdKeys = ["cwd", "workdir", "working_directory", "workingDirectory"];
     const command =
       getFirstCommandField(item, commandKeys) ||
       getFirstCommandField(input, commandKeys) ||
       getFirstCommandField(nestedArgs, commandKeys);
     const description =
-      getFirstStringField(item, descriptionKeys) ||
       getFirstStringField(input, descriptionKeys) ||
-      getFirstStringField(nestedArgs, descriptionKeys);
+      getFirstStringField(nestedArgs, descriptionKeys) ||
+      getFirstStringField(item, descriptionKeys);
     const cwd =
-      getFirstStringField(item, cwdKeys) ||
       getFirstStringField(input, cwdKeys) ||
       getFirstStringField(nestedArgs, cwdKeys) ||
+      getFirstStringField(item, cwdKeys) ||
       asString(item.cwd ?? "");
-    const detailPayload = description
-      ? JSON.stringify(
-          {
+    // Always persist structured command fields when any are known. Description-only
+    // payloads used to drop `command`, which made BashTool* cards fall back to the
+    // bare "命令" / "Command" label (the ugly batch-terminal regression on DSH).
+    const detailPayload =
+      command || description || cwd
+        ? JSON.stringify({
             command: command || undefined,
-            description,
+            description: description || undefined,
             cwd: cwd || undefined,
-          },
-        )
-      : "";
+          })
+        : "";
     const status = asString(item.status ?? "");
     const output = stringifyUnknown(
       item.aggregatedOutput ??
@@ -1169,8 +1220,8 @@ export function buildConversationItem(
   if (type === "mcpToolCall") {
     const server = asString(item.server ?? "");
     const tool = asString(item.tool ?? "");
-    const argsPayload = item.arguments ?? null;
-    const args = argsPayload ? JSON.stringify(argsPayload, null, 2) : "";
+    const argsPayload = item.arguments ?? item.input ?? null;
+    const args = stringifyToolArguments(argsPayload);
     const output = asString(
       item.result ??
         item.output ??

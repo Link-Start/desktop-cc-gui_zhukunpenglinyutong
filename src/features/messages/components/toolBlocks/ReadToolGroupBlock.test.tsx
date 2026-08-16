@@ -51,4 +51,26 @@ describe("ReadToolGroupBlock", () => {
     // 批量读取行应带文件类型图标（与文件树彩色 icon 同源）
     expect(document.querySelectorAll(".explore-inline-file-icon").length).toBe(2);
   });
+
+  it("renders DSH read file_path rows instead of bare ellipsis", () => {
+    render(
+      <ReadToolGroupBlock
+        items={[
+          createReadItem("dsh-read-1", "read", {
+            file_path: "docs/research/mossx-dsh-capability-spike.md",
+          }),
+          createReadItem("dsh-read-2", "read", {
+            file_path: "src-tauri/src/engine/dsh/history.rs",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("mossx-dsh-capability-spike.md")).toBeTruthy();
+    expect(screen.getByText("history.rs")).toBeTruthy();
+    expect(
+      screen.getByTitle("docs/research/mossx-dsh-capability-spike.md"),
+    ).toBeTruthy();
+    expect(screen.queryByText("...")).toBeNull();
+  });
 });

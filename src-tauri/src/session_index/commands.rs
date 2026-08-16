@@ -12,11 +12,12 @@ use super::store::{
 };
 use super::writers::{
     backfill_claude_for_workspace, backfill_codex_for_workspace, backfill_kimi_for_workspace,
-    commit_engine_rows, engine_source_is_fresh, gemini_home_fingerprint, grok_home_fingerprint,
-    invalidate_workspace_sources, opencode_source_fingerprint, pi_home_fingerprint,
-    rows_from_gemini_summaries, rows_from_grok_summaries, rows_from_opencode_entries,
-    rows_from_pi_summaries, sync_claude_for_workspace, sync_codex_for_workspace,
-    sync_kimi_for_workspace, BackfillBatchResult, WriterResult, CLAUDE_BACKFILL_BATCH_SIZE,
+    commit_engine_rows, dsh_source_fingerprint, engine_source_is_fresh, gemini_home_fingerprint,
+    grok_home_fingerprint, invalidate_workspace_sources, opencode_source_fingerprint,
+    pi_home_fingerprint, rows_from_dsh_summaries, rows_from_gemini_summaries,
+    rows_from_grok_summaries, rows_from_opencode_entries, rows_from_pi_summaries,
+    sync_claude_for_workspace, sync_codex_for_workspace, sync_kimi_for_workspace,
+    BackfillBatchResult, WriterResult, CLAUDE_BACKFILL_BATCH_SIZE,
     CODEX_BACKFILL_PARTITIONS_PER_BATCH, KIMI_BACKFILL_BATCH_SIZE,
 };
 use crate::engine::gemini_history::list_gemini_sessions;
@@ -294,6 +295,88 @@ async fn sync_pi_engine(workspace_path: PathBuf, limit: usize, force: bool) -> W
     })
 }
 
+async fn sync_dsh_engine(
+    state: &AppState,
+    workspace_path: PathBuf,
+    limit: usize,
+    force: bool,
+) -> WriterResult {
+    let fingerprint = dsh_source_fingerprint(&workspace_path);
+    let skip = !force
+        && tokio::task::spawn_blocking({
+            let workspace_path = workspace_path.clone();
+            let fingerprint = fingerprint.clone();
+            move || {
+                let connection = open_connection()?;
+                engine_source_is_fresh(&connection, "dsh", &workspace_path, &fingerprint)
+            }
+        })
+        .await
+        .ok()
+        .and_then(|result| result.ok())
+        .unwrap_or(false);
+    if skip {
+        return WriterResult {
+            skipped_fresh: true,
+            engines: vec!["dsh".into()],
+            ..WriterResult::default()
+        };
+    }
+
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    let list_result = timeout(ASYNC_ENGINE_LIST_TIMEOUT, async {
+        let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+        crate::engine::dsh::history::list_dsh_sessions(&client, &workspace_path, Some(limit)).await
+    })
+    .await;
+
+    let (rows, partial) = match list_result {
+        Ok(Ok(sessions)) => (rows_from_dsh_summaries(&workspace_path, &sessions), None),
+        Ok(Err(error)) => {
+            // Host down / not installed is soft-empty for index sync.
+            let message = error.to_ascii_lowercase();
+            let soft = message.contains("not running")
+                || message.contains("connection refused")
+                || message.contains("connect")
+                || message.contains("not found")
+                || message.contains("not installed")
+                || message.contains("timed out")
+                || message.contains("timeout");
+            (
+                Vec::new(),
+                if soft {
+                    Some("dsh-unavailable".into())
+                } else {
+                    Some(format!("dsh-sync-error:{}", truncate_error(&error)))
+                },
+            )
+        }
+        Err(_) => (Vec::new(), Some("dsh-sync-timeout".into())),
+    };
+
+    tokio::task::spawn_blocking(move || {
+        let connection = open_connection()?;
+        commit_engine_rows(
+            &connection,
+            "dsh",
+            &workspace_path,
+            rows,
+            &fingerprint,
+            partial,
+        )
+    })
+    .await
+    .ok()
+    .and_then(|result| result.ok())
+    .unwrap_or_else(|| WriterResult {
+        engines: vec!["dsh".into()],
+        partial_source: Some("dsh-commit-error".into()),
+        skipped_fresh: false,
+        ..WriterResult::default()
+    })
+}
+
 async fn sync_opencode_engine(
     state: &AppState,
     workspace_id: &str,
@@ -404,16 +487,18 @@ pub(crate) async fn sync_session_index_core(
     )
     .await?;
 
-    // Gemini / Grok / PI each have their own 3s timeout. Join them so a
-    // slow Gemini probe cannot serialize PI off the first-paint window.
-    let (gemini, grok, pi) = tokio::join!(
+    // Gemini / Grok / PI / DSH each have their own 3s timeout. Join them so a
+    // slow Gemini probe cannot serialize PI/DSH off the first-paint window.
+    let (gemini, grok, pi, dsh) = tokio::join!(
         sync_gemini_engine(workspace_path.clone(), limit, force),
         sync_grok_engine(workspace_path.clone(), limit, force),
         sync_pi_engine(workspace_path.clone(), limit, force),
+        sync_dsh_engine(state, workspace_path.clone(), limit, force),
     );
     merge_writer(&mut aggregated, gemini);
     merge_writer(&mut aggregated, grok);
     merge_writer(&mut aggregated, pi);
+    merge_writer(&mut aggregated, dsh);
 
     let opencode =
         sync_opencode_engine(state, workspace_id, workspace_path.clone(), limit, force).await;
@@ -606,7 +691,9 @@ pub(crate) async fn backfill_session_index_core(
     .map_err(|error| error.to_string())??;
     merge_writer(&mut aggregated, disk);
 
-    let (gemini, grok, pi) = tokio::join!(
+    let settings = state.app_settings.lock().await.clone();
+    let dsh_runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    let (gemini, grok, pi, dsh) = tokio::join!(
         backfill_async_engine(
             "gemini",
             workspace_path.clone(),
@@ -625,10 +712,25 @@ pub(crate) async fn backfill_session_index_core(
             |path, limit| async move { list_pi_sessions(&path, Some(limit), None).await },
             rows_from_pi_summaries,
         ),
+        backfill_async_engine(
+            "dsh",
+            workspace_path.clone(),
+            move |path, limit| {
+                let runtime = dsh_runtime.clone();
+                async move {
+                    let (_snapshot, client) =
+                        crate::engine::dsh::connect_existing(&runtime).await?;
+                    crate::engine::dsh::history::list_dsh_sessions(&client, &path, Some(limit))
+                        .await
+                }
+            },
+            rows_from_dsh_summaries,
+        ),
     );
     merge_writer(&mut aggregated, gemini);
     merge_writer(&mut aggregated, grok);
     merge_writer(&mut aggregated, pi);
+    merge_writer(&mut aggregated, dsh);
 
     Ok(aggregated)
 }

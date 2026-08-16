@@ -8,6 +8,7 @@ export type SessionIndexEngine =
   | "kimi"
   | "pi"
   | "opencode"
+  | "dsh"
   | string;
 
 export type SessionIndexRow = {

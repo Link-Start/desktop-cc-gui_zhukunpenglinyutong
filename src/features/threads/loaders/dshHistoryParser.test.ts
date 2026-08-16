@@ -88,6 +88,50 @@ describe("parseDshHistoryMessages", () => {
     );
   });
 
+  it("preserves DSH read file_path in tool detail for display", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "call-read-1",
+        kind: "tool",
+        title: "read",
+        toolInput: {
+          file_path: "src-tauri/src/engine/dsh/history.rs",
+        },
+        toolOutput: "1\tuse super::host;",
+      },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        kind: "tool",
+        title: "read",
+        status: "completed",
+      }),
+    );
+    if (items[0]?.kind === "tool") {
+      const parsed = JSON.parse(items[0].detail) as Record<string, string>;
+      expect(parsed.file_path).toBe("src-tauri/src/engine/dsh/history.rs");
+    }
+  });
+
+  it("accepts raw JSON string toolInput from DSH wire format", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "call-read-2",
+        kind: "tool",
+        title: "read",
+        toolInput: '{"file_path":"docs/research/mossx-dsh-capability-spike.md"}',
+      },
+    ]);
+    expect(items).toHaveLength(1);
+    if (items[0]?.kind === "tool") {
+      // History loader may leave the string as-is; UI parseToolArgs must still work.
+      const detail = items[0].detail;
+      expect(detail).toContain("file_path");
+      expect(detail).toContain("mossx-dsh-capability-spike.md");
+    }
+  });
+
   it("attaches later tool output to the matching tool call", () => {
     const items = parseDshHistoryMessages([
       {
@@ -113,6 +157,42 @@ describe("parseDshHistoryMessages", () => {
         output: "3 matches",
       }),
     );
+  });
+
+  it("projects bash history tools as commandExecution terminal cards", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "dsh-bash-1",
+        kind: "tool",
+        title: "bash",
+        toolInput: JSON.stringify({
+          command: "pwd",
+          description: "Print working directory",
+        }),
+      },
+      {
+        id: "dsh-bash-1",
+        kind: "tool",
+        title: "bash",
+        toolOutput: "/repo\n",
+      },
+    ]);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: Print working directory",
+        status: "completed",
+        output: "/repo",
+      }),
+    );
+    if (items[0]?.kind === "tool") {
+      const parsed = JSON.parse(items[0].detail) as Record<string, string>;
+      expect(parsed.command).toBe("pwd");
+      expect(parsed.description).toBe("Print working directory");
+    }
   });
 
   it("skips blank messages and unknown kinds", () => {

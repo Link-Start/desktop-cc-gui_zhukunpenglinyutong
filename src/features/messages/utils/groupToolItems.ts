@@ -15,6 +15,12 @@ export type GroupedEntry =
   | { kind: 'item'; item: ConversationItem }
   | { kind: 'readGroup'; items: ToolItem[] }
   | { kind: 'editGroup'; items: ToolItem[] }
+  /**
+   * Legacy bash batch kind. New grouping no longer emits `bashGroup`
+   * (terminal tools stay as plain `item` rows → single `BashToolBlock`).
+   * Kept in the union so older projection fixtures / process-phase code that
+   * still pattern-match on it remain type-safe until fully cleaned.
+   */
   | { kind: 'bashGroup'; items: ToolItem[] }
   | { kind: 'searchGroup'; items: ToolItem[] };
 
@@ -53,14 +59,15 @@ function canMergeExploreItems(previous: ExploreItem, next: ExploreItem): boolean
  * 将分类映射到 GroupedEntry 的 kind。
  * `fileEdit` 是场景桶：连续的 edit + fileChange 合并为同一「文件修改」场景。
  * （裸 `edit` 不会进入 buffer——resolveSceneCategory 已归一为 fileEdit。）
+ * bash 不再分组：连续终端命令保持单条 `BashToolBlock` / terminal card，
+ * 避免 DSH 等引擎退化成「批量终端 / 命令」丑卡（command 字段解析失败时尤其明显）。
  * subagent 不再分组：幕布降级为普通工具行，展示收敛到 ComposerRunStatusStrip。
  */
-type GroupableCategory = 'read' | 'fileEdit' | 'bash' | 'search';
+type GroupableCategory = 'read' | 'fileEdit' | 'search';
 
 const CATEGORY_TO_GROUP_KIND: Record<GroupableCategory, GroupedEntry['kind']> = {
   read: 'readGroup',
   fileEdit: 'editGroup',
-  bash: 'bashGroup',
   search: 'searchGroup',
 };
 

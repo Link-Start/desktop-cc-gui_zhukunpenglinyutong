@@ -1031,6 +1031,23 @@ pub(crate) fn opencode_source_fingerprint(workspace_path: &Path) -> String {
     )
 }
 
+pub(crate) fn dsh_source_fingerprint(workspace_path: &Path) -> String {
+    // DSH sessions live in the host process / $DSH_HOME. Home mtime catches
+    // durable writes; a short wall-clock bucket still re-probes live host
+    // sessions created without immediate disk churn (same idea as OpenCode).
+    let home = std::env::var_os("DSH_HOME")
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".dsh")))
+        .unwrap_or_else(|| PathBuf::from(".dsh"));
+    let bucket = now_ms_fallback() / 15_000;
+    format!(
+        "dsh:{}:{}:{}",
+        normalize_path_key(&workspace_path.to_string_lossy()),
+        mtime_fingerprint(&home),
+        bucket
+    )
+}
+
 pub(crate) fn rows_from_gemini_summaries(
     workspace_path: &Path,
     sessions: &[crate::engine::gemini_history::GeminiSessionSummary],
@@ -1092,6 +1109,39 @@ pub(crate) fn rows_from_pi_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: session.file_size_bytes,
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn rows_from_dsh_summaries(
+    workspace_path: &Path,
+    sessions: &[crate::engine::dsh::history::DshSessionSummary],
+) -> Vec<SessionIndexRow> {
+    let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
+    sessions
+        .iter()
+        .map(|session| {
+            let title = {
+                let trimmed = session.first_message.trim();
+                if trimmed.is_empty() {
+                    "DeepSeek Harness Session".to_string()
+                } else {
+                    truncate_title(trimmed, 80)
+                }
+            };
+            SessionIndexRow {
+                engine: "dsh".into(),
+                session_id: session.session_id.clone(),
+                title,
+                native_title: None,
+                updated_at: session.updated_at,
+                created_at: Some(session.created_at).filter(|value| *value > 0),
+                cwd: Some(workspace_key.clone()),
+                workspace_path: Some(workspace_key.clone()),
+                physical_path: None,
+                parent_session_id: None,
+                size_bytes: None,
             }
         })
         .collect()
@@ -1216,6 +1266,35 @@ mod tests {
         assert_eq!(rows[0].session_id, "019ffb7b-dedc-7b36-8d2f-f85f35501036");
         assert_eq!(rows[0].title, "你在干什么");
         assert_eq!(rows[0].size_bytes, Some(128));
+    }
+
+    #[test]
+    fn rows_from_dsh_summaries_prefix_engine_and_title() {
+        let rows = rows_from_dsh_summaries(
+            Path::new("/Users/zhukunpeng/Desktop/CC GUI 项目/desktop-cc-gui"),
+            &[crate::engine::dsh::history::DshSessionSummary {
+                session_id: "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into(),
+                first_message: "无法查看DSH历史记录".into(),
+                updated_at: 1_786_896_696_172,
+                created_at: 1_786_896_696_172,
+                message_count: 0,
+                engine: Some("dsh".into()),
+                canonical_session_id: Some(
+                    "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into(),
+                ),
+            }],
+        );
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].engine, "dsh");
+        assert_eq!(
+            rows[0].session_id,
+            "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d"
+        );
+        assert_eq!(rows[0].title, "无法查看DSH历史记录");
+        assert!(rows[0]
+            .workspace_path
+            .as_deref()
+            .is_some_and(|path| path.contains("desktop-cc-gui")));
     }
 
     #[test]

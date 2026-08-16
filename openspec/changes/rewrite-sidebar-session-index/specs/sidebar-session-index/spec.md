@@ -57,13 +57,19 @@ After active workspace first-paint succeeds and the startup gate is ready, the s
 
 ### Requirement: Extended engine writers are bounded
 
-Gemini, Grok, and OpenCode writers MAY participate in Session Index sync but MUST use hard timeouts (seconds-level). OpenCode failure or absence MUST soft-empty without failing the whole index sync.
+Gemini, Grok, PI, DSH, and OpenCode writers MAY participate in Session Index sync but MUST use hard timeouts (seconds-level). OpenCode / DSH host failure or absence MUST soft-empty without failing the whole index sync.
 
 #### Scenario: OpenCode CLI missing
 
 - **WHEN** OpenCode is not installed or disabled
 - **THEN** Session Index sync MUST still succeed for other engines
 - **AND** OpenCode rows MAY be empty with a partial source diagnostic
+
+#### Scenario: DSH host not running
+
+- **WHEN** DSH CLI host is not reachable at the configured endpoint
+- **THEN** Session Index sync MUST still succeed for other engines
+- **AND** DSH rows MAY be empty with a partial source diagnostic (`dsh-unavailable` / timeout)
 
 #### Scenario: Quiet post first-paint index soft re-sync
 

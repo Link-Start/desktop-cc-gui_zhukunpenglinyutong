@@ -246,8 +246,16 @@ pub fn fold_history_events(entries: &[Value]) -> Vec<DshSessionMessage> {
             }
             "tool/call" => {
                 index += 1;
+                // Prefer durable callId so later tool/result can pair by id.
+                let call_id = data
+                    .get("callId")
+                    .or_else(|| data.get("id"))
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                    .unwrap_or_else(|| format!("dsh-tool-{index}"));
                 messages.push(DshSessionMessage {
-                    id: format!("dsh-tool-{index}"),
+                    id: call_id,
                     role: "assistant".to_string(),
                     text: String::new(),
                     timestamp: None,
@@ -260,14 +268,45 @@ pub fn fold_history_events(entries: &[Value]) -> Vec<DshSessionMessage> {
                         .get("name")
                         .and_then(Value::as_str)
                         .map(str::to_string),
-                    tool_input: data.get("arguments").cloned().or_else(|| data.get("args").cloned()),
+                    // DSH `arguments` is a raw JSON string; parse when possible so FE
+                    // path extractors receive a normal object (and still accept strings).
+                    tool_input: normalize_dsh_tool_arguments(
+                        data.get("arguments").or_else(|| data.get("args")),
+                    ),
                     tool_output: None,
                     source_kind: None,
                 });
             }
             "tool/result" => {
-                if let Some(last) = messages.iter_mut().rev().find(|row| row.kind == "tool" && row.tool_output.is_none()) {
-                    last.tool_output = data.get("result").cloned().or_else(|| data.get("output").cloned());
+                let call_id = data
+                    .get("callId")
+                    .or_else(|| data.get("id"))
+                    .or_else(|| data.get("toolCallId"))
+                    .or_else(|| data.pointer("/message/source/callId"))
+                    .or_else(|| data.pointer("/message/content/0/toolCallId"))
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty());
+                let output = data
+                    .get("result")
+                    .cloned()
+                    .or_else(|| data.get("output").cloned())
+                    .or_else(|| extract_dsh_history_tool_output(&data));
+                if let Some(call_id) = call_id {
+                    if let Some(target) = messages
+                        .iter_mut()
+                        .rev()
+                        .find(|row| row.kind == "tool" && row.id == call_id)
+                    {
+                        target.tool_output = output;
+                        continue;
+                    }
+                }
+                if let Some(last) = messages
+                    .iter_mut()
+                    .rev()
+                    .find(|row| row.kind == "tool" && row.tool_output.is_none())
+                {
+                    last.tool_output = output;
                 }
             }
             "turn/end" => {
@@ -350,6 +389,65 @@ fn sanitize_dsh_sidebar_title(title: &str) -> String {
     } else {
         title.to_string()
     }
+}
+
+/// DSH stores tool arguments as the raw model JSON string. Prefer a parsed
+/// object for FE path extractors; fall back to the original value.
+fn normalize_dsh_tool_arguments(value: Option<&Value>) -> Option<Value> {
+    let value = value?;
+    if let Some(raw) = value.as_str() {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        if let Ok(parsed) = serde_json::from_str::<Value>(trimmed) {
+            if parsed.is_object() || parsed.is_array() {
+                return Some(parsed);
+            }
+        }
+        return Some(Value::String(trimmed.to_string()));
+    }
+    Some(value.clone())
+}
+
+fn extract_dsh_history_tool_output(data: &Value) -> Option<Value> {
+    if let Some(block) = data.pointer("/message/content/0") {
+        if let Some(text) = block.get("text").and_then(Value::as_str) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(Value::String(trimmed.to_string()));
+            }
+        }
+        if let Some(content) = block.get("content") {
+            if let Some(text) = content.as_str() {
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    return Some(Value::String(trimmed.to_string()));
+                }
+            }
+            if let Some(arr) = content.as_array() {
+                let mut parts = Vec::new();
+                for entry in arr {
+                    if let Some(text) = entry.get("text").and_then(Value::as_str) {
+                        if !text.is_empty() {
+                            parts.push(text.to_string());
+                        }
+                    } else if let Some(text) = entry.as_str() {
+                        if !text.is_empty() {
+                            parts.push(text.to_string());
+                        }
+                    }
+                }
+                let joined = parts.join("\n");
+                let trimmed = joined.trim();
+                if !trimmed.is_empty() {
+                    return Some(Value::String(trimmed.to_string()));
+                }
+            }
+        }
+        return Some(block.clone());
+    }
+    data.get("message").cloned()
 }
 
 fn flush_assistant(
@@ -624,5 +722,55 @@ mod tests {
             ""
         );
         assert_eq!(sanitize_dsh_sidebar_title("你好"), "你好");
+    }
+
+    #[test]
+    fn folds_tool_call_raw_arguments_and_pairs_result_by_call_id() {
+        let entries = vec![
+            json!({
+                "event": {
+                    "type": "tool/call",
+                    "data": {
+                        "callId": "call-read-1",
+                        "name": "read",
+                        "arguments": "{\"file_path\":\"src/main.ts\"}"
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "tool/result",
+                    "data": {
+                        "message": {
+                            "source": { "callId": "call-read-1" },
+                            "content": [{
+                                "type": "tool-result",
+                                "toolCallId": "call-read-1",
+                                "content": [{ "type": "text", "text": "1\tok" }]
+                            }]
+                        }
+                    }
+                }
+            }),
+        ];
+        let messages = fold_history_events(&entries);
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].id, "call-read-1");
+        assert_eq!(messages[0].title.as_deref(), Some("read"));
+        assert_eq!(
+            messages[0]
+                .tool_input
+                .as_ref()
+                .and_then(|value| value.get("file_path"))
+                .and_then(Value::as_str),
+            Some("src/main.ts")
+        );
+        assert_eq!(
+            messages[0]
+                .tool_output
+                .as_ref()
+                .and_then(Value::as_str),
+            Some("1\tok")
+        );
     }
 }

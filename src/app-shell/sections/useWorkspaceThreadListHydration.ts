@@ -440,8 +440,10 @@ export function useWorkspaceThreadListHydration({
 
   /**
    * Quiet soft re-sync of Session Index after first-paint (NOT exhaustive
-   * full-catalog). Picks up CLI-created sessions for Gemini/Grok/OpenCode
+   * full-catalog). Picks up CLI-created sessions for Gemini/Grok/OpenCode/DSH
    * without multi-GB inventory. Force refresh still uses full-catalog.
+   * DSH/PI host-or-disk probes still run inside that first-paint pass when
+   * Session Index has no rows for those engines (see useThreadActions).
    */
   const schedulePostFirstPaintFullCatalog = useCallback(
     (workspaceId: string, options?: { allowRepeat?: boolean }) => {

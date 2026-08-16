@@ -1559,6 +1559,51 @@ go lang`,
     }
   });
 
+  it("parses DSH-style raw JSON string arguments for commandExecution terminal cards", () => {
+    const item = buildConversationItem({
+      type: "commandExecution",
+      id: "dsh-bash-1",
+      title: "bash",
+      tool: "bash",
+      // Live DSH EngineEvent path passes arguments as an unparsed JSON string.
+      arguments: JSON.stringify({
+        command: "rg -n \"批量终端\" src",
+        description: "Search batch terminal UI sources",
+        workdir: "/repo",
+      }),
+      status: "started",
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("commandExecution");
+      expect(item.title).toBe("Command: Search batch terminal UI sources");
+      const parsed = JSON.parse(item.detail) as Record<string, string>;
+      expect(parsed.command).toBe('rg -n "批量终端" src');
+      expect(parsed.description).toBe("Search batch terminal UI sources");
+      expect(parsed.cwd).toBe("/repo");
+    }
+  });
+
+  it("keeps command-only DSH commandExecution detail when description is absent", () => {
+    const item = buildConversationItem({
+      type: "commandExecution",
+      id: "dsh-bash-2",
+      title: "bash",
+      arguments: JSON.stringify({
+        command: "ls -la",
+      }),
+      status: "completed",
+      aggregatedOutput: "ok\n",
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.title).toBe("Command: ls -la");
+      const parsed = JSON.parse(item.detail) as Record<string, string>;
+      expect(parsed.command).toBe("ls -la");
+      expect(parsed.description).toBeUndefined();
+    }
+  });
+
   it("keeps mcpToolCall output from output-like fallback fields", () => {
     const item = buildConversationItem({
       type: "mcpToolCall",
@@ -1573,6 +1618,27 @@ go lang`,
     if (item && item.kind === "tool") {
       expect(item.toolType).toBe("mcpToolCall");
       expect(item.output).toContain("/repo");
+    }
+  });
+
+  it("normalizes DSH-style raw JSON string arguments for path display", () => {
+    const item = buildConversationItem({
+      type: "mcpToolCall",
+      id: "dsh-read-1",
+      server: "agent",
+      tool: "read",
+      arguments: JSON.stringify({
+        file_path: "src-tauri/src/engine/dsh/history.rs",
+      }),
+      status: "started",
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.title).toBe("read");
+      const parsed = JSON.parse(item.detail) as Record<string, string>;
+      expect(parsed.file_path).toBe("src-tauri/src/engine/dsh/history.rs");
+      // Must not double-encode into a quoted string payload.
+      expect(item.detail.startsWith("\"")).toBe(false);
     }
   });
 

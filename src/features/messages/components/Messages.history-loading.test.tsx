@@ -302,11 +302,13 @@ describe("Messages history loading", () => {
       />,
     );
 
-    // find/cat are file-inspection → stay on canvas; pure ls noise is filtered out of the group.
-    expect(screen.getByText(/tools\.bashGroupBatchRun/)).toBeTruthy();
+    // find/cat are file-inspection → stay on canvas as single terminal cards
+    // (bash batch grouping retired). Pure ls noise is filtered out.
+    expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
+    expect(screen.getAllByText(/tools\.terminalCommand/).length).toBeGreaterThan(0);
   });
 
-  it("hides pure shell noise bash groups on Claude canvas outside history restore", () => {
+  it("hides pure shell noise bash rows on Claude canvas outside history restore", () => {
     render(
       <Messages
         items={[
@@ -349,6 +351,7 @@ describe("Messages history loading", () => {
     );
 
     expect(screen.queryByText(/tools\.bashGroupBatchRun/)).toBeNull();
+    expect(screen.queryByText(/tools\.terminalCommand/)).toBeNull();
   });
 
   // jsdom drops scrollTop writes on unlaid-out elements, so back the scroller

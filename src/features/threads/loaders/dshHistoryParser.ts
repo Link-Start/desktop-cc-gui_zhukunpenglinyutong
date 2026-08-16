@@ -3,6 +3,7 @@ import {
   isDshInjectedContextMessage,
   readDshMessageSourceKind,
 } from "../../../utils/dshRuntimeContext";
+import { isBashTool } from "../../../utils/toolSemantics";
 import { asRecord, asString } from "./historyLoaderUtils";
 
 function stringifyValue(value: unknown): string {
@@ -17,6 +18,141 @@ function stringifyValue(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+/**
+ * DSH stores tool arguments as the raw model JSON string. Prefer a pretty
+ * object string so Read/Edit path extractors can parse `file_path` without a
+ * double-encoded payload.
+ */
+function stringifyToolInput(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "";
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (parsed && typeof parsed === "object") {
+        return JSON.stringify(parsed, null, 2);
+      }
+    } catch {
+      // Incomplete / non-JSON fragments stay raw.
+    }
+    return trimmed;
+  }
+  return stringifyValue(value);
+}
+
+function parseToolInputRecord(value: unknown): Record<string, unknown> | null {
+  // historyLoaderUtils.asRecord returns {} for non-objects — do not treat that as a hit.
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function firstStringField(
+  source: Record<string, unknown> | null,
+  keys: string[],
+): string {
+  if (!source) {
+    return "";
+  }
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return "";
+}
+
+/**
+ * Project DSH history tools into the same canvas shapes the live EngineEvent
+ * path emits: bash → commandExecution with structured command detail; others
+ * keep bare tool titles so Read/Edit/Search blocks still classify by name.
+ */
+function projectDshHistoryTool(
+  itemId: string,
+  rawToolName: string,
+  input: unknown,
+  output: string,
+): Extract<ConversationItem, { kind: "tool" }> {
+  const status = output ? "completed" : "in_progress";
+  const args = parseToolInputRecord(input);
+  const detail = stringifyToolInput(input).trim();
+
+  if (isBashTool(rawToolName)) {
+    const command =
+      firstStringField(args, [
+        "command",
+        "cmd",
+        "script",
+        "shell_command",
+        "bash",
+      ]) || "";
+    const description = firstStringField(args, [
+      "description",
+      "summary",
+      "label",
+      "title",
+      "task",
+    ]);
+    const cwd = firstStringField(args, [
+      "cwd",
+      "workdir",
+      "working_directory",
+      "workingDirectory",
+    ]);
+    const titleText = description || command;
+    const structuredDetail =
+      command || description || cwd
+        ? JSON.stringify({
+            command: command || undefined,
+            description: description || undefined,
+            cwd: cwd || undefined,
+          })
+        : detail;
+    return {
+      id: itemId,
+      kind: "tool",
+      toolType: "commandExecution",
+      title: titleText ? `Command: ${titleText}` : "Command",
+      detail: structuredDetail,
+      status,
+      output: output || undefined,
+    };
+  }
+
+  return {
+    id: itemId,
+    kind: "tool",
+    // Bare tool name (read/edit/grep/…) so FE specialized blocks classify by name.
+    toolType: rawToolName,
+    title: rawToolName,
+    detail,
+    status,
+    output: output || undefined,
+  };
 }
 
 export function parseDshHistoryMessages(messagesData: unknown): ConversationItem[] {
@@ -89,19 +225,41 @@ export function parseDshHistoryMessages(messagesData: unknown): ConversationItem
       continue;
     }
 
-    const title =
+    const rawToolName =
       asString(message.title ?? message.toolType ?? message.tool_type ?? "").trim() ||
       "Tool";
     const output = stringifyValue(
       message.toolOutput ?? message.tool_output ?? message.text ?? "",
     ).trim();
     const input = message.toolInput ?? message.tool_input ?? null;
+    const projected = projectDshHistoryTool(itemId, rawToolName, input, output);
     const existingIndex = toolIndexById.get(itemId);
     if (typeof existingIndex === "number") {
       const existing = items[existingIndex];
       if (existing?.kind === "tool") {
+        // Result-only rows often omit toolInput. Prefer the richer earlier title/
+        // detail so "Command: <desc>" and structured command detail are not wiped.
+        // Result-only follow-ups often omit toolInput; never replace a richer
+        // Command title/detail with the bare "Command" fallback.
+        const existingIsRicherCommandTitle =
+          existing.title.startsWith("Command:") &&
+          (projected.title === "Command" || !projected.title);
+        const existingHasCommandDetail =
+          existing.detail.includes('"command"') ||
+          existing.detail.includes('"description"');
+        const projectedHasCommandDetail =
+          projected.detail.includes('"command"') ||
+          projected.detail.includes('"description"');
         items[existingIndex] = {
           ...existing,
+          detail:
+            existingHasCommandDetail && !projectedHasCommandDetail
+              ? existing.detail
+              : projected.detail || existing.detail,
+          title: existingIsRicherCommandTitle
+            ? existing.title
+            : projected.title || existing.title,
+          toolType: projected.toolType || existing.toolType,
           output: output || existing.output,
           status: output ? "completed" : existing.status,
         };
@@ -109,15 +267,7 @@ export function parseDshHistoryMessages(messagesData: unknown): ConversationItem
       continue;
     }
     toolIndexById.set(itemId, items.length);
-    items.push({
-      id: itemId,
-      kind: "tool",
-      toolType: title,
-      title,
-      detail: stringifyValue(input).trim(),
-      status: output ? "completed" : "in_progress",
-      output: output || undefined,
-    });
+    items.push(projected);
   }
 
   return items;
