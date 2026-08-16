@@ -530,7 +530,7 @@ impl ClaudeSession {
         let user_answered = tokio::select! {
             _ = notify.notified() => true,
             _ = tokio::time::sleep(
-                std::time::Duration::from_secs(1800)
+                std::time::Duration::from_secs(ASK_USER_QUESTION_TIMEOUT_SECS)
             ) => false,
         };
 
@@ -1026,7 +1026,12 @@ impl ClaudeSession {
 
         // Block until the answer arrives (or the native 5-min bound elapses).
         // Keep in lockstep with USER_INPUT_TIMEOUT_SECONDS (30 min) on the FE card.
-        let answer = match tokio::time::timeout(std::time::Duration::from_secs(1800), rx).await {
+        let answer = match tokio::time::timeout(
+            std::time::Duration::from_secs(ASK_USER_QUESTION_TIMEOUT_SECS),
+            rx,
+        )
+        .await
+        {
             Ok(Ok(text)) => text,
             Ok(Err(_)) => {
                 // Sender dropped without answering.

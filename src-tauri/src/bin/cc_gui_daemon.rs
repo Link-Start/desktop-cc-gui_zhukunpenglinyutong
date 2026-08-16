@@ -324,7 +324,7 @@ mod codex {
         dsh_node_requirement_error, node_satisfies_dsh_requirement, run_claude_doctor_with_settings,
         run_codex_doctor_with_settings, run_dsh_doctor_with_settings,
         run_grok_doctor_with_settings, run_kimi_doctor_with_settings,
-        run_opencode_doctor_with_settings,
+        run_opencode_doctor_with_settings, run_pi_doctor_with_settings,
     };
     pub(crate) use crate::codex_installer::{
         build_cli_install_plan_with_backend, resolve_cli_version_status,

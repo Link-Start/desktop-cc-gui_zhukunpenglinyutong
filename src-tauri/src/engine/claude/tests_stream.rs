@@ -493,8 +493,8 @@ async fn build_command_raises_mcp_tool_timeout_when_ask_wired() {
     // Root cause of the "answers >60s are lost" bug (2026-07-04): the CLI's
     // per-request MCP tool-call fetch timeout defaults to 60s for remote HTTP
     // servers, so it abandons our AskUserQuestion call before a slow user answers.
-    // build_command must raise MCP_TOOL_TIMEOUT to our 1800s server bound whenever
-    // the MCP ask is wired (non-plan mode + server started).
+    // build_command must raise MCP_TOOL_TIMEOUT past our 1800s server bound
+    // (1800s + 30s margin) whenever the MCP ask is wired.
     let manager = std::sync::Arc::new(ClaudeSessionManager::new());
     // Idempotent; starts the process-global in-process MCP server so the wiring
     // branch in build_command is taken.
@@ -522,8 +522,8 @@ async fn build_command_raises_mcp_tool_timeout_when_ask_wired() {
 
     assert_eq!(
         timeout_env.as_deref(),
-        Some("1800000"),
-        "MCP_TOOL_TIMEOUT must be raised to 1800s when the AskUserQuestion MCP ask is wired"
+        Some("1830000"),
+        "MCP_TOOL_TIMEOUT must be raised past 1800s (30s margin) when AskUserQuestion is wired"
     );
 }
 
@@ -1246,6 +1246,203 @@ async fn send_message_releases_background_blocker_on_matching_terminal_notificat
             .count(),
         1,
         "notification release + re-armed grace must still emit one TurnCompleted"
+    );
+}
+
+/// A backgrounded Agent/Task (`task_started`) that never emits a terminal
+/// `task_notification` (and therefore never emits `result`) must force-settle
+/// at CLAUDE_BG_TASK_MAX_WAIT instead of hanging forever.
+#[cfg(unix)]
+#[tokio::test]
+async fn send_message_force_settles_pending_agent_task_that_never_notifies() {
+    let script_body = concat!(
+        "#!/bin/sh\n",
+        "echo '{\"type\":\"system\",\"subtype\":\"task_started\",\"task_id\":\"agent-hang-1\",\"tool_use_id\":\"toolu_1\"}'\n",
+        "# Never emit a task_notification or a result, simulates a crashed/hung subagent.\n",
+        "sleep 30\n",
+        "exit 0\n",
+    );
+    let (root, workspace_path, script_path) = create_fake_claude_script(script_body);
+    let session = test_session_with_bin(workspace_path, script_path);
+    let mut receiver = session.subscribe();
+    let mut params = SendMessageParams::default();
+    params.text = "launch a background agent".to_string();
+
+    let started = std::time::Instant::now();
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        session.send_message(params, "turn-pending-hang"),
+    )
+    .await
+    .expect("send_message must force-settle at the pending-task max-wait, not hang on the 30s sleep")
+    .expect("a force-settled pending task is a success (result was never expected to arrive)");
+    let elapsed = started.elapsed();
+
+    let events = drain_turn_events(&mut receiver);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        response.contains("did not report back") && response.contains("abandoned"),
+        "abandonment must be a visible notice, never silent empty-success; got {response:?}"
+    );
+    assert!(
+        elapsed >= std::time::Duration::from_secs(2) && elapsed < std::time::Duration::from_secs(10),
+        "expected force-settle around the 3s test CLAUDE_BG_TASK_MAX_WAIT, not the 30s sleep; elapsed={elapsed:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.event, EngineEvent::TurnCompleted { .. }))
+            .count(),
+        1,
+        "exactly one TurnCompleted after the pending-task max-wait force-settles the turn"
+    );
+}
+
+/// CLAUDE_BG_TASK_MAX_WAIT is an idle bound: activity every 1.5s for 4.5s must
+/// survive past the raw 3s test constant and settle normally.
+#[cfg(unix)]
+#[tokio::test]
+async fn send_message_pending_agent_task_idle_reset_survives_past_raw_max_wait() {
+    let script_body = concat!(
+        "#!/bin/sh\n",
+        "echo '{\"type\":\"system\",\"subtype\":\"task_started\",\"task_id\":\"agent-active-1\",\"tool_use_id\":\"toolu_1\"}'\n",
+        "sleep 1.5\n",
+        "echo '{\"type\":\"system\",\"subtype\":\"task_progress\",\"task_id\":\"agent-active-1\"}'\n",
+        "sleep 1.5\n",
+        "echo '{\"type\":\"system\",\"subtype\":\"task_progress\",\"task_id\":\"agent-active-1\"}'\n",
+        "sleep 1.5\n",
+        "echo '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"<task-notification><task-id>agent-active-1</task-id><status>completed</status><result>done</result></task-notification>\"}]}}'\n",
+        "echo '{\"type\":\"result\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"final answer\"}]}}'\n",
+        "exit 0\n",
+    );
+    let (root, workspace_path, script_path) = create_fake_claude_script(script_body);
+    let session = test_session_with_bin(workspace_path, script_path);
+    let mut receiver = session.subscribe();
+    let mut params = SendMessageParams::default();
+    params.text = "launch a background agent that keeps working".to_string();
+
+    let started = std::time::Instant::now();
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        session.send_message(params, "turn-pending-idle-reset"),
+    )
+    .await
+    .expect("send_message must not hang past the outer test timeout")
+    .expect("a genuinely active pending task must settle normally, not be force-killed");
+    let elapsed = started.elapsed();
+
+    let events = drain_turn_events(&mut receiver);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        !response.contains("did not report back") && !response.is_empty(),
+        "an actively-progressing subagent must complete normally, not be abandoned; got {response:?}"
+    );
+    assert!(
+        elapsed >= std::time::Duration::from_millis(4000),
+        "expected the full ~4.5s activity sequence to complete, proving the idle-reset kept the \
+         bound from firing at the raw 3s constant; elapsed={elapsed:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.event, EngineEvent::TurnCompleted { .. }))
+            .count(),
+        1
+    );
+}
+
+/// A pending Agent/Task that settles before `result` must not wait toward
+/// CLAUDE_BG_TASK_MAX_WAIT.
+#[cfg(unix)]
+#[tokio::test]
+async fn send_message_pending_agent_task_settles_normally_before_result() {
+    let script_body = concat!(
+        "#!/bin/sh\n",
+        "echo '{\"type\":\"system\",\"subtype\":\"task_started\",\"task_id\":\"agent-notify-1\",\"tool_use_id\":\"toolu_1\"}'\n",
+        "echo '{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"<task-notification><task-id>agent-notify-1</task-id><status>completed</status><result>done</result></task-notification>\"}]}}'\n",
+        "echo '{\"type\":\"result\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"final answer\"}]}}'\n",
+        "exit 0\n",
+    );
+    let (root, workspace_path, script_path) = create_fake_claude_script(script_body);
+    let session = test_session_with_bin(workspace_path, script_path);
+    let mut receiver = session.subscribe();
+    let mut params = SendMessageParams::default();
+    params.text = "launch a background agent".to_string();
+
+    let started = std::time::Instant::now();
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        session.send_message(params, "turn-pending-settle"),
+    )
+    .await
+    .expect("send_message must not hang when the pending task settles before result")
+    .expect("normal settlement before result should succeed");
+    let elapsed = started.elapsed();
+
+    let events = drain_turn_events(&mut receiver);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        !response.contains("did not report back") && !response.is_empty(),
+        "settlement before result should succeed, not be abandoned; got {response:?}"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_secs(2),
+        "should settle almost immediately, not wait toward CLAUDE_BG_TASK_MAX_WAIT; elapsed={elapsed:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.event, EngineEvent::TurnCompleted { .. }))
+            .count(),
+        1
+    );
+}
+
+/// A normal turn with no `task_started` must stay unbounded past the 3s test
+/// CLAUDE_BG_TASK_MAX_WAIT.
+#[cfg(unix)]
+#[tokio::test]
+async fn send_message_unaffected_turn_survives_past_pending_task_max_wait() {
+    let script_body = concat!(
+        "#!/bin/sh\n",
+        "echo '{\"type\":\"system\",\"subtype\":\"init\"}'\n",
+        "sleep 4\n",
+        "echo '{\"type\":\"result\",\"session_id\":\"11111111-1111-4111-8111-111111111111\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"final answer\"}]}}'\n",
+        "exit 0\n",
+    );
+    let (root, workspace_path, script_path) = create_fake_claude_script(script_body);
+    let session = test_session_with_bin(workspace_path, script_path);
+    let mut receiver = session.subscribe();
+    let mut params = SendMessageParams::default();
+    params.text = "hello".to_string();
+
+    let started = std::time::Instant::now();
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        session.send_message(params, "turn-no-pending-task"),
+    )
+    .await
+    .expect("send_message must not be force-settled by a bound that was never armed")
+    .expect("a normal long turn with no background task should succeed");
+    let elapsed = started.elapsed();
+
+    let events = drain_turn_events(&mut receiver);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(response, "final answer");
+    assert!(
+        elapsed >= std::time::Duration::from_secs(4),
+        "a normal turn with no task_started must survive past the 3s test max-wait unaffected; elapsed={elapsed:?}"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event.event, EngineEvent::TurnCompleted { .. }))
+            .count(),
+        1
     );
 }
 

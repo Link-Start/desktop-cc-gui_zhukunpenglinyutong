@@ -10,7 +10,9 @@ import type { WorkspaceSessionCatalogPage } from "../../../services/tauri";
 import {
   listThreadTitles as listThreadTitlesService,
   listThreads as listThreadsService,
+  listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
+import { sessionIndexRowsToThreadSummaries } from "./sessionIndexThreadSummaries";
 import {
   getThreadTimestamp,
   previewThreadName,
@@ -131,6 +133,61 @@ export function useLoadOlderThreadsForWorkspace({
           onThreadTitleMappingsLoaded?.(workspace.id, mappedTitles);
         } catch {
           mappedTitles = {};
+        }
+        const oldest = [...existing].sort((left, right) => left.updatedAt - right.updatedAt)[0];
+        if (oldest && typeof listSessionIndexForWorkspaceService === "function") {
+          const olderIndexPage = await withTimeout(
+            listSessionIndexForWorkspaceService(workspace.id, {
+              limit: 20,
+              syncIfNeeded: false,
+              forceSync: false,
+              beforeUpdatedAt: oldest.updatedAt,
+              beforeSessionId: oldest.id.includes(":")
+                ? oldest.id.slice(oldest.id.indexOf(":") + 1)
+                : oldest.id,
+            }).catch(() => null),
+            4_000,
+          );
+          if (olderIndexPage && Array.isArray(olderIndexPage.data) && olderIndexPage.data.length > 0) {
+            const olderSummaries = sessionIndexRowsToThreadSummaries(
+              olderIndexPage.data,
+              {
+                workspaceId: workspace.id,
+                mappedTitles,
+                getCustomName,
+                hiddenSharedBindingIds: new Set(),
+              },
+            );
+            const merged = sortThreadSummariesForDisplay([
+              ...existing,
+              ...olderSummaries.filter(
+                (entry) => !existing.some((current) => current.id === entry.id),
+              ),
+            ]);
+            dispatch({
+              type: "setThreads",
+              workspaceId: workspace.id,
+              threads: applySessionArchiveState(
+                merged,
+                await archivedSessionMapPromise,
+              ),
+            });
+            latestThreadsByWorkspaceRef.current = {
+              ...latestThreadsByWorkspaceRef.current,
+              [workspace.id]: merged,
+            };
+            dispatch({
+              type: "setThreadListPaging",
+              workspaceId: workspace.id,
+              isLoading: false,
+            });
+            dispatch({
+              type: "setThreadListCursor",
+              workspaceId: workspace.id,
+              cursor: olderIndexPage.hasMore ? encodedNextCursor : null,
+            });
+            return;
+          }
         }
         let catalogCursor: string | null = null;
         let didLoadCatalogPage = false;

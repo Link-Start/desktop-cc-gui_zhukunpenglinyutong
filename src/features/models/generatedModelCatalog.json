@@ -135,6 +135,17 @@
         "lifecycle": "fallback"
       }
     ],
+    "pi": [
+      {
+        "id": "auto",
+        "label": "PI Auto",
+        "description": "Use PI CLI default model",
+        "provider": "pi",
+        "protocol": "pi",
+        "lifecycle": "stable",
+        "default": true
+      }
+    ],
     "opencode": [
       {
         "id": "opencode/big-pickle",

@@ -48,6 +48,7 @@ export type MessagesEngine =
   | "grok"
   | "kimi"
   | "opencode"
+  | "pi"
   | "dsh";
 
 export function isSelectionInsideNode(selection: Selection | null, node: HTMLElement | null) {
@@ -164,14 +165,7 @@ export function resolveAgentTaskDisplaySummary(summary: string | null | undefine
 }
 
 export function toConversationEngine(engine: MessagesEngine): ConversationEngine {
-  if (
-    engine === "claude" ||
-    engine === "gemini" ||
-    engine === "grok" ||
-    engine === "kimi" ||
-    engine === "opencode" ||
-    engine === "dsh"
-  ) {
+  if (engine === "claude" || engine === "gemini" || engine === "grok" || engine === "kimi" || engine === "opencode" || engine === "pi" || engine === "dsh") {
     return engine;
   }
   return "codex";

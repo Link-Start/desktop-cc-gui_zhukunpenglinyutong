@@ -142,6 +142,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     onThreadRecoveryFork,
     onToggleProcessPhaseExpanded,
     openFileLink,
+    openHtmlFileInBrowser,
     showFileLinkMenu,
     toggleExpanded,
   } = interactions;
@@ -432,6 +433,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
               userActionNode={renderUserActions()}
               codeBlockCopyUseModifier={codeBlockCopyUseModifier}
               onOpenFileLink={openFileLink}
+              onOpenHtmlInBrowser={openHtmlFileInBrowser}
               onOpenFileLinkMenu={showFileLinkMenu}
               streamMitigationProfile={streamMitigationProfile}
               onAssistantVisibleTextRender={onAssistantVisibleTextRender}
@@ -488,6 +490,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
           activeEngine={activeEngine}
           onToggle={toggleExpanded}
           onOpenFileLink={openFileLink}
+          onOpenHtmlInBrowser={openHtmlFileInBrowser}
           onOpenFileLinkMenu={showFileLinkMenu}
           presentationProfile={presentationProfile}
           streamMitigationProfile={streamMitigationProfile}
@@ -501,6 +504,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
           item={renderItem}
           workspaceId={workspaceId}
           onOpenFileLink={openFileLink}
+          onOpenHtmlInBrowser={openHtmlFileInBrowser}
           onOpenFileLinkMenu={showFileLinkMenu}
         />
       );
@@ -744,6 +748,7 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
           isLive={isThinking && latestReasoningId === item.id}
           onToggle={toggleExpanded}
           onOpenFileLink={openFileLink}
+          onOpenHtmlInBrowser={openHtmlFileInBrowser}
           onOpenFileLinkMenu={showFileLinkMenu}
           presentationProfile={presentationProfile}
           streamMitigationProfile={streamMitigationProfile}

@@ -33,6 +33,7 @@ const ENGINE_LABELS: Record<EngineType, string> = {
   grok: "Grok CLI",
   kimi: "Kimi CLI",
   opencode: "OpenCode",
+  pi: "PI CLI",
   dsh: "DeepSeek Harness",
 };
 

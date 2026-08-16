@@ -5,6 +5,7 @@ import type { EngineType } from "../../../types";
 import deepseekIcon from "@lobehub/icons-static-svg/icons/deepseek-color.svg";
 import claudeIcon from "../../../assets/model-icons/claude.svg";
 import geminiIcon from "../../../assets/model-icons/gemini.svg";
+import piCliIcon from "@lobehub/icons-static-svg/icons/pi.svg";
 
 type EngineIconProps = {
   engine: EngineType;
@@ -143,6 +144,16 @@ export function EngineIcon({
       );
     case "opencode":
       return <OpenCodeGlyph size={size} className={className} style={style} />;
+    case "pi":
+      return (
+        <img
+          src={piCliIcon}
+          alt="PI CLI"
+          className={className}
+          style={iconStyle}
+          aria-hidden
+        />
+      );
     case "dsh":
       return (
         <img

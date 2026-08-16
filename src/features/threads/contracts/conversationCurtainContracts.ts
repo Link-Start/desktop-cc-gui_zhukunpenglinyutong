@@ -6,12 +6,13 @@ import type {
 } from "../../../types";
 
 export type ConversationEngine =
-  | "codex"
   | "claude"
+  | "codex"
   | "gemini"
   | "grok"
   | "kimi"
   | "opencode"
+  | "pi"
   | "dsh";
 
 export const NORMALIZED_ITEM_KINDS = [

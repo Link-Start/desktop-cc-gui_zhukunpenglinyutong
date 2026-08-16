@@ -547,6 +547,7 @@ export const MessagesCore = memo(function MessagesCore({
     handleExitPlanModeExecuteForItem,
     noteCaptureMenu,
     openFileLink,
+    openHtmlFileInBrowser,
     resetInteractionScope,
     selectedExitPlanExecutionByItemKey,
     showFileLinkMenu,
@@ -565,6 +566,7 @@ export const MessagesCore = memo(function MessagesCore({
     renderSourceItems,
     selectedOpenAppId,
     threadId,
+    workspaceId,
     workspacePath,
   });
 
@@ -997,6 +999,7 @@ export const MessagesCore = memo(function MessagesCore({
           phase.durationMs ??
           (typeof lastDurationMs === "number" && lastDurationMs >= 0 ? lastDurationMs : null),
         insertBeforeItemId: phase.insertBeforeItemId,
+        collapsedAnchorItemId: phase.collapsedAnchorItemId,
         assistantItemId: phase.assistantItemId,
         hiddenItemIds: phase.hiddenItemIds,
       })),
@@ -1756,6 +1759,7 @@ export const MessagesCore = memo(function MessagesCore({
       onThreadRecoveryFork,
       onToggleProcessPhaseExpanded: handleToggleProcessPhaseExpanded,
       openFileLink,
+      openHtmlFileInBrowser,
       showFileLinkMenu,
       toggleExpanded,
     },

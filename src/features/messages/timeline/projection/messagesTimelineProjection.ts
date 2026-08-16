@@ -107,6 +107,7 @@ export type TimelineProcessPhaseChip = {
   };
   /** First process item of the phase (present only when expanded / remounted). */
   insertBeforeItemId: string;
+  collapsedAnchorItemId?: string;
   /** Assistant prose this phase produced — used to place header when collapsed. */
   assistantItemId: string;
   hiddenItemIds: readonly string[];
@@ -146,6 +147,8 @@ export function buildTimelineProjectionRows(input: {
           revealIndex,
         });
       });
+    } else if (phase.collapsedAnchorItemId) {
+      phaseByFirstItemId.set(phase.collapsedAnchorItemId, phase);
     } else {
       // Collapsed: process rows are hard-unmounted; park the header above prose.
       phaseByAssistantId.set(phase.assistantItemId, phase);

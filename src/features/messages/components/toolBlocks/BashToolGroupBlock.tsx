@@ -84,11 +84,18 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
   onRequestAutoScroll,
 }: BashToolGroupBlockProps) {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(
+    () =>
+      items.some(
+        (entry) =>
+          resolveToolStatus(entry.status, Boolean(entry.output)) === "processing",
+      ),
+  );
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [copiedOutputId, setCopiedOutputId] = useState<string | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const prevCountRef = useRef(items.length);
+  const wasProcessingRef = useRef(false);
 
   const parsed = useMemo(
     () => items.map((item) => parseBashItem(item, t('tools.commandLabel'))),
@@ -106,6 +113,14 @@ export const BashToolGroupBlock = memo(function BashToolGroupBlock({
       setExpandedItemId(lastProcessing.id);
     }
   }, [parsed]);
+
+  useEffect(() => {
+    if (wasProcessingRef.current && !hasProcessing) {
+      setIsExpanded(false);
+      setExpandedItemId(null);
+    }
+    wasProcessingRef.current = hasProcessing;
+  }, [hasProcessing]);
 
   useEffect(() => {
     if (items.length > prevCountRef.current && timelineRef.current) {

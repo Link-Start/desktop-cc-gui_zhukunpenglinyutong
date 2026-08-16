@@ -29,7 +29,7 @@ describe("dispatchThreadItemsProgressively", () => {
     });
   });
 
-  it("paints growing prefixes for large histories", async () => {
+  it("paints the newest window first, then grows backward", async () => {
     const dispatch = vi.fn();
     const items = makeItems(THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE * 2 + 5);
     await dispatchThreadItemsProgressively(dispatch, "grok:big", items, {
@@ -44,7 +44,12 @@ describe("dispatchThreadItemsProgressively", () => {
       items: ConversationItem[];
     };
     expect(first.items).toHaveLength(10);
+    expect(first.items[0]?.id).toBe(items[items.length - 10]?.id);
+    expect(first.items[first.items.length - 1]?.id).toBe(
+      items[items.length - 1]?.id,
+    );
     expect(last.items).toHaveLength(items.length);
+    expect(last.items[0]?.id).toBe(items[0]?.id);
     expect(last.items[last.items.length - 1]?.id).toBe(
       items[items.length - 1]?.id,
     );

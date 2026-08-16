@@ -27,6 +27,7 @@ pub(crate) enum CliInstallEngine {
     Grok,
     #[serde(rename = "opencode")]
     OpenCode,
+    Pi,
     #[serde(rename = "dsh")]
     Dsh,
 }
@@ -147,10 +148,11 @@ pub(crate) fn resolve_effective_strategy(
         CliInstallEngine::Codex
         | CliInstallEngine::Kimi
         | CliInstallEngine::OpenCode
+        | CliInstallEngine::Pi
         | CliInstallEngine::Dsh => {
             match requested {
                 CliInstallStrategy::NpmGlobal => CliInstallStrategy::NpmGlobal,
-                // Codex/Kimi/OpenCode/DSH self-update stays blocked; keep requested so plan can explain.
+                // Codex/Kimi/OpenCode/Pi/DSH self-update stays blocked; keep requested so plan can explain.
                 other => other,
             }
         }
@@ -176,6 +178,7 @@ pub(crate) fn package_name_for_engine(engine: CliInstallEngine) -> &'static str 
         CliInstallEngine::Codex => "@openai/codex@latest",
         CliInstallEngine::Claude => "@anthropic-ai/claude-code@latest",
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code@latest",
+        CliInstallEngine::Pi => "@earendil-works/pi-coding-agent@latest",
         CliInstallEngine::OpenCode => "opencode-ai@latest",
         CliInstallEngine::Dsh => "@deepseek-ai/dsh@latest",
         // Grok CLI is not distributed via npm; it uses the official curl installer.
@@ -188,6 +191,7 @@ fn uninstall_package_name_for_engine(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Codex => "@openai/codex",
         CliInstallEngine::Claude => "@anthropic-ai/claude-code",
         CliInstallEngine::Kimi => "@moonshot-ai/kimi-code",
+        CliInstallEngine::Pi => "@earendil-works/pi-coding-agent",
         // Grok CLI is not distributed via npm; it uses the official curl installer.
         CliInstallEngine::Grok => unreachable!("grok is not distributed via npm"),
         // OpenCode uninstall is intentionally not supported (protects auth and session data).
@@ -284,7 +288,7 @@ fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Ve
                     .to_string(),
             ],
         },
-        CliInstallEngine::Codex | CliInstallEngine::Kimi => match action {
+        CliInstallEngine::Codex | CliInstallEngine::Kimi | CliInstallEngine::Pi => match action {
             CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => vec![
                 "npm".to_string(),
                 "install".to_string(),
@@ -342,6 +346,7 @@ fn engine_binary_name(engine: CliInstallEngine) -> &'static str {
         CliInstallEngine::Kimi => "kimi",
         CliInstallEngine::Grok => "grok",
         CliInstallEngine::OpenCode => "opencode",
+        CliInstallEngine::Pi => "pi",
         CliInstallEngine::Dsh => "dsh",
     }
 }
@@ -353,6 +358,7 @@ fn engine_explicit_bin<'a>(engine: CliInstallEngine, settings: &'a AppSettings) 
         CliInstallEngine::Kimi => settings.kimi_bin.as_deref(),
         CliInstallEngine::Grok => settings.grok_bin.as_deref(),
         CliInstallEngine::OpenCode => settings.opencode_bin.as_deref(),
+        CliInstallEngine::Pi => settings.pi_bin.as_deref(),
         CliInstallEngine::Dsh => settings.dsh_bin.as_deref(),
     }
     .filter(|value| !value.trim().is_empty())
@@ -925,9 +931,10 @@ pub(crate) async fn resolve_cli_version_status(
             current_platform(),
             CliInstallPlatform::Unknown | CliInstallPlatform::Windows
         ),
-        CliInstallEngine::Codex | CliInstallEngine::Kimi | CliInstallEngine::OpenCode => {
-            registry_ok
-        }
+        CliInstallEngine::Codex
+        | CliInstallEngine::Kimi
+        | CliInstallEngine::OpenCode
+        | CliInstallEngine::Pi => registry_ok,
         CliInstallEngine::Dsh => registry_ok && dsh_node_requirement_ok,
     };
 
@@ -948,6 +955,7 @@ pub(crate) async fn resolve_cli_version_status(
         | CliInstallEngine::Kimi
         | CliInstallEngine::Grok
         | CliInstallEngine::OpenCode
+        | CliInstallEngine::Pi
         | CliInstallEngine::Dsh => {
             match check_cli_binary(engine_binary_name(engine), path_env.clone()).await {
                 Ok(Some(version)) => Some(version),
@@ -1400,6 +1408,7 @@ async fn run_post_install_doctor(
         CliInstallEngine::OpenCode => {
             crate::codex::run_opencode_doctor_with_settings(None, settings).await
         }
+        CliInstallEngine::Pi => crate::codex::run_pi_doctor_with_settings(None, settings).await,
         CliInstallEngine::Dsh => crate::codex::run_dsh_doctor_with_settings(None, settings).await,
     }
 }

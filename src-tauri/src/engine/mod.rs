@@ -39,6 +39,10 @@ pub(crate) mod grok_provider_profile;
 pub mod kimi;
 pub mod kimi_history;
 pub(crate) mod kimi_provider_profile;
+pub mod pi;
+pub mod pi_auth;
+pub(crate) mod pi_history;
+pub(crate) mod pi_provider_profile;
 pub mod dsh;
 pub(crate) mod dsh_provider_profile;
 pub mod manager;
@@ -55,6 +59,9 @@ pub use commands::*;
 pub use manager::EngineManager;
 pub use rewind_commands::*;
 pub use session_history_commands::*;
+pub use pi_auth::{
+    pi_auth_delete_credential, pi_auth_list_providers, pi_auth_set_api_key,
+};
 pub use status::resolve_engine_type;
 pub use task_output::*;
 
@@ -74,6 +81,8 @@ pub enum EngineType {
     OpenCode,
     /// Kimi Code CLI
     Kimi,
+    /// PI CLI
+    Pi,
     /// DeepSeek Harness (dsh web host)
     Dsh,
 }
@@ -94,6 +103,7 @@ impl EngineType {
             EngineType::Grok => "Grok CLI",
             EngineType::OpenCode => "OpenCode",
             EngineType::Kimi => "Kimi CLI",
+            EngineType::Pi => "PI",
             EngineType::Dsh => "DeepSeek Harness",
         }
     }
@@ -107,6 +117,7 @@ impl EngineType {
             EngineType::Grok => "grok",
             EngineType::OpenCode => "opencode",
             EngineType::Kimi => "kimi",
+            EngineType::Pi => "pi",
             EngineType::Dsh => "dsh",
         }
     }
@@ -123,6 +134,7 @@ pub(crate) fn engine_enabled_in_settings(
         | EngineType::Codex
         | EngineType::Grok
         | EngineType::Kimi
+        | EngineType::Pi
         | EngineType::Dsh => true,
     }
 }
@@ -135,6 +147,7 @@ pub(crate) fn engine_disabled_diagnostic(engine_type: EngineType) -> Option<&'st
         | EngineType::Codex
         | EngineType::Grok
         | EngineType::Kimi
+        | EngineType::Pi
         | EngineType::Dsh => None,
     }
 }
@@ -147,6 +160,7 @@ pub(crate) fn disabled_engine_status(engine_type: EngineType) -> EngineStatus {
         EngineType::Grok => EngineFeatures::grok(),
         EngineType::OpenCode => EngineFeatures::opencode(),
         EngineType::Kimi => EngineFeatures::kimi(),
+        EngineType::Pi => EngineFeatures::pi(),
         EngineType::Dsh => EngineFeatures::dsh(),
     };
     EngineStatus {
@@ -413,6 +427,18 @@ impl EngineFeatures {
             reasoning_effort: true,
             collaboration_mode: false,
             // Headless multimodal via `grok --prompt-file` ACP image blocks.
+            image_input: true,
+            session_resume: true,
+            tools_control: true,
+            streaming: true,
+            mcp: false,
+        }
+    }
+
+    pub fn pi() -> Self {
+        Self {
+            reasoning_effort: false,
+            collaboration_mode: false,
             image_input: true,
             session_resume: true,
             tools_control: true,

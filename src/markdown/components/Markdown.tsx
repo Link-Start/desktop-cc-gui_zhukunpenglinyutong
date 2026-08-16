@@ -86,6 +86,7 @@ import {
   PreBlock,
   type PreProps,
 } from "./MarkdownBlocks";
+import { MarkdownFileLink } from "./MarkdownFileLink";
 
 type MarkdownProps = {
   value: string;
@@ -111,6 +112,7 @@ type MarkdownProps = {
   progressiveRevealChunkChars?: number;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
+  onOpenHtmlInBrowser?: (path: string) => void;
   onRenderedValueChange?: (value: string) => void;
   onOutlineReady?: (outline: MarkdownOutlineEntry[]) => void;
 };
@@ -147,6 +149,7 @@ function areMarkdownPropsEqual(prev: MarkdownProps, next: MarkdownProps) {
     prev.progressiveRevealChunkChars === next.progressiveRevealChunkChars &&
     prev.onOpenFileLink === next.onOpenFileLink &&
     prev.onOpenFileLinkMenu === next.onOpenFileLinkMenu &&
+    prev.onOpenHtmlInBrowser === next.onOpenHtmlInBrowser &&
     prev.onRenderedValueChange === next.onRenderedValueChange &&
     prev.onOutlineReady === next.onOutlineReady
   );
@@ -169,6 +172,7 @@ export const Markdown = memo(function Markdown({
   progressiveRevealChunkChars = PROGRESSIVE_REVEAL_CHUNK_CHARS,
   onOpenFileLink,
   onOpenFileLinkMenu,
+  onOpenHtmlInBrowser,
   onRenderedValueChange,
   onOutlineReady,
 }: MarkdownProps) {
@@ -283,6 +287,8 @@ export const Markdown = memo(function Markdown({
   onOpenFileLinkRef.current = onOpenFileLink;
   const onOpenFileLinkMenuRef = useRef(onOpenFileLinkMenu);
   onOpenFileLinkMenuRef.current = onOpenFileLinkMenu;
+  const onOpenHtmlInBrowserRef = useRef(onOpenHtmlInBrowser);
+  onOpenHtmlInBrowserRef.current = onOpenHtmlInBrowser;
 
   const handleFileLinkClick = useCallback((event: React.MouseEvent, path: string) => {
     event.preventDefault();
@@ -308,27 +314,29 @@ export const Markdown = memo(function Markdown({
         if (isFileLinkUrl(url)) {
           const path = decodeFileLink(url);
           return (
-            <a
+            <MarkdownFileLink
               href={href}
-              onClick={(event) => handleFileLinkClick(event, path)}
-              onContextMenu={(event) => handleFileLinkContextMenu(event, path)}
+              path={path}
+              onOpen={handleFileLinkClick}
+              onOpenMenu={handleFileLinkContextMenu}
+              onOpenHtmlInBrowser={onOpenHtmlInBrowserRef.current}
             >
               {children}
-            </a>
+            </MarkdownFileLink>
           );
         }
         const localFilePath = resolveLocalFileHref(url);
         if (localFilePath) {
           return (
-            <a
+            <MarkdownFileLink
               href={href}
-              onClick={(event) => handleFileLinkClick(event, localFilePath)}
-              onContextMenu={(event) =>
-                handleFileLinkContextMenu(event, localFilePath)
-              }
+              path={localFilePath}
+              onOpen={handleFileLinkClick}
+              onOpenMenu={handleFileLinkContextMenu}
+              onOpenHtmlInBrowser={onOpenHtmlInBrowserRef.current}
             >
               {children}
-            </a>
+            </MarkdownFileLink>
           );
         }
         const isExternal =
@@ -363,13 +371,15 @@ export const Markdown = memo(function Markdown({
         }
         const href = toFileLink(text);
         return (
-          <a
+          <MarkdownFileLink
             href={href}
-            onClick={(event) => handleFileLinkClick(event, text)}
-            onContextMenu={(event) => handleFileLinkContextMenu(event, text)}
+            path={text}
+            onOpen={handleFileLinkClick}
+            onOpenMenu={handleFileLinkContextMenu}
+            onOpenHtmlInBrowser={onOpenHtmlInBrowserRef.current}
           >
             <code>{children}</code>
-          </a>
+          </MarkdownFileLink>
         );
       },
       img: ({ src, alt, ...props }) => {
@@ -446,6 +456,7 @@ export const Markdown = memo(function Markdown({
     codeBlockCopyUseModifier,
     onOpenFileLink,
     onOpenFileLinkMenu,
+    onOpenHtmlInBrowser,
     shouldDeferMarkdownHeavyIslands,
     workspaceId,
   ]);
@@ -568,25 +579,29 @@ export const Markdown = memo(function Markdown({
       if (isFileLinkUrl(safeHref)) {
         const path = decodeFileLink(safeHref);
         return (
-          <a
+          <MarkdownFileLink
             href={safeHref}
-            onClick={(event) => handleFileLinkClick(event, path)}
-            onContextMenu={(event) => handleFileLinkContextMenu(event, path)}
+            path={path}
+            onOpen={handleFileLinkClick}
+            onOpenMenu={handleFileLinkContextMenu}
+            onOpenHtmlInBrowser={onOpenHtmlInBrowser}
           >
             {children}
-          </a>
+          </MarkdownFileLink>
         );
       }
       const localFilePath = resolveLocalFileHref(safeHref);
       if (localFilePath) {
         return (
-          <a
+          <MarkdownFileLink
             href={safeHref}
-            onClick={(event) => handleFileLinkClick(event, localFilePath)}
-            onContextMenu={(event) => handleFileLinkContextMenu(event, localFilePath)}
+            path={localFilePath}
+            onOpen={handleFileLinkClick}
+            onOpenMenu={handleFileLinkContextMenu}
+            onOpenHtmlInBrowser={onOpenHtmlInBrowser}
           >
             {children}
-          </a>
+          </MarkdownFileLink>
         );
       }
       const isExternal =
@@ -609,7 +624,7 @@ export const Markdown = memo(function Markdown({
         </a>
       );
     },
-    [handleFileLinkClick, handleFileLinkContextMenu, urlTransform],
+    [handleFileLinkClick, handleFileLinkContextMenu, onOpenHtmlInBrowser, urlTransform],
   );
 
   const renderMarkdownContent = useCallback((nextContent: string) => {

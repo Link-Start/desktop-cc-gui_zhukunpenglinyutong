@@ -1298,6 +1298,7 @@ pub(crate) async fn add_workspace(
         None,
         None,
         None,
+        None,
     )
     .await;
 
@@ -1329,7 +1330,7 @@ pub(crate) async fn add_workspace(
             // Gemini follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Gemini, path, codex_bin, &state).await
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             // Kimi follows local CLI session model (no persistent daemon session).
             add_workspace_for_cli_engine(EngineType::Kimi, path, codex_bin, &state).await
         }
@@ -1364,7 +1365,7 @@ async fn add_workspace_for_cli_engine(
         EngineType::Claude => "claude",
         EngineType::Gemini => "gemini",
         EngineType::OpenCode => "opencode",
-        EngineType::Kimi => "kimi",
+        EngineType::Kimi | EngineType::Pi => "kimi",
         EngineType::Grok => "grok",
         EngineType::Dsh => "dsh",
         _ => return Err(format!("Unsupported CLI engine: {:?}", engine_type)),
@@ -1398,7 +1399,7 @@ async fn add_workspace_for_cli_engine(
                 .await
                 .installed
         }
-        EngineType::Kimi => {
+        EngineType::Kimi | EngineType::Pi => {
             let kimi_bin = {
                 let settings = state.app_settings.lock().await;
                 settings.kimi_bin.clone()
@@ -2789,7 +2790,8 @@ $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
 [Convert]::ToBase64String($ms.ToArray())
 "#
     );
-    let output = std::process::Command::new("powershell")
+    // std_command 携带 CREATE_NO_WINDOW：避免每次图标提取闪现控制台窗口。
+    let output = crate::utils::std_command("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -3142,7 +3144,8 @@ fn command_resolvable_on_path(name: &str) -> bool {
     }
     #[cfg(windows)]
     {
-        std::process::Command::new("where")
+        // std_command 携带 CREATE_NO_WINDOW：避免打开方式探测闪现控制台窗口。
+        crate::utils::std_command("where")
             .arg(name)
             .stdin(Stdio::null())
             .stdout(Stdio::null())

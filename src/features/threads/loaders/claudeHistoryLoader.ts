@@ -27,8 +27,11 @@ type ClaudeHistoryLoaderOptions = {
   loadClaudeSession: (
     workspacePath: string,
     sessionId: string,
+    options?: { limit?: number | null; before?: string | null },
   ) => Promise<unknown>;
 };
+
+export const CLAUDE_UI_HISTORY_WINDOW = 80;
 
 type MessageItemWithTurn = Extract<ConversationItem, { kind: "message" }> & {
   role: "assistant";
@@ -2390,7 +2393,9 @@ export function createClaudeHistoryLoader({
           },
         });
       }
-      const result = await loadClaudeSession(workspacePath, sessionId);
+      const result = await loadClaudeSession(workspacePath, sessionId, {
+        limit: CLAUDE_UI_HISTORY_WINDOW,
+      });
       const record = result as { messages?: unknown };
       const messagesData = record.messages ?? result;
       const parsedItems = parseClaudeHistoryMessagesWithShadowRecovery({

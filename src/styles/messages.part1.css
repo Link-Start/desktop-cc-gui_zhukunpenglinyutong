@@ -914,24 +914,25 @@
 }
 
 .browser-context-summary-card {
-  --browser-context-summary-accent: var(--accent-blue, #2563eb);
-  --browser-context-summary-accent-rgb: 37 99 235;
-  --browser-context-summary-ink: var(--text-primary, #111827);
-  --browser-context-summary-muted: var(--text-muted, #4b5563);
-  --browser-context-summary-soft: color-mix(in srgb, var(--browser-context-summary-ink) 84%, transparent);
-  max-width: 860px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--browser-context-summary-accent) 44%, var(--border-subtle));
-  border-radius: 12px;
-  background:
-    linear-gradient(135deg, rgb(var(--browser-context-summary-accent-rgb) / 0.11), transparent 50%),
-    var(--surface-card);
-  color: var(--browser-context-summary-ink);
+  display: block;
+  align-self: stretch;
+  justify-self: stretch;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  margin: 4px 0 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  box-sizing: border-box;
 }
 
-.browser-context-summary-card.is-expired {
-  --browser-context-summary-accent: #c2410c;
-  --browser-context-summary-accent-rgb: 194 65 12;
+.browser-context-summary-card.is-expired,
+.browser-context-summary-card.is-degraded,
+.browser-context-summary-card.is-unavailable {
+  color: inherit;
 }
 
 .browser-context-summary-card.is-degraded {

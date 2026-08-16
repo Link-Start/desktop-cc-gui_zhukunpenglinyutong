@@ -153,7 +153,7 @@ function extractThreadProviderMetadata(thread: Record<string, unknown>) {
   };
 }
 
-type PendingNativeEngine = "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh";
+type PendingNativeEngine = "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
 
 function uniquePendingEngine(
   pendingByEngine: Record<PendingNativeEngine, string | null>,
@@ -215,11 +215,11 @@ type UseThreadTurnEventsOptions = {
   ) => Promise<void>;
   resolvePendingThreadForSession?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh",
   ) => string | null;
   resolvePendingThreadForTurn?: (
     workspaceId: string,
-    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "dsh",
+    engine: "claude" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh",
     turnId: string | null | undefined,
   ) => string | null;
   getActiveTurnIdForThread?: (threadId: string) => string | null;
@@ -1161,6 +1161,7 @@ export function useThreadTurnEvents({
         grok: resolvePendingThreadForSession?.(workspaceId, "grok") ?? null,
         kimi: resolvePendingThreadForSession?.(workspaceId, "kimi") ?? null,
         claude: resolvePendingThreadForSession?.(workspaceId, "claude") ?? null,
+        pi: resolvePendingThreadForSession?.(workspaceId, "pi") ?? null,
         dsh: resolvePendingThreadForSession?.(workspaceId, "dsh") ?? null,
       };
       const pendingOpenCode = pendingByEngine.opencode;

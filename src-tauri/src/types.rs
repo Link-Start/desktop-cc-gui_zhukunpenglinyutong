@@ -924,6 +924,8 @@ pub(crate) struct AppSettings {
     pub(crate) claude_bin: Option<String>,
     #[serde(default, rename = "kimiBin")]
     pub(crate) kimi_bin: Option<String>,
+    #[serde(default, rename = "piBin")]
+    pub(crate) pi_bin: Option<String>,
     #[serde(default, rename = "dshBin")]
     pub(crate) dsh_bin: Option<String>,
     #[serde(default, rename = "dshHost")]
@@ -1932,6 +1934,7 @@ impl Default for AppSettings {
             codex_bin: None,
             claude_bin: None,
             kimi_bin: None,
+            pi_bin: None,
             dsh_bin: None,
             dsh_host: None,
             dsh_port: None,

@@ -74,6 +74,7 @@ const NEW_SESSION_ENGINE_ACTION_IDS: Readonly<Record<string, EngineType>> = {
   "new-session-gemini": "gemini",
   "new-session-kimi": "kimi",
   "new-session-grok": "grok",
+  "new-session-pi": "pi",
   "new-session-dsh": "dsh",
 };
 
@@ -198,6 +199,7 @@ export type WorkspaceMenuIconKind =
   | "engine-gemini"
   | "engine-kimi"
   | "engine-grok"
+  | "engine-pi"
   | "engine-dsh"
   | "new-shared"
   | "alias"
@@ -1516,6 +1518,7 @@ export function useSidebarMenus({
         opencode: t("workspace.engineOpenCode"),
         kimi: t("workspace.engineKimi"),
         grok: t("workspace.engineGrok"),
+        pi: t("workspace.enginePi"),
       };
       // Shared CLI 子引擎同样受 CLI 配置管理控制。
       const sharedEngineEntries = (
@@ -1525,6 +1528,7 @@ export function useSidebarMenus({
           ["opencode", "engine-opencode"],
           ["kimi", "engine-kimi"],
           ["grok", "engine-grok"],
+          ["pi", "engine-pi"],
         ] as const
       ).filter(([engine]) => isEngineSessionEntryVisible(engine));
       const actions = [
@@ -1738,6 +1742,16 @@ export function useSidebarMenus({
               );
             },
           })),
+        },
+        {
+          id: "new-session-pi",
+          label: t("workspace.enginePi"),
+          iconKind: "engine-pi",
+          ...resolveEngineActionMeta(workspace, "pi"),
+          onSelect: async () => {
+            const threadId = await runAddAgent("pi");
+            await handleCreatedSession(threadId);
+          },
         },
         {
           id: "new-session-grok",

@@ -30,6 +30,8 @@ export function loadDiffStyles() {
     () => import("./diff.css"),
     () => import("./diff-viewer.css"),
     () => import("./file-view-panel.css"),
+    () => import("./editable-diff-compare-nav.css"),
+    () => import("./editable-diff-review-shell.css"),
   ]);
 }
 
@@ -55,6 +57,7 @@ export function loadIntentCanvasStyles() {
 export function loadSettingsStyles() {
   return loadStyles([
     () => import("./settings.css"),
+    () => import("./settings.vendor-pi-auth.css"),
   ]);
 }
 
@@ -128,6 +131,8 @@ export function loadExtensionsStyles() {
 export function loadBrowserAgentStyles() {
   return loadStyles([
     () => import("./browser-agent-window.css"),
+    () => import("./browser-agent-dock.css"),
+    () => import("./browser-agent-excerpt.css"),
   ]);
 }
 

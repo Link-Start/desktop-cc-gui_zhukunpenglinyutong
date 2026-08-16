@@ -194,6 +194,7 @@ export const MessageRow = memo(function MessageRow({
   userActionNode = null,
   codeBlockCopyUseModifier,
   onOpenFileLink,
+  onOpenHtmlInBrowser,
   onOpenFileLinkMenu,
   streamMitigationProfile = null,
   onAssistantVisibleTextRender,
@@ -768,6 +769,7 @@ export const MessageRow = memo(function MessageRow({
               streamingMarkdownComplexity,
             )}
             onOpenFileLink={onOpenFileLink}
+            onOpenHtmlInBrowser={onOpenHtmlInBrowser}
             onOpenFileLinkMenu={onOpenFileLinkMenu}
             liveRenderMode={useLightweightStreamingMarkdown ? "lightweight" : "full"}
             progressiveReveal={
@@ -932,6 +934,7 @@ export const MessageRow = memo(function MessageRow({
                   codeBlockStyle="message"
                   codeBlockCopyUseModifier={codeBlockCopyUseModifier}
                   onOpenFileLink={onOpenFileLink}
+                  onOpenHtmlInBrowser={onOpenHtmlInBrowser}
                   onOpenFileLinkMenu={onOpenFileLinkMenu}
                 />
               )}
@@ -1013,6 +1016,7 @@ export const MessageRow = memo(function MessageRow({
                     codeBlockStyle="message"
                     codeBlockCopyUseModifier={codeBlockCopyUseModifier}
                     onOpenFileLink={onOpenFileLink}
+                    onOpenHtmlInBrowser={onOpenHtmlInBrowser}
                     onOpenFileLinkMenu={onOpenFileLinkMenu}
                   />
                 )}
@@ -1323,6 +1327,7 @@ export const MessageRow = memo(function MessageRow({
                   codeBlockStyle="message"
                   codeBlockCopyUseModifier={codeBlockCopyUseModifier}
                   onOpenFileLink={onOpenFileLink}
+                  onOpenHtmlInBrowser={onOpenHtmlInBrowser}
                   onOpenFileLinkMenu={onOpenFileLinkMenu}
                 />
               )}

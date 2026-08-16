@@ -6,8 +6,19 @@ import type {
   BrowserSnapshotBudget,
   BrowserObservationState,
   BrowserUserAnnotation,
+  BrowserSelectionLocate,
 } from "../types";
 import type { TaskRunBrowserEvidenceRef } from "../types";
+
+export type BrowserExcerptKind =
+  | "paragraph"
+  | "heading"
+  | "button"
+  | "link"
+  | "list"
+  | "image"
+  | "snapshot"
+  | "excerpt";
 
 export type BrowserEvidenceSectionState = BrowserObservationState | "empty";
 
@@ -24,6 +35,8 @@ export type BrowserEvidenceViewModelSection = {
 export type BrowserSelectedElementPreview = {
   annotationId: string;
   title: string;
+  body: string;
+  kind: BrowserExcerptKind;
   elementName: string;
   role: string | null;
   meta: string;
@@ -32,6 +45,7 @@ export type BrowserSelectedElementPreview = {
   hrefOrigin: string | null;
   sourceTitle: string;
   sourceUrl: string;
+  locate: BrowserSelectionLocate | null;
   copySafeText: string;
 };
 
@@ -133,6 +147,18 @@ function buildBrowserSelectedElementPreviewFromAnnotation(
   const size = formatRegionSize(annotation.region);
   const boundsLabel = formatRegionBounds(annotation.region);
   const title = selectedElementTitle(annotation);
+  const body = annotation.nearbyText?.trim() || title;
+  const kind: BrowserExcerptKind =
+    annotation.nearestElement?.role === "heading"
+      ? "heading"
+      : annotation.nearestElement?.role === "button"
+        ? "button"
+        : annotation.nearestElement?.role === "link"
+          ? "link"
+          : annotation.anchor === "element"
+            ? "excerpt"
+            : "snapshot";
+  const locate = annotation.locate ?? null;
   const meta = [
     elementName,
     role ? `role=${role}` : null,
@@ -157,6 +183,8 @@ function buildBrowserSelectedElementPreviewFromAnnotation(
   return {
     annotationId: annotation.annotationId,
     title,
+    body,
+    kind,
     elementName,
     role,
     meta,
@@ -165,6 +193,7 @@ function buildBrowserSelectedElementPreviewFromAnnotation(
     hrefOrigin: annotation.nearestElement?.hrefOrigin ?? null,
     sourceTitle,
     sourceUrl,
+    locate,
     copySafeText,
   };
 }

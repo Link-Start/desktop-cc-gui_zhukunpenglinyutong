@@ -384,6 +384,22 @@ describe("Markdown file links", () => {
     expect(container.textContent ?? "").toContain("bad");
   });
 
+  it("shows a built-in browser action for html file links", () => {
+    const onOpenHtmlInBrowser = vi.fn();
+    render(
+      <Markdown
+        value={"预览：[index.html](/repo/docs/index.html)"}
+        onOpenFileLink={vi.fn()}
+        onOpenHtmlInBrowser={onOpenHtmlInBrowser}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /files\.openInBrowser|在浏览器打开/i }),
+    );
+    expect(onOpenHtmlInBrowser).toHaveBeenCalledWith("/repo/docs/index.html");
+  });
+
   it("routes lightweight live markdown file links through the file opener callback", () => {
     const onOpenFileLink = vi.fn();
     render(

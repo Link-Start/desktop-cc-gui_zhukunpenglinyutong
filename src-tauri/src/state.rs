@@ -112,6 +112,35 @@ impl AppState {
 
         self.engine_manager
             .set_engine_config(
+                EngineType::Kimi,
+                EngineConfig {
+                    bin_path: settings.kimi_bin.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
+        self.engine_manager
+            .set_engine_config(
+                EngineType::Grok,
+                EngineConfig {
+                    bin_path: settings.grok_bin.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        self.engine_manager
+            .set_engine_config(
+                EngineType::Pi,
+                EngineConfig {
+                    bin_path: settings.pi_bin.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
+
+        self.engine_manager
+            .set_engine_config(
                 EngineType::Dsh,
                 EngineConfig {
                     bin_path: settings.dsh_bin.clone(),

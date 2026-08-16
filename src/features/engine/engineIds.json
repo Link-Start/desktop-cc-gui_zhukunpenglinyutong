@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "engineIds": ["claude", "codex", "gemini", "grok", "kimi", "opencode", "dsh"],
+  "engineIds": ["claude", "codex", "gemini", "grok", "kimi", "opencode", "pi", "dsh"],
   "engines": [
     {
       "id": "claude",
@@ -55,6 +55,15 @@
       "protocolFamily": "stream-json-cli",
       "executionModel": "one-shot",
       "capabilityProfile": "opencode"
+    },
+    {
+      "id": "pi",
+      "displayName": "PI CLI",
+      "shortName": "PI",
+      "adapterId": "builtin.pi",
+      "protocolFamily": "stream-json-cli",
+      "executionModel": "one-shot",
+      "capabilityProfile": "pi"
     },
     {
       "id": "dsh",

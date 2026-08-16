@@ -93,6 +93,7 @@ export type CodexUnifiedExecExternalStatus = {
 export type AppSettings = {
   claudeBin: string | null;
   kimiBin: string | null;
+  piBin: string | null;
   grokBin: string | null;
   opencodeBin: string | null;
   dshBin: string | null;

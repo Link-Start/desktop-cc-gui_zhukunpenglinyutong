@@ -291,10 +291,16 @@ export async function listClaudeSessions(
 /**
  * Load full message history for a specific Claude Code session.
  */
-export async function loadClaudeSession(workspacePath: string, sessionId: string): Promise<Record<string, unknown> | null> {
+export async function loadClaudeSession(
+  workspacePath: string,
+  sessionId: string,
+  options?: { limit?: number | null; before?: string | null },
+): Promise<Record<string, unknown> | null> {
   return invoke<Record<string, unknown> | null>("load_claude_session", {
     workspacePath,
     sessionId,
+    limit: options?.limit ?? null,
+    before: options?.before ?? null,
   });
 }
 
@@ -402,6 +408,28 @@ export async function listKimiSessions(workspacePath: string, limit?: number | n
  */
 export async function loadKimiSession(workspacePath: string, sessionId: string): Promise<Record<string, unknown> | null> {
   return invoke<Record<string, unknown> | null>("load_kimi_session", {
+    workspacePath,
+    sessionId,
+  });
+}
+
+export async function listPiSessions(
+  workspacePath: string,
+  limit?: number | null,
+): Promise<Record<string, unknown> | unknown[] | null> {
+  return traceStartupInvoke("list_pi_sessions", "global", () =>
+    invoke<Record<string, unknown> | unknown[] | null>("list_pi_sessions", {
+      workspacePath,
+      limit: limit ?? null,
+    }),
+  );
+}
+
+export async function loadPiSession(
+  workspacePath: string,
+  sessionId: string,
+): Promise<Record<string, unknown> | null> {
+  return invoke<Record<string, unknown> | null>("load_pi_session", {
     workspacePath,
     sessionId,
   });

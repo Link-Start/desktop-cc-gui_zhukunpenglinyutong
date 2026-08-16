@@ -158,6 +158,8 @@ export interface WorkspaceSessionCatalogQuery {
    * Session Management omits this and keeps the full inventory parse.
    */
   scanQuality?: WorkspaceSessionScanQuality | null;
+  /** Explicit `exhaustive` only. Keyword/folder/archived must not imply a full scan. */
+  scanMode?: "bounded" | "exhaustive" | null;
 }
 
 export interface WorkspaceSessionCatalogPage {

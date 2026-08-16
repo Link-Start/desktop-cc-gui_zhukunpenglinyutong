@@ -51,6 +51,8 @@ function resolveEngineLabel(engine: EngineType): string {
       return "Gemini CLI";
     case "grok":
       return "Grok CLI";
+    case "pi":
+      return "PI CLI";
     case "opencode":
       return "OpenCode";
     case "dsh":

@@ -476,6 +476,7 @@ pub(crate) fn is_pending_shared_binding_thread_id(engine: EngineType, thread_id:
         EngineType::Claude => normalized.starts_with("claude-pending-shared-"),
         EngineType::Codex => normalized.starts_with("codex-pending-shared-"),
         EngineType::Kimi => normalized.starts_with("kimi-pending-shared-"),
+        EngineType::Pi => normalized.starts_with("pi-pending-shared-"),
         EngineType::Grok => normalized.starts_with("grok-pending-shared-"),
         EngineType::OpenCode => normalized.starts_with("opencode-pending-shared-"),
         EngineType::Gemini | EngineType::Dsh => false,
@@ -491,6 +492,7 @@ pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_
     let raw = match engine {
         EngineType::Claude
         | EngineType::Kimi
+        | EngineType::Pi
         | EngineType::Grok
         | EngineType::OpenCode
         | EngineType::Dsh => {
@@ -507,7 +509,11 @@ pub(crate) fn binding_uses_established_native_thread(engine: EngineType, thread_
     }
     match engine {
         EngineType::Claude => normalized.contains(':'),
-        EngineType::Codex | EngineType::Kimi | EngineType::Grok | EngineType::OpenCode => true,
+        EngineType::Codex
+        | EngineType::Kimi
+        | EngineType::Pi
+        | EngineType::Grok
+        | EngineType::OpenCode => true,
         EngineType::Gemini | EngineType::Dsh => false,
     }
 }
@@ -517,6 +523,7 @@ pub(crate) fn engine_binding_thread_id(engine: EngineType, seed: &str) -> String
         EngineType::Claude => format!("claude-pending-shared-{seed}"),
         EngineType::Codex => format!("codex-pending-shared-{seed}"),
         EngineType::Kimi => format!("kimi-pending-shared-{seed}"),
+        EngineType::Pi => format!("pi-pending-shared-{seed}"),
         EngineType::Grok => format!("grok-pending-shared-{seed}"),
         EngineType::OpenCode => format!("opencode-pending-shared-{seed}"),
         EngineType::Gemini => format!("gemini-pending-shared-{seed}"),
@@ -1790,6 +1797,7 @@ pub async fn send_shared_session_message(
         | EngineType::OpenCode
         | EngineType::Grok
         | EngineType::Kimi
+        | EngineType::Pi
         | EngineType::Dsh => {
             return Err(format!(
                 "Unsupported shared session engine: {}",

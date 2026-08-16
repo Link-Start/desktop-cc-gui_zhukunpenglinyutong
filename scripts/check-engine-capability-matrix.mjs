@@ -25,6 +25,7 @@ const ENGINE_VARIANTS = {
   grok: "Grok",
   opencode: "OpenCode",
   kimi: "Kimi",
+  pi: "Pi",
   dsh: "Dsh",
 };
 const VALID_STATE = new Set(["supported", "compat-input", "unsupported", "unknown"]);

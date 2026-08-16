@@ -1667,6 +1667,31 @@ const settings = {
     grokPlaceholder: "grok",
     opencodeDescription:
       "Configure OpenCode CLI providers and local settings used by ccgui.",
+    piDescription: "Configure PI CLI auth and models. Credentials stay in ~/.pi.",
+    piCliLifecycleHint:
+      "Install or update the local PI CLI via npm package @earendil-works/pi-coding-agent. Auth and models stay in ~/.pi.",
+    piAuth: {
+      sectionTitle: "Provider authentication",
+      oauthTitle: "Subscriptions",
+      oauthHint: "OAuth sign-in; tokens auto-refresh and are stored in auth.json",
+      oauthDesc: {
+        claude: "Anthropic subscription · third-party usage is metered per token",
+        codex: "OpenAI subscription · requires ChatGPT Plus or Pro",
+        copilot: "Works with github.com and GitHub Enterprise Server",
+        xai: "Subscription auth · XAI_API_KEY also available",
+        openrouter: "PKCE sign-in mints a user-controlled API key",
+        radius: "Dynamic pi-messages gateway",
+      },
+      subscribed: "Authorized · auto-refresh",
+      notSubscribed: "Not authorized",
+      login: "Log in",
+      apiKeyTitle: "API Key",
+      apiKeyHint: "Written to ~/.pi/agent/auth.json · takes priority over env vars",
+      searchPlaceholder: "Filter providers…",
+      configured: "Configured",
+      notConfigured: "Not configured",
+      envActive: "Env var active",
+    },
     dshDescription:
       "DeepSeek Harness is a local Node host (dsh web). Configure models and API keys in the DSH Web UI, not in mossx.",
     defaultOpenCodePath: "Default OpenCode CLI path",

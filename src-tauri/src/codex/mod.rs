@@ -34,6 +34,7 @@ pub(crate) use self::doctor::{
     dsh_node_requirement_error, node_satisfies_dsh_requirement, run_claude_doctor_with_settings,
     run_codex_doctor_with_settings, run_dsh_doctor_with_settings, run_grok_doctor_with_settings,
     run_kimi_doctor_with_settings, run_opencode_doctor_with_settings,
+    run_pi_doctor_with_settings,
 };
 pub(crate) use self::home::{resolve_default_codex_home, resolve_workspace_codex_home};
 pub(crate) use self::installer::{
@@ -431,7 +432,8 @@ pub(crate) async fn spawn_workspace_session_with_launch_options(
         app_settings_snapshot.codex_auto_compaction_enabled,
     );
     let event_sink = build_event_sink(app_handle);
-    spawn_workspace_session_inner_with_settings(
+    // Box 到堆，避免 spawn 深链内联出超大栈帧（Windows 主线程默认仅 1MB）。
+    Box::pin(spawn_workspace_session_inner_with_settings(
         entry,
         default_codex_bin,
         codex_args,
@@ -443,7 +445,7 @@ pub(crate) async fn spawn_workspace_session_with_launch_options(
         launch_options,
         provider_runtime_key,
         app_settings_snapshot,
-    )
+    ))
     .await
 }
 
@@ -554,6 +556,15 @@ pub(crate) fn remote_opencode_doctor_request(
     )
 }
 
+pub(crate) fn remote_pi_doctor_request(pi_bin: Option<String>) -> (&'static str, Value) {
+    (
+        "pi_doctor",
+        json!({
+            "piBin": pi_bin.map(remote_backend::normalize_path_for_remote),
+        }),
+    )
+}
+
 pub(crate) fn remote_dsh_doctor_request(dsh_bin: Option<String>) -> (&'static str, Value) {
     (
         "dsh_doctor",
@@ -606,6 +617,21 @@ pub(crate) async fn kimi_doctor(
 
     let settings = state.app_settings.lock().await.clone();
     run_kimi_doctor_with_settings(kimi_bin, &settings).await
+}
+
+#[tauri::command]
+pub(crate) async fn pi_doctor(
+    pi_bin: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        let (method, params) = remote_pi_doctor_request(pi_bin);
+        return remote_backend::call_remote(&*state, app, method, params).await;
+    }
+
+    let settings = state.app_settings.lock().await.clone();
+    run_pi_doctor_with_settings(pi_bin, &settings).await
 }
 
 #[tauri::command]
@@ -2184,12 +2210,12 @@ pub(crate) async fn respond_to_server_request(
     }
 
     // Native control request keeps the existing request-id routing contract.
-    for session in state
+    let claude_sessions_for_workspace = state
         .engine_manager
         .claude_manager
         .sessions_for_workspace(&workspace_id)
-        .await
-    {
+        .await;
+    for session in &claude_sessions_for_workspace {
         if session.has_pending_user_input(&request_id) {
             return session.respond_to_user_input(request_id, result).await;
         }
@@ -2198,6 +2224,18 @@ pub(crate) async fn respond_to_server_request(
                 .respond_to_approval_request(request_id, result)
                 .await;
         }
+    }
+
+    // Late AskUserQuestion: no Claude session still has this ask-* pending.
+    // Falling through to Codex only yields "workspace not connected".
+    if let Some(ask_request_id) = expired_claude_ask_request_id(
+        &request_id,
+        !claude_sessions_for_workspace.is_empty(),
+        is_user_input_response,
+    ) {
+        return Err(format!(
+            "AskUserQuestion request {ask_request_id} already expired or was answered"
+        ));
     }
 
     let codex_runtime_key =
@@ -3060,6 +3098,22 @@ Task:\n{cleaned_prompt}"
         "title": title,
         "worktreeName": worktree_name
     }))
+}
+
+/// Late Claude AskUserQuestion answer. All three conditions are load-bearing:
+/// no Claude session → keep generic connectivity; approval must not match;
+/// only `ask-` ids (not `ccgui-plan-blocker:`).
+fn expired_claude_ask_request_id(
+    request_id: &Value,
+    has_claude_session: bool,
+    is_user_input_response: bool,
+) -> Option<&str> {
+    if !has_claude_session || !is_user_input_response {
+        return None;
+    }
+    request_id
+        .as_str()
+        .filter(|value| value.starts_with("ask-"))
 }
 
 #[cfg(test)]

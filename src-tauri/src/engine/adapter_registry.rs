@@ -207,6 +207,7 @@ impl EngineAdapterRegistry {
             EngineType::Grok,
             EngineType::Kimi,
             EngineType::OpenCode,
+            EngineType::Pi,
             EngineType::Dsh,
         ] {
             let protocol = BuiltinEngineProtocol::new(engine);
@@ -282,6 +283,7 @@ pub fn engine_id(engine: EngineType) -> &'static str {
         EngineType::Grok => "grok",
         EngineType::Kimi => "kimi",
         EngineType::OpenCode => "opencode",
+        EngineType::Pi => "pi",
         EngineType::Dsh => "dsh",
     }
 }

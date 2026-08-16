@@ -1,6 +1,10 @@
 import type { ConversationItem, RequestUserInputRequest } from "../../../../types";
 import type { PresentationProfile } from "../../../../conversation-presentation/presentationProfile";
-import { shouldHideToolItemForRender } from "../../utils/groupToolItems";
+import {
+  groupToolItems,
+  shouldHideToolItemForRender,
+  type GroupedEntry,
+} from "../../utils/groupToolItems";
 import type { MessagesEngine } from "../../utils/messagesRenderUtils";
 import {
   countRenderableCollapsedEntries,
@@ -62,6 +66,11 @@ export type ProcessPhaseCollapse = {
    * (first tool/reasoning/explore of the phase) so collapse stays at the top.
    */
   insertBeforeItemId: string;
+  /**
+   * Trailing live phase has no assistant prose: collapsed header sits
+   * immediately before this still-visible tail item.
+   */
+  collapsedAnchorItemId?: string;
   count: number;
   breakdown: ProcessPhaseBreakdown;
   durationMs: number | null;
@@ -437,10 +446,17 @@ function collectTurnProcessItemsForFinalAssistant(
   return phaseItems;
 }
 
+const TRAILING_PROCESS_COLLAPSE_THRESHOLD = 5;
+const TRAILING_PROCESS_VISIBLE_TAIL_COUNT = 3;
+
+function groupedEntryProcessItems(entry: GroupedEntry): ConversationItem[] {
+  return entry.kind === "item" ? [entry.item] : [...entry.items];
+}
+
 /**
  * Collapse the multi-step process of each user turn into a drawer above the
  * turn's final assistant prose. Trailing process without following text stays
- * fully expanded.
+ * expanded until it exceeds the rolling card window.
  *
  * Performance model (hard unmount):
  * - Live open process (no following prose yet): fully mounted.
@@ -527,6 +543,58 @@ export function resolveCollapsedTimelineItems(options: {
       expanded,
       hiddenItemIds,
     });
+  }
+
+  let trailingBoundaryIndex = -1;
+  for (let cursor = canvasItems.length - 1; cursor >= 0; cursor -= 1) {
+    const candidate = canvasItems[cursor];
+    if (!candidate) {
+      continue;
+    }
+    if (isUserMessageItem(candidate) || isAssistantMessageWithVisibleText(candidate)) {
+      trailingBoundaryIndex = cursor;
+      break;
+    }
+  }
+  const trailingProcessItems = canvasItems
+    .slice(trailingBoundaryIndex + 1)
+    .filter(isCollapsibleProcessItem);
+  const trailingEntries = groupToolItems(trailingProcessItems);
+  if (trailingEntries.length > TRAILING_PROCESS_COLLAPSE_THRESHOLD) {
+    const hiddenTrailingItems = trailingEntries
+      .slice(0, trailingEntries.length - TRAILING_PROCESS_VISIBLE_TAIL_COUNT)
+      .flatMap(groupedEntryProcessItems);
+    const firstVisibleTailEntry =
+      trailingEntries[trailingEntries.length - TRAILING_PROCESS_VISIBLE_TAIL_COUNT];
+    const firstVisibleTailItem = firstVisibleTailEntry
+      ? groupedEntryProcessItems(firstVisibleTailEntry)[0]
+      : undefined;
+    const trailingCount = countRenderableCollapsedEntries(
+      hiddenTrailingItems,
+      activeEngine,
+    );
+    const firstHiddenItem = hiddenTrailingItems[0];
+    if (firstHiddenItem && firstVisibleTailItem && trailingCount >= 1) {
+      const boundaryItem = canvasItems[trailingBoundaryIndex];
+      const phaseKey = `trailing:${boundaryItem?.id ?? "start"}`;
+      const trailingExpanded = expandedPhaseKeys.has(phaseKey);
+      if (!trailingExpanded) {
+        for (const hiddenItem of hiddenTrailingItems) {
+          unmountedItemIds.add(hiddenItem.id);
+        }
+      }
+      phases.push({
+        phaseKey,
+        assistantItemId: phaseKey,
+        insertBeforeItemId: firstHiddenItem.id,
+        collapsedAnchorItemId: firstVisibleTailItem.id,
+        count: trailingCount,
+        breakdown: resolvePhaseBreakdown(hiddenTrailingItems, activeEngine),
+        durationMs: resolvePhaseDurationMs(hiddenTrailingItems),
+        expanded: trailingExpanded,
+        hiddenItemIds: hiddenTrailingItems.map((hiddenItem) => hiddenItem.id),
+      });
+    }
   }
 
   if (phases.length === 0) {

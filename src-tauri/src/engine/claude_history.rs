@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 use tokio::fs;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 
@@ -1854,7 +1854,13 @@ pub struct ClaudeSessionLoadResult {
     pub messages: Vec<ClaudeSessionMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<ClaudeSessionUsage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_more: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
+
+const CLAUDE_WINDOW_TAIL_CHUNK: u64 = 256 * 1024;
 
 fn rewrite_session_id_fields(value: &mut Value, source_session_id: &str, forked_session_id: &str) {
     match value {
@@ -1938,9 +1944,26 @@ pub async fn load_claude_session_with_config(
     session_id: &str,
     config: Option<&EngineConfig>,
 ) -> Result<ClaudeSessionLoadResult, String> {
+    load_claude_session_with_config_window(workspace_path, session_id, config, None, None).await
+}
+
+pub async fn load_claude_session_with_config_window(
+    workspace_path: &Path,
+    session_id: &str,
+    config: Option<&EngineConfig>,
+    limit: Option<usize>,
+    before: Option<&str>,
+) -> Result<ClaudeSessionLoadResult, String> {
     let normalized_session_id = normalize_session_id(session_id)?;
     let base_dir = claude_projects_dir(config).ok_or("Cannot determine Claude home directory")?;
-    load_claude_session_from_base_dir(&base_dir, workspace_path, &normalized_session_id).await
+    load_claude_session_from_base_dir_window(
+        &base_dir,
+        workspace_path,
+        &normalized_session_id,
+        limit,
+        before,
+    )
+    .await
 }
 
 fn find_claude_session_file(
@@ -1973,16 +1996,119 @@ pub(crate) fn resolve_claude_session_file_with_config(
     find_claude_session_file(&base_dir, workspace_path, &normalized_session_id)
 }
 
+async fn read_claude_tail_window_bytes(
+    path: &Path,
+    end_exclusive: u64,
+) -> Result<(u64, Vec<u8>), String> {
+    let start = end_exclusive.saturating_sub(CLAUDE_WINDOW_TAIL_CHUNK);
+    let mut file = fs::File::open(path)
+        .await
+        .map_err(|error| format!("Failed to open session file: {}", error))?;
+    file.seek(std::io::SeekFrom::Start(start))
+        .await
+        .map_err(|error| format!("Failed to seek session file: {}", error))?;
+    let mut buf = vec![0u8; (end_exclusive.saturating_sub(start)) as usize];
+    let mut read = 0usize;
+    while read < buf.len() {
+        let n = file
+            .read(&mut buf[read..])
+            .await
+            .map_err(|error| format!("Failed to read session file: {}", error))?;
+        if n == 0 {
+            break;
+        }
+        read += n;
+    }
+    buf.truncate(read);
+    Ok((start, buf))
+}
+
+async fn load_claude_session_window_from_path(
+    path: &Path,
+    session_id: &str,
+    limit: usize,
+    before: Option<&str>,
+) -> Result<ClaudeSessionLoadResult, String> {
+    let file_len = fs::metadata(path)
+        .await
+        .map_err(|error| format!("Failed to stat session file: {}", error))?
+        .len();
+    let mut end = before
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|value| *value <= file_len)
+        .unwrap_or(file_len);
+    let mut assembled = Vec::new();
+    let mut window_start = end;
+    while end > 0 {
+        let (start, bytes) = read_claude_tail_window_bytes(path, end).await?;
+        window_start = start;
+        let mut chunk = bytes;
+        if start > 0 {
+            if let Some(newline) = chunk.iter().position(|byte| *byte == b'\n') {
+                chunk = chunk.split_off(newline + 1);
+                window_start = start + newline as u64 + 1;
+            }
+        }
+        assembled.splice(0..0, chunk);
+        if assembled.iter().filter(|byte| **byte == b'\n').count() >= limit.saturating_mul(4)
+            || start == 0
+        {
+            break;
+        }
+        end = start;
+    }
+    let has_more = window_start > 0;
+    let mut result = parse_claude_session_from_reader(
+        BufReader::new(std::io::Cursor::new(assembled)),
+        session_id,
+    )
+    .await?;
+    if result.messages.len() > limit {
+        let skip = result.messages.len() - limit;
+        result.messages.drain(0..skip);
+        result.has_more = Some(true);
+        result.next_cursor = Some(window_start.to_string());
+    } else {
+        result.has_more = Some(has_more);
+        result.next_cursor = if has_more {
+            Some(window_start.to_string())
+        } else {
+            None
+        };
+    }
+    Ok(result)
+}
+
+pub(crate) async fn load_claude_session_from_base_dir_window(
+    base_dir: &Path,
+    workspace_path: &Path,
+    session_id: &str,
+    limit: Option<usize>,
+    before: Option<&str>,
+) -> Result<ClaudeSessionLoadResult, String> {
+    let session_file = find_claude_session_file(base_dir, workspace_path, session_id)?;
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        return load_claude_session_window_from_path(&session_file, session_id, limit, before)
+            .await;
+    }
+    let file = fs::File::open(&session_file)
+        .await
+        .map_err(|e| format!("Failed to open session file: {}", e))?;
+    parse_claude_session_from_reader(BufReader::new(file), session_id).await
+}
+
 pub(crate) async fn load_claude_session_from_base_dir(
     base_dir: &Path,
     workspace_path: &Path,
     session_id: &str,
 ) -> Result<ClaudeSessionLoadResult, String> {
-    let session_file = find_claude_session_file(base_dir, workspace_path, session_id)?;
-    let file = fs::File::open(&session_file)
-        .await
-        .map_err(|e| format!("Failed to open session file: {}", e))?;
-    let reader = BufReader::new(file);
+    load_claude_session_from_base_dir_window(base_dir, workspace_path, session_id, None, None).await
+}
+
+async fn parse_claude_session_from_reader<R: tokio::io::AsyncRead + Unpin>(
+    reader: BufReader<R>,
+    session_id: &str,
+) -> Result<ClaudeSessionLoadResult, String> {
     let mut lines = reader.lines();
 
     let mut messages: Vec<ClaudeSessionMessage> = Vec::new();
@@ -2326,6 +2452,8 @@ pub(crate) async fn load_claude_session_from_base_dir(
     Ok(ClaudeSessionLoadResult {
         messages,
         usage: last_usage,
+        has_more: None,
+        next_cursor: None,
     })
 }
 

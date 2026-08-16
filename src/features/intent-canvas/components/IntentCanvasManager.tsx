@@ -13,7 +13,6 @@ import {
 import { useTranslation } from "react-i18next";
 import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle";
 import ArrowLeft from "lucide-react/dist/esm/icons/arrow-left";
-import Copy from "lucide-react/dist/esm/icons/copy";
 import FileSearch from "lucide-react/dist/esm/icons/file-search";
 import FileText from "lucide-react/dist/esm/icons/file-text";
 import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
@@ -21,15 +20,13 @@ import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import LinkIcon from "lucide-react/dist/esm/icons/link";
 import LoaderCircle from "lucide-react/dist/esm/icons/loader-circle";
 import MessageSquareText from "lucide-react/dist/esm/icons/message-square-text";
-import Plus from "lucide-react/dist/esm/icons/plus";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Save from "lucide-react/dist/esm/icons/save";
-import Search from "lucide-react/dist/esm/icons/search";
-import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 
 import { cn } from "../../../lib/utils";
 import type { WorkspaceInfo } from "../../../types";
-import { ThreadDeleteConfirmBubble } from "../../threads/components/ThreadDeleteConfirmBubble";
+import { IntentCanvasHome } from "./manager-home/IntentCanvasHome";
+import { groupCanvasEntriesByEra, type CanvasEra } from "../utils/eraGrouping";
 import type {
   CanvasEvidenceRef,
   CanvasSemanticEdge,
@@ -1291,6 +1288,16 @@ export function IntentCanvasManager({
     });
   }, [entries, searchQuery]);
 
+  const [renderNow] = useState(() => new Date());
+  const canvasEras = useMemo(
+    () => groupCanvasEntriesByEra(filteredEntries, renderNow),
+    [filteredEntries, renderNow],
+  );
+  const selectEraEntries = useCallback((era: CanvasEra) => {
+    setSelectedCanvasIds(new Set(era.entries.map((entry) => entry.id)));
+    setIsBulkDeletePromptOpen(false);
+  }, []);
+
   const selectedEntries = useMemo(
     () => entries.filter((entry) => selectedCanvasIds.has(entry.id)),
     [entries, selectedCanvasIds],
@@ -1390,183 +1397,41 @@ export function IntentCanvasManager({
   }
 
   return (
-    <section className="intent-canvas-manager" aria-label={t("intentCanvas.manager.ariaLabel")}> 
-      <header className="intent-canvas-manager-hero">
-        <div className="intent-canvas-manager-identity">
-          <h2>{t("intentCanvas.manager.title")}</h2>
-          <p>{t("intentCanvas.manager.subtitle")}</p>
-        </div>
-        <label className="intent-canvas-search">
-          <Search aria-hidden />
-          <input
-            value={searchQuery}
-            placeholder={t("intentCanvas.manager.searchPlaceholder")}
-            onChange={(event) => setSearchQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div className="intent-canvas-manager-actions">
-          <span className="intent-canvas-manager-count">
-            <FileText aria-hidden />
-            {t("intentCanvas.manager.count", { count: filteredEntries.length })}
-          </span>
-          <button
-            type="button"
-            onClick={toggleFilteredCanvasSelection}
-            disabled={filteredEntries.length === 0 || status === "loading"}
-          >
-            {allFilteredEntriesSelected
-              ? t("intentCanvas.manager.clearSelection")
-              : t("intentCanvas.manager.selectAll")}
-          </button>
-          <button type="button" onClick={() => void refreshIndex()} disabled={status === "loading"}>
-            <RefreshCw aria-hidden className={status === "loading" ? "is-spinning" : undefined} />
-            {t("intentCanvas.manager.refresh")}
-          </button>
-          {onOpenProjectMap ? (
-            <button type="button" onClick={onOpenProjectMap}>
-              <GitBranch aria-hidden />
-              {t("intentCanvas.manager.projectMap")}
-            </button>
-          ) : null}
-          <button type="button" className="is-primary" onClick={() => void createCanvas()}>
-            <Plus aria-hidden />
-            {t("intentCanvas.manager.newCanvas")}
-          </button>
-        </div>
-      </header>
-
-      {warnings.map((warning) => (
-        <p key={warning} className="intent-canvas-warning" role="status">{warning}</p>
-      ))}
-      {errorMessage ? <p className="intent-canvas-error" role="alert">{errorMessage}</p> : null}
-      {selectedEntries.length > 0 ? (
-        <div className="intent-canvas-bulk-toolbar" role="status">
-          <span>{t("intentCanvas.manager.selectedCount", { count: selectedEntries.length })}</span>
-          <div className="intent-canvas-bulk-actions">
-            <button type="button" onClick={clearCanvasSelection} disabled={isBulkDeleting}>
-              {t("intentCanvas.manager.clearSelection")}
-            </button>
-            <button
-              type="button"
-              className="is-danger"
-              onClick={() => {
-                setActionPrompt(null);
-                setIsBulkDeletePromptOpen(true);
-              }}
-              disabled={isBulkDeleting}
-            >
-              <Trash2 aria-hidden />
-              {t("intentCanvas.manager.deleteSelected", { count: selectedEntries.length })}
-            </button>
-          </div>
-          {isBulkDeletePromptOpen ? (
-            <div className="intent-canvas-action-popover-shell is-bulk">
-              <ThreadDeleteConfirmBubble
-                threadName={t("intentCanvas.manager.selectedCount", { count: selectedEntries.length })}
-                title={t("intentCanvas.manager.bulkDelete")}
-                message={t("intentCanvas.manager.bulkDeleteConfirm", { count: selectedEntries.length })}
-                hint={t("intentCanvas.manager.bulkDeleteHint")}
-                confirmLabel={t("intentCanvas.manager.deleteSelected", { count: selectedEntries.length })}
-                isDeleting={isBulkDeleting}
-                onCancel={() => setIsBulkDeletePromptOpen(false)}
-                onConfirm={() => void confirmBulkDelete()}
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {status === "loading" && entries.length === 0 ? (
-        <div className="intent-canvas-loading"><LoaderCircle aria-hidden className="is-spinning" /> {t("intentCanvas.loading")}</div>
-      ) : filteredEntries.length === 0 ? (
-        <div className="intent-canvas-empty-state">
-          <FileText aria-hidden />
-          <h3>{t("intentCanvas.manager.emptyTitle")}</h3>
-          <p>{t("intentCanvas.manager.emptyBody")}</p>
-          <button type="button" className="is-primary" onClick={() => void createCanvas()}>
-            <Plus aria-hidden />
-            {t("intentCanvas.manager.newCanvas")}
-          </button>
-        </div>
-      ) : (
-        <div className="intent-canvas-grid" role="list">
-          {filteredEntries.map((entry) => (
-            <article
-              key={entry.id}
-              className={cn("intent-canvas-card-tile", selectedCanvasIds.has(entry.id) && "is-selected")}
-              role="listitem"
-            >
-              <label className="intent-canvas-card-selection">
-                <input
-                  type="checkbox"
-                  checked={selectedCanvasIds.has(entry.id)}
-                  onChange={() => toggleCanvasSelection(entry.id)}
-                  aria-label={t("intentCanvas.manager.selectCanvas", { title: entry.title })}
-                />
-                <span>{t("intentCanvas.manager.selectCanvasShort")}</span>
-              </label>
-              <button
-                type="button"
-                className="intent-canvas-card-open"
-                onClick={() => handleCanvasActionRequest(entry, "open")}
-              >
-                <span className="intent-canvas-card-mode">{entry.mode}</span>
-                <h3>{entry.title}</h3>
-                <p>{entry.summary || t("intentCanvas.manager.noSummary")}</p>
-                <dl>
-                  <div><dt>{t("intentCanvas.manager.elements")}</dt><dd>{entry.elementCount}</dd></div>
-                  <div><dt>{t("intentCanvas.manager.files")}</dt><dd>{entry.linkedFileCount}</dd></div>
-                  <div><dt>{t("intentCanvas.manager.nodes")}</dt><dd>{entry.linkedProjectMapNodeCount}</dd></div>
-                </dl>
-                <span className="intent-canvas-card-updated">
-                  {t("intentCanvas.manager.updated", { time: formatDateTime(entry.updatedAt) })}
-                </span>
-              </button>
-              <div className="intent-canvas-card-actions">
-                <button
-                  type="button"
-                  onClick={() => handleCanvasActionRequest(entry, "duplicate")}
-                  aria-label={t("intentCanvas.manager.duplicate")}
-                  title={t("intentCanvas.manager.duplicate")}
-                >
-                  <Copy aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleCanvasActionRequest(entry, "open")}
-                  aria-label={t("intentCanvas.manager.open")}
-                  title={t("intentCanvas.manager.open")}
-                >
-                  <LinkIcon aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className="is-danger"
-                  onClick={() => handleCanvasActionRequest(entry, "delete")}
-                  aria-label={t("intentCanvas.manager.delete")}
-                  title={t("intentCanvas.manager.delete")}
-                >
-                  <Trash2 aria-hidden />
-                </button>
-              </div>
-              {actionPrompt?.entry.id === entry.id ? (
-                <div className="intent-canvas-action-popover-shell">
-                  <ThreadDeleteConfirmBubble
-                    threadName={entry.title}
-                    title={t(`intentCanvas.manager.${actionPrompt.action}`)}
-                    message={t(`intentCanvas.manager.${actionPrompt.action}Confirm`, { title: entry.title })}
-                    hint={t(`intentCanvas.manager.${actionPrompt.action}Hint`)}
-                    confirmLabel={t(`intentCanvas.manager.${actionPrompt.action}`)}
-                    isDeleting={confirmingCanvasActionId === entry.id}
-                    onCancel={() => setActionPrompt(null)}
-                    onConfirm={() => void confirmCanvasAction()}
-                  />
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </div>
-      )}
+    <section className="intent-canvas-manager" aria-label={t("intentCanvas.manager.ariaLabel")}>
+      <IntentCanvasHome
+        status={status}
+        filteredEntries={filteredEntries}
+        eras={canvasEras}
+        now={renderNow}
+        warnings={warnings}
+        errorMessage={errorMessage}
+        searchQuery={searchQuery}
+        anchorHealthByCanvasId={{}}
+        selectedCanvasIds={selectedCanvasIds}
+        selectedCount={selectedEntries.length}
+        allFilteredEntriesSelected={allFilteredEntriesSelected}
+        isBulkDeletePromptOpen={isBulkDeletePromptOpen}
+        isBulkDeleting={isBulkDeleting}
+        actionPrompt={actionPrompt}
+        confirmingCanvasActionId={confirmingCanvasActionId}
+        onSearchQueryChange={setSearchQuery}
+        onToggleSelectAll={toggleFilteredCanvasSelection}
+        onRefresh={() => void refreshIndex()}
+        onOpenProjectMap={onOpenProjectMap}
+        onCreateCanvas={() => void createCanvas()}
+        onToggleCanvasSelection={toggleCanvasSelection}
+        onSelectEra={selectEraEntries}
+        onClearSelection={clearCanvasSelection}
+        onBulkDeleteRequest={() => {
+          setActionPrompt(null);
+          setIsBulkDeletePromptOpen(true);
+        }}
+        onBulkDeleteConfirm={() => void confirmBulkDelete()}
+        onBulkDeleteCancel={() => setIsBulkDeletePromptOpen(false)}
+        onCanvasActionRequest={handleCanvasActionRequest}
+        onConfirmCanvasAction={() => void confirmCanvasAction()}
+        onCancelCanvasAction={() => setActionPrompt(null)}
+      />
     </section>
   );
 }

@@ -11,6 +11,7 @@ export type CliCustomPathEngine =
   | "kimi"
   | "grok"
   | "opencode"
+  | "pi"
   | "dsh";
 
 export type CliCustomPathSavePayload = {
@@ -39,6 +40,7 @@ const CLI_CUSTOM_PATH_ENGINE_META: Record<
   kimi: { command: "kimi", displayName: "Kimi CLI" },
   grok: { command: "grok", displayName: "Grok CLI" },
   opencode: { command: "opencode", displayName: "OpenCode CLI" },
+  pi: { command: "pi", displayName: "PI CLI" },
   dsh: { command: "dsh", displayName: "DeepSeek Harness" },
 };
 

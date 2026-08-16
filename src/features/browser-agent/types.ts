@@ -136,6 +136,41 @@ export type BrowserSessionCleanupResult = {
   retainedSessionCount: number;
 };
 
+export type BrowserTabContextMenuTheme = {
+  colorScheme: "light" | "dark";
+  surface: string;
+  foreground: string;
+  border: string;
+  hoverSurface: string;
+  disabledForeground: string;
+  shadow: string;
+};
+
+export type BrowserTabContextMenuRequest = {
+  browserSessionId: string;
+  x: number;
+  locale?: string | null;
+  disabledActions: string[];
+  theme: BrowserTabContextMenuTheme;
+};
+
+export type BrowserSelectionLocate = {
+  documentX: number;
+  documentY: number;
+  viewportX: number;
+  viewportY: number;
+  width: number;
+  height: number;
+  scrollX: number;
+  scrollY: number;
+  listIndex: number | null;
+  listLength: number | null;
+  previousText: string | null;
+  nextText: string | null;
+  ancestorLabel?: string | null;
+  cssPath?: string | null;
+};
+
 export type BrowserWebviewBounds = {
   x: number;
   y: number;
@@ -274,6 +309,7 @@ export type BrowserUserAnnotation = {
   region: BrowserUserAnnotationRegion | null;
   nearbyText: string | null;
   nearestElement: BrowserUserAnnotationNearestElement | null;
+  locate?: BrowserSelectionLocate | null;
   privacy: BrowserPrivacyReport;
   staleReasons: BrowserObservationStaleReason[];
   diagnostics: BrowserObservationDiagnostic[];

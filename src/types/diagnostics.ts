@@ -86,11 +86,12 @@ export type CodexLaunchProfilePreview = {
 };
 
 export type CliInstallEngine =
-  | "codex"
   | "claude"
-  | "kimi"
+  | "codex"
   | "grok"
+  | "kimi"
   | "opencode"
+  | "pi"
   | "dsh";
 
 export type CliInstallAction = "installLatest" | "updateLatest" | "uninstall";

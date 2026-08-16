@@ -5,21 +5,24 @@ use tauri::State;
 use tokio::time::timeout;
 
 use super::store::{
-    list_for_workspace_path, open_connection, SessionIndexListPage, SessionIndexSyncReport,
+    list_for_workspace_path, list_for_workspace_path_before, open_connection,
+    SessionIndexListPage, SessionIndexSyncReport,
 };
 use super::writers::{
     commit_engine_rows, engine_source_is_fresh, gemini_home_fingerprint, grok_home_fingerprint,
-    invalidate_workspace_sources, opencode_source_fingerprint, rows_from_gemini_summaries,
-    rows_from_grok_summaries, rows_from_opencode_entries, sync_claude_for_workspace,
-    sync_codex_for_workspace, sync_kimi_for_workspace, WriterResult,
+    invalidate_workspace_sources, opencode_source_fingerprint, pi_home_fingerprint,
+    rows_from_gemini_summaries, rows_from_grok_summaries, rows_from_opencode_entries,
+    rows_from_pi_summaries, sync_claude_for_workspace, sync_codex_for_workspace,
+    sync_kimi_for_workspace, WriterResult,
 };
 use crate::engine::gemini_history::list_gemini_sessions;
 use crate::engine::grok_history::list_grok_sessions;
+use crate::engine::pi_history::list_pi_sessions;
 use crate::engine::opencode_session_list_core;
 use crate::local_usage::resolve_sessions_roots;
 use crate::state::AppState;
 
-const DEFAULT_SIDEBAR_INDEX_LIMIT: usize = 50;
+const DEFAULT_SIDEBAR_INDEX_LIMIT: usize = 20;
 const ASYNC_ENGINE_LIST_TIMEOUT: Duration = Duration::from_secs(3);
 const OPENCODE_INDEX_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -227,6 +230,66 @@ async fn sync_grok_engine(workspace_path: PathBuf, limit: usize, force: bool) ->
     })
 }
 
+async fn sync_pi_engine(workspace_path: PathBuf, limit: usize, force: bool) -> WriterResult {
+    let fingerprint = pi_home_fingerprint();
+    let skip = !force
+        && tokio::task::spawn_blocking({
+            let workspace_path = workspace_path.clone();
+            let fingerprint = fingerprint.clone();
+            move || {
+                let connection = open_connection()?;
+                engine_source_is_fresh(&connection, "pi", &workspace_path, &fingerprint)
+            }
+        })
+        .await
+        .ok()
+        .and_then(|result| result.ok())
+        .unwrap_or(false);
+    if skip {
+        return WriterResult {
+            skipped_fresh: true,
+            engines: vec!["pi".into()],
+            ..WriterResult::default()
+        };
+    }
+
+    let list_result = timeout(
+        ASYNC_ENGINE_LIST_TIMEOUT,
+        list_pi_sessions(&workspace_path, Some(limit), None),
+    )
+    .await;
+
+    let (rows, partial) = match list_result {
+        Ok(Ok(sessions)) => (rows_from_pi_summaries(&workspace_path, &sessions), None),
+        Ok(Err(error)) => (
+            Vec::new(),
+            Some(format!("pi-sync-error:{}", truncate_error(&error))),
+        ),
+        Err(_) => (Vec::new(), Some("pi-sync-timeout".into())),
+    };
+
+    tokio::task::spawn_blocking(move || {
+        let connection = open_connection()?;
+        commit_engine_rows(
+            &connection,
+            "pi",
+            &workspace_path,
+            rows,
+            &fingerprint,
+            partial,
+        )
+    })
+    .await
+    .ok()
+    .and_then(|result| result.ok())
+    .unwrap_or_else(|| WriterResult {
+        engines: vec!["pi".into()],
+        partial_source: Some("pi-commit-error".into()),
+        skipped_fresh: false,
+        ..WriterResult::default()
+    })
+}
+
 async fn sync_opencode_engine(
     state: &AppState,
     workspace_id: &str,
@@ -315,7 +378,7 @@ async fn sync_opencode_engine(
     })
 }
 
-async fn sync_session_index_core(
+pub(crate) async fn sync_session_index_core(
     state: &AppState,
     workspace_id: &str,
     limit: usize,
@@ -342,6 +405,9 @@ async fn sync_session_index_core(
 
     let grok = sync_grok_engine(workspace_path.clone(), limit, force).await;
     merge_writer(&mut aggregated, grok);
+
+    let pi = sync_pi_engine(workspace_path.clone(), limit, force).await;
+    merge_writer(&mut aggregated, pi);
 
     let opencode =
         sync_opencode_engine(state, workspace_id, workspace_path.clone(), limit, force).await;
@@ -395,6 +461,8 @@ pub async fn list_session_index_for_workspace(
     limit: Option<u32>,
     sync_if_needed: Option<bool>,
     force_sync: Option<bool>,
+    before_updated_at: Option<i64>,
+    before_session_id: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<SessionIndexListPage, String> {
     let started = Instant::now();
@@ -435,12 +503,22 @@ pub async fn list_session_index_for_workspace(
     }
 
     let path_for_list = path_str.clone();
-    let data = tokio::task::spawn_blocking(move || {
+    let before = before_updated_at.map(|updated_at| {
+        (
+            updated_at,
+            before_session_id.unwrap_or_default().trim().to_string(),
+        )
+    });
+    let mut data = tokio::task::spawn_blocking(move || {
         let connection = open_connection()?;
-        list_for_workspace_path(&connection, &path_for_list, limit)
+        list_for_workspace_path_before(&connection, &path_for_list, limit.saturating_add(1), before)
     })
     .await
     .map_err(|error| error.to_string())??;
+    let has_more = data.len() > limit;
+    if has_more {
+        data.truncate(limit);
+    }
 
     if engines.is_empty() {
         let mut seen = std::collections::HashSet::new();
@@ -462,6 +540,7 @@ pub async fn list_session_index_for_workspace(
         sync_ms: sync_ms.or_else(|| Some(started.elapsed().as_millis() as u64)),
         engines,
         partial_source,
+        has_more,
     })
 }
 

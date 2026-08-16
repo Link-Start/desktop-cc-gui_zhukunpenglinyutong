@@ -17,6 +17,7 @@ import type {
   BrowserWebviewMountRequest,
   BrowserPlatformCapability,
   BrowserProviderRouteDecision,
+  BrowserTabContextMenuRequest,
 } from "../../features/browser-agent/types";
 
 export async function getBrowserAgentStatus(): Promise<BrowserAgentStatus> {
@@ -119,6 +120,28 @@ export async function hideBrowserAgentWebview(
   browserSessionId: string,
 ): Promise<void> {
   return invoke<void>("hide_browser_agent_webview", { browserSessionId });
+}
+
+export async function showBrowserAgentTabContextMenuOverlay(
+  request: BrowserTabContextMenuRequest,
+): Promise<void> {
+  return invoke<void>("show_browser_agent_tab_context_menu_overlay", { request });
+}
+
+export async function startBrowserAgentElementSelect(
+  browserSessionId: string,
+): Promise<void> {
+  return invoke<void>("start_browser_agent_element_select", {
+    browserSessionId,
+  });
+}
+
+export async function stopBrowserAgentElementSelect(
+  browserSessionId: string,
+): Promise<void> {
+  return invoke<void>("stop_browser_agent_element_select", {
+    browserSessionId,
+  });
 }
 
 export async function listBrowserAgentEvidence(

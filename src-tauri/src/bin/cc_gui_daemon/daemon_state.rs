@@ -1353,7 +1353,7 @@ impl DaemonState {
                                     engine::EngineType::Gemini => {
                                         current_thread_id = format!("gemini:{}", session_id);
                                     }
-                                    engine::EngineType::Kimi => {
+                                    engine::EngineType::Kimi | engine::EngineType::Pi => {
                                         current_thread_id = format!("kimi:{}", session_id);
                                     }
                                     engine::EngineType::Grok => {
@@ -1853,7 +1853,7 @@ impl DaemonState {
                     }
                 }))
             }
-            engine::EngineType::Kimi => {
+            engine::EngineType::Kimi | engine::EngineType::Pi => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let provider_binding_lookup_session_id = session_id
                     .as_deref()
@@ -2634,7 +2634,7 @@ impl DaemonState {
                     "text": response,
                 }))
             }
-            engine::EngineType::Kimi => {
+            engine::EngineType::Kimi | engine::EngineType::Pi => {
                 let workspace_path = self.workspace_path_for_engine(&workspace_id).await?;
                 let session = self
                     .engine_manager
@@ -2802,7 +2802,7 @@ impl DaemonState {
                 }
                 Ok(())
             }
-            engine::EngineType::Kimi => {
+            engine::EngineType::Kimi | engine::EngineType::Pi => {
                 self.engine_manager
                     .interrupt_kimi_sessions(&workspace_id, None)
                     .await
@@ -2872,7 +2872,7 @@ impl DaemonState {
                 }
                 Ok(())
             }
-            engine::EngineType::Kimi => {
+            engine::EngineType::Kimi | engine::EngineType::Pi => {
                 self.engine_manager
                     .interrupt_kimi_sessions(&workspace_id, Some(&turn_id))
                     .await

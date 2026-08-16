@@ -54,7 +54,7 @@ export type ProviderTargetGroup = {
 
 type ProfileCatalog = Partial<
   Record<
-    "claude" | "codex" | "kimi" | "grok" | "opencode",
+    "claude" | "codex" | "kimi" | "grok" | "opencode" | "pi",
     EngineProviderProfileOption[]
   >
 >;
@@ -67,6 +67,7 @@ const PROVIDER_PROFILE_ENGINES: readonly ProviderProfileEngine[] = [
   "grok",
   "kimi",
   "opencode",
+  "pi",
 ];
 
 export function isProviderProfileEngine(
@@ -111,6 +112,7 @@ const DEFAULT_PROFILES: ProfileCatalog = {
       source: "disk",
     },
   ],
+  pi: [],
 };
 
 let profileCatalogCache: ProfileCatalog | null = null;

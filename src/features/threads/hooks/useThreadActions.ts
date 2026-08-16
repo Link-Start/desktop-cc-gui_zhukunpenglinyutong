@@ -12,6 +12,7 @@ import {
   listGeminiSessions as listGeminiSessionsService,
   listGrokSessions as listGrokSessionsService,
   listKimiSessions as listKimiSessionsService,
+  listPiSessions as listPiSessionsService,
   listDshSessions as listDshSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
@@ -69,11 +70,13 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  mergePiSessionSummaries,
   mergeDshSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   normalizeGeminiSessionSummaries,
   normalizeGrokSessionSummaries,
   normalizeKimiSessionSummaries,
+  normalizePiSessionSummaries,
   normalizeDshSessionSummaries,
   normalizeThreadListPartialSource,
   resolveThreadSourceMeta,
@@ -181,6 +184,10 @@ export function useThreadActions({
     Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
   >({});
   const kimiRefreshAttemptedRef = useRef<Record<string, boolean>>({});
+  const piSessionCacheRef = useRef<
+    Record<string, { fetchedAt: number; sessions: KimiSessionSummary[] }>
+  >({});
+  const piRefreshAttemptedRef = useRef<Record<string, boolean>>({});
   const grokSessionCacheRef = useRef<
     Record<string, { fetchedAt: number; sessions: GrokSessionSummary[] }>
   >({});
@@ -457,10 +464,7 @@ export function useThreadActions({
         // CRITICAL UX: on first-paint, await index FIRST and paint immediately.
         // Do NOT wait for titles/shared/codex live list — that left the sidebar
         // stuck on stale sidebarSnapshot for seconds (user: old list → late correct).
-        const sessionIndexLimit = Math.max(
-          resolveInitialThreadListTargetCount(workspace) * 4,
-          50,
-        );
+        const sessionIndexLimit = 20;
         // Only explicit soft re-sync forces writers; cold first-paint must hit
         // warm SQLite (ms) so stale sidebarSnapshot is replaced immediately.
         const forceIndexSync = Boolean(options?.forceSessionIndexSync);
@@ -2221,6 +2225,59 @@ export function useThreadActions({
                 [workspace.id]: visibleNextSummaries,
               };
             }
+          })();
+        }
+        const shouldRefreshPiSessions =
+          isLatestThreadListRequest() &&
+          !isFirstPaintHydration &&
+          (piRefreshAttemptedRef.current[workspace.id] !== true ||
+            (latestThreadsByWorkspaceRef.current[workspace.id] ?? []).some(
+              (thread) => thread.engineSource === "pi",
+            ) ||
+            !!piSessionCacheRef.current[workspace.id]);
+        if (shouldRefreshPiSessions) {
+          void (async () => {
+            piRefreshAttemptedRef.current[workspace.id] = true;
+            const piResult = await withTimeout(
+              listPiSessionsService(workspace.path, 50),
+              KIMI_SESSION_FETCH_TIMEOUT_MS,
+            );
+            if (!isLatestThreadListRequest() || piResult === null) {
+              return;
+            }
+            const normalizedPiSessions = normalizePiSessionSummaries(piResult);
+            piSessionCacheRef.current[workspace.id] = {
+              fetchedAt: Date.now(),
+              sessions: normalizedPiSessions,
+            };
+            const currentSnapshot =
+              latestThreadsByWorkspaceRef.current[workspace.id] ?? [];
+            const baselineSummaries =
+              currentSnapshot.length > 0 ? currentSnapshot : allSummaries;
+            const nextSummaries = mergePiSessionSummaries(
+              baselineSummaries,
+              normalizedPiSessions,
+              workspace.id,
+              mappedTitles,
+              getCustomName,
+              hiddenSharedBindingIds,
+            );
+            const visibleNextSummaries = applySessionArchiveState(
+              nextSummaries,
+              await archivedSessionMapPromise,
+            );
+            if (!isLatestThreadListRequest()) {
+              return;
+            }
+            dispatch({
+              type: "setThreads",
+              workspaceId: workspace.id,
+              threads: visibleNextSummaries,
+            });
+            latestThreadsByWorkspaceRef.current = {
+              ...latestThreadsByWorkspaceRef.current,
+              [workspace.id]: visibleNextSummaries,
+            };
           })();
         }
       } catch (error) {

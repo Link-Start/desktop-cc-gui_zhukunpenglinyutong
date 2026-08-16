@@ -10,7 +10,7 @@ use std::{
 };
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{
     webview::{NewWindowResponse, WebviewBuilder},
     AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
@@ -18,7 +18,10 @@ use tauri::{
 
 use crate::state::AppState;
 
-use toolbar::{handle_browser_toolbar_navigation, spawn_browser_toolbar_injection};
+use toolbar::{
+    browser_element_selector_script, browser_element_selector_stop_script,
+    handle_browser_toolbar_navigation, spawn_browser_toolbar_injection,
+};
 pub(crate) use types::*;
 
 const BROWSER_WEBVIEW_EVENT: &str = "browser-agent://webview-event";
@@ -29,10 +32,20 @@ const BROWSER_CAPTURE_BRIDGE_HOST: &str = "browser-agent-capture.invalid";
 const BROWSER_CAPTURE_BRIDGE_PATH: &str = "/__mossx_capture__";
 const BROWSER_CAPTURE_CHUNK_SIZE: usize = 1_600;
 const BROWSER_CAPTURE_WAIT_ATTEMPTS: usize = 80;
+const BROWSER_TAB_CONTEXT_MENU_EVENT: &str = "browser-agent://tab-context-action";
+const BROWSER_TAB_CONTEXT_MENU_BRIDGE_HOST: &str = "browser-agent-tab-menu.invalid";
+const BROWSER_TAB_CONTEXT_MENU_BRIDGE_PATH: &str = "/__mossx_tab_context_menu__";
+const BROWSER_TAB_CONTEXT_MENU_TOP_OFFSET: f64 = 16.0;
+const BROWSER_TAB_CONTEXT_MENU_BRIDGE_TTL_MS: u64 = 60_000;
 
 static BROWSER_RENDERER_SESSION_ID: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static BROWSER_EMBEDDED_WEBVIEW_BINDING: OnceLock<Mutex<Option<EmbeddedBrowserWebviewBinding>>> =
+    OnceLock::new();
 static BROWSER_CAPTURE_BRIDGE: OnceLock<Mutex<HashMap<String, BrowserCaptureBridgeState>>> =
     OnceLock::new();
+static BROWSER_TAB_CONTEXT_MENU_INVOCATION: OnceLock<
+    Mutex<Option<BrowserTabContextMenuInvocation>>,
+> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 struct BrowserCaptureBridgeState {
@@ -47,6 +60,92 @@ struct BrowserCaptureNavigationChunk {
     index: usize,
     total: usize,
     payload: String,
+}
+
+/// 每个 tab 菜单仅有一个短时、一次性的 native bridge 授权。target session 可与
+/// renderer session 不同，因为用户可在当前 A 页面上右键非活动 B tab。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BrowserTabContextMenuInvocation {
+    nonce: String,
+    target_browser_session_id: String,
+    renderer_browser_session_id: String,
+    issued_at: u64,
+}
+
+impl BrowserTabContextMenuInvocation {
+    fn new(
+        target_browser_session_id: &str,
+        renderer_browser_session_id: &str,
+        issued_at: u64,
+    ) -> Self {
+        Self {
+            nonce: format!("browser-tab-menu-{}", uuid::Uuid::new_v4()),
+            target_browser_session_id: target_browser_session_id.to_string(),
+            renderer_browser_session_id: renderer_browser_session_id.to_string(),
+            issued_at,
+        }
+    }
+
+    fn authorizes(
+        &self,
+        nonce: &str,
+        target_browser_session_id: &str,
+        renderer_browser_session_id: &str,
+        now: u64,
+    ) -> bool {
+        self.nonce == nonce
+            && self.target_browser_session_id == target_browser_session_id
+            && self.renderer_browser_session_id == renderer_browser_session_id
+            && now >= self.issued_at
+            && now - self.issued_at <= BROWSER_TAB_CONTEXT_MENU_BRIDGE_TTL_MS
+    }
+}
+
+/// 唯一 embedded renderer 的回调归属事实。native callback 是异步共享通道，不能只用
+/// “当前 session”猜测归属；必须同时确认页面 URL 与本次绑定一致。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EmbeddedBrowserWebviewBinding {
+    browser_session_id: String,
+    expected_url: String,
+    load_started: bool,
+}
+
+impl EmbeddedBrowserWebviewBinding {
+    fn navigating_to(browser_session_id: &str, expected_url: &str) -> Self {
+        Self {
+            browser_session_id: browser_session_id.to_string(),
+            expected_url: expected_url.to_string(),
+            load_started: false,
+        }
+    }
+
+    fn accepts_page_load(
+        &mut self,
+        callback_url: &str,
+        event: tauri::webview::PageLoadEvent,
+    ) -> Option<String> {
+        if !browser_webview_urls_match(self.expected_url.as_str(), callback_url) {
+            return None;
+        }
+        match event {
+            tauri::webview::PageLoadEvent::Started => self.load_started = true,
+            tauri::webview::PageLoadEvent::Finished if !self.load_started => return None,
+            tauri::webview::PageLoadEvent::Finished => {}
+        }
+        Some(self.browser_session_id.clone())
+    }
+
+    fn accepts_title(&self, callback_url: &str) -> Option<String> {
+        (self.load_started && browser_webview_urls_match(self.expected_url.as_str(), callback_url))
+            .then(|| self.browser_session_id.clone())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserTabContextMenuAction {
+    browser_session_id: String,
+    action: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -84,8 +183,83 @@ fn browser_renderer_session_binding() -> &'static Mutex<Option<String>> {
     BROWSER_RENDERER_SESSION_ID.get_or_init(|| Mutex::new(None))
 }
 
+fn browser_embedded_webview_binding() -> &'static Mutex<Option<EmbeddedBrowserWebviewBinding>> {
+    BROWSER_EMBEDDED_WEBVIEW_BINDING.get_or_init(|| Mutex::new(None))
+}
+
 fn browser_capture_bridge() -> &'static Mutex<HashMap<String, BrowserCaptureBridgeState>> {
     BROWSER_CAPTURE_BRIDGE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn browser_tab_context_menu_invocation() -> &'static Mutex<Option<BrowserTabContextMenuInvocation>>
+{
+    BROWSER_TAB_CONTEXT_MENU_INVOCATION.get_or_init(|| Mutex::new(None))
+}
+
+fn register_browser_tab_context_menu_invocation(invocation: BrowserTabContextMenuInvocation) {
+    if let Ok(mut active_invocation) = browser_tab_context_menu_invocation().lock() {
+        *active_invocation = Some(invocation);
+    }
+}
+
+fn consume_browser_tab_context_menu_invocation(
+    nonce: &str,
+    target_browser_session_id: &str,
+    renderer_browser_session_id: &str,
+    now: u64,
+) -> bool {
+    let Ok(mut active_invocation) = browser_tab_context_menu_invocation().lock() else {
+        return false;
+    };
+    consume_tab_context_menu_invocation(
+        &mut active_invocation,
+        nonce,
+        target_browser_session_id,
+        renderer_browser_session_id,
+        now,
+    )
+}
+
+fn consume_tab_context_menu_invocation(
+    active_invocation: &mut Option<BrowserTabContextMenuInvocation>,
+    nonce: &str,
+    target_browser_session_id: &str,
+    renderer_browser_session_id: &str,
+    now: u64,
+) -> bool {
+    let is_authorized = active_invocation
+        .as_ref()
+        .map(|invocation| {
+            invocation.authorizes(
+                nonce,
+                target_browser_session_id,
+                renderer_browser_session_id,
+                now,
+            )
+        })
+        .unwrap_or(false);
+    if is_authorized {
+        *active_invocation = None;
+    }
+    is_authorized
+}
+
+fn clear_browser_tab_context_menu_invocation(nonce: &str) {
+    if let Ok(mut active_invocation) = browser_tab_context_menu_invocation().lock() {
+        if active_invocation
+            .as_ref()
+            .map(|invocation| invocation.nonce == nonce)
+            .unwrap_or(false)
+        {
+            *active_invocation = None;
+        }
+    }
+}
+
+fn invalidate_browser_tab_context_menu_invocation() {
+    if let Ok(mut active_invocation) = browser_tab_context_menu_invocation().lock() {
+        *active_invocation = None;
+    }
 }
 
 fn bind_browser_renderer_session(browser_session_id: &str) {
@@ -102,12 +276,116 @@ fn clear_browser_renderer_session(browser_session_id: &str) {
     }
 }
 
+fn browser_webview_urls_match(expected_url: &str, callback_url: &str) -> bool {
+    let Ok(mut expected) = expected_url.parse::<tauri::Url>() else {
+        return expected_url == callback_url;
+    };
+    let Ok(mut callback) = callback_url.parse::<tauri::Url>() else {
+        return false;
+    };
+    expected.set_fragment(None);
+    callback.set_fragment(None);
+    expected == callback
+}
+
+fn current_browser_embedded_webview_binding() -> Option<EmbeddedBrowserWebviewBinding> {
+    browser_embedded_webview_binding()
+        .lock()
+        .ok()
+        .and_then(|binding| binding.clone())
+}
+
+fn begin_browser_embedded_webview_navigation(
+    browser_session_id: &str,
+    expected_url: &str,
+) -> EmbeddedBrowserWebviewBinding {
+    // 页面切换后，旧 document 中遗留的菜单 URL 不能在切回同一 renderer 时复用。
+    invalidate_browser_tab_context_menu_invocation();
+    let next_binding =
+        EmbeddedBrowserWebviewBinding::navigating_to(browser_session_id, expected_url);
+    if let Ok(mut binding) = browser_embedded_webview_binding().lock() {
+        *binding = Some(next_binding.clone());
+    }
+    next_binding
+}
+
+fn restore_browser_embedded_webview_binding(
+    binding_to_restore: Option<EmbeddedBrowserWebviewBinding>,
+) {
+    if let Ok(mut binding) = browser_embedded_webview_binding().lock() {
+        *binding = binding_to_restore;
+    }
+}
+
+fn restore_browser_embedded_webview_session(browser_session_id: &str, expected_url: &str) {
+    let mut restored_binding =
+        EmbeddedBrowserWebviewBinding::navigating_to(browser_session_id, expected_url);
+    // sync bounds 后恢复的是仍保留在同一 native renderer 内的页面，不会重新 navigate。
+    restored_binding.load_started = true;
+    restore_browser_embedded_webview_binding(Some(restored_binding));
+}
+
+fn update_browser_embedded_webview_navigation_target(browser_session_id: &str, expected_url: &str) {
+    if let Ok(mut binding) = browser_embedded_webview_binding().lock() {
+        let Some(binding) = binding.as_mut() else {
+            return;
+        };
+        if binding.browser_session_id != browser_session_id {
+            return;
+        }
+        binding.expected_url = expected_url.to_string();
+        binding.load_started = false;
+    }
+}
+
+fn clear_browser_embedded_webview_session(browser_session_id: &str) {
+    let cleared = {
+        let Ok(mut binding) = browser_embedded_webview_binding().lock() else {
+            return;
+        };
+        if binding
+            .as_ref()
+            .map(|active| active.browser_session_id.as_str())
+            == Some(browser_session_id)
+        {
+            *binding = None;
+            true
+        } else {
+            false
+        }
+    };
+    if cleared {
+        invalidate_browser_tab_context_menu_invocation();
+    }
+}
+
+fn browser_embedded_webview_page_load_session_id(
+    callback_url: &str,
+    event: tauri::webview::PageLoadEvent,
+) -> Option<String> {
+    browser_embedded_webview_binding()
+        .lock()
+        .ok()
+        .and_then(|mut binding| binding.as_mut()?.accepts_page_load(callback_url, event))
+}
+
+fn browser_embedded_webview_title_session_id(callback_url: &str) -> Option<String> {
+    browser_embedded_webview_binding()
+        .lock()
+        .ok()
+        .and_then(|binding| binding.as_ref()?.accepts_title(callback_url))
+}
+
 fn current_browser_renderer_session(fallback_session_id: &str) -> String {
     browser_renderer_session_binding()
         .lock()
         .ok()
         .and_then(|binding| binding.clone())
         .unwrap_or_else(|| fallback_session_id.to_string())
+}
+
+fn current_browser_embedded_webview_session_id() -> Option<String> {
+    current_browser_embedded_webview_binding().map(|binding| binding.browser_session_id)
 }
 
 fn settings_from_app_settings(settings: &crate::types::AppSettings) -> BrowserAgentSettings {
@@ -945,9 +1223,22 @@ async fn persist_snapshot_evidence(
     }
 }
 
-fn browser_webview_label(browser_session_id: &str) -> String {
-    let _ = browser_session_id;
-    BROWSER_RENDERER_WEBVIEW_LABEL.to_string()
+fn close_legacy_browser_child_webviews(app: &AppHandle) {
+    // 旧版曾为每个 tab 建 child WebView；升级后的 renderer 固定为单实例。热更新场景
+    // 下先清理遗留实例，避免它们继续盖住当前 Browser Dock surface。
+    let legacy_labels: Vec<String> = app
+        .webviews()
+        .into_keys()
+        .filter(|label| {
+            label.starts_with("browser-agent-webview-")
+                && label.as_str() != BROWSER_RENDERER_WEBVIEW_LABEL
+        })
+        .collect();
+    for label in legacy_labels {
+        if let Some(webview) = app.get_webview(label.as_str()) {
+            let _ = webview.close();
+        }
+    }
 }
 
 fn valid_webview_bounds(bounds: &BrowserWebviewBounds) -> bool {
@@ -963,6 +1254,196 @@ fn browser_webview_rect(bounds: &BrowserWebviewBounds) -> tauri::Rect {
     tauri::Rect {
         position: tauri::Position::Logical(tauri::LogicalPosition::new(bounds.x, bounds.y)),
         size: tauri::Size::Logical(tauri::LogicalSize::new(bounds.width, bounds.height)),
+    }
+}
+
+struct BrowserTabContextMenuLabels {
+    close_current: &'static str,
+    close_others: &'static str,
+    close_right: &'static str,
+    close_all: &'static str,
+}
+
+fn browser_tab_context_menu_overlay_script(
+    browser_session_id: &str,
+    nonce: &str,
+    x: f64,
+    locale: Option<&str>,
+    disabled_actions: &[String],
+    theme: &BrowserTabContextMenuTheme,
+) -> Result<String, String> {
+    let labels = browser_tab_context_menu_labels(locale);
+    let session_id =
+        serde_json::to_string(browser_session_id).map_err(|error| error.to_string())?;
+    let nonce = serde_json::to_string(nonce).map_err(|error| error.to_string())?;
+    let theme = serde_json::to_string(theme).map_err(|error| error.to_string())?;
+    let items = serde_json::to_string(&[
+        (
+            "current",
+            labels.close_current,
+            disabled_actions.iter().any(|action| action == "current"),
+        ),
+        (
+            "others",
+            labels.close_others,
+            disabled_actions.iter().any(|action| action == "others"),
+        ),
+        (
+            "right",
+            labels.close_right,
+            disabled_actions.iter().any(|action| action == "right"),
+        ),
+        (
+            "all",
+            labels.close_all,
+            disabled_actions.iter().any(|action| action == "all"),
+        ),
+    ])
+    .map_err(|error| error.to_string())?;
+    let x = x.max(12.0);
+
+    Ok(format!(
+        r#"(() => {{
+  const cleanupKey = "__mossxBrowserTabMenuCleanup";
+  if (typeof window[cleanupKey] === "function") {{
+    window[cleanupKey]();
+  }}
+  const host = document.createElement("div");
+  host.id = "mossx-browser-tab-context-menu";
+  host.setAttribute("data-mossx-browser-tab-menu", "true");
+  const setHostStyle = (property, value) => host.style.setProperty(property, value, "important");
+  setHostStyle("all", "initial");
+  setHostStyle("position", "fixed");
+  setHostStyle("inset", "0");
+  setHostStyle("z-index", "2147483647");
+  setHostStyle("display", "block");
+  setHostStyle("visibility", "visible");
+  setHostStyle("opacity", "1");
+  setHostStyle("transform", "none");
+  setHostStyle("pointer-events", "none");
+  const shadow = host.attachShadow({{ mode: "closed" }});
+  const root = document.createElement("div");
+  root.id = "mossx-browser-tab-context-menu-root";
+  root.setAttribute("role", "menu");
+  root.setAttribute("aria-label", "Browser tab actions");
+  root.style.cssText = [
+    "position:fixed", "z-index:2147483647", "left:min({x}px, calc(100vw - 272px))",
+    "top:{BROWSER_TAB_CONTEXT_MENU_TOP_OFFSET}px", "width:248px", "box-sizing:border-box",
+    "padding:8px", "border:1px solid var(--mossx-tab-menu-border)", "border-radius:16px",
+    "background:var(--mossx-tab-menu-surface)",
+    "font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", "color:var(--mossx-tab-menu-foreground)",
+    "pointer-events:auto", "isolation:isolate"
+  ].join(";");
+  const theme = {theme};
+  root.style.colorScheme = theme.colorScheme;
+  root.style.setProperty("--mossx-tab-menu-surface", theme.surface);
+  root.style.setProperty("--mossx-tab-menu-foreground", theme.foreground);
+  root.style.setProperty("--mossx-tab-menu-border", theme.border);
+  root.style.setProperty("--mossx-tab-menu-hover", theme.hoverSurface);
+  root.style.setProperty("--mossx-tab-menu-disabled-foreground", theme.disabledForeground);
+  if (theme.shadow !== "none") root.style.boxShadow = "0 18px 48px " + theme.shadow;
+  const close = () => {{
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    window.removeEventListener("keydown", onKeyDown, true);
+    host.remove();
+    delete window[cleanupKey];
+  }};
+  const onPointerDown = (event) => {{
+    if (!event.composedPath().includes(host)) close();
+  }};
+  const onKeyDown = (event) => {{
+    if (event.key === "Escape") close();
+  }};
+  const sessionId = {session_id};
+  const menuNonce = {nonce};
+  const actions = {items};
+  for (const [action, label, disabled] of actions) {{
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.action = action;
+    button.setAttribute("role", "menuitem");
+    button.disabled = disabled;
+    button.setAttribute("aria-disabled", String(disabled));
+    button.textContent = label;
+    button.style.cssText = "display:block;width:100%;min-height:42px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:" + (disabled ? "var(--mossx-tab-menu-disabled-foreground)" : "var(--mossx-tab-menu-foreground)") + ";text-align:left;font:inherit;cursor:" + (disabled ? "not-allowed" : "pointer");
+    button.onmouseenter = () => {{ if (!disabled) button.style.background = "var(--mossx-tab-menu-hover)"; }};
+    button.onmouseleave = () => {{ if (!disabled) button.style.background = "transparent"; }};
+    button.onclick = () => {{
+      if (disabled) return;
+      close();
+      window.location.assign("https://{BROWSER_TAB_CONTEXT_MENU_BRIDGE_HOST}{BROWSER_TAB_CONTEXT_MENU_BRIDGE_PATH}?action=" + encodeURIComponent(action) + "&browserSessionId=" + encodeURIComponent(sessionId) + "&nonce=" + encodeURIComponent(menuNonce));
+    }};
+    root.appendChild(button);
+  }}
+  shadow.appendChild(root);
+  (document.body || document.documentElement).appendChild(host);
+  window[cleanupKey] = close;
+  setTimeout(() => document.addEventListener("pointerdown", onPointerDown, true), 0);
+  window.addEventListener("keydown", onKeyDown, true);
+}})();"#,
+    ))
+}
+
+fn handle_browser_tab_context_menu_navigation(app: &AppHandle, target_url: &str) -> bool {
+    let Ok(url) = target_url.parse::<tauri::Url>() else {
+        return false;
+    };
+    if url.host_str() != Some(BROWSER_TAB_CONTEXT_MENU_BRIDGE_HOST)
+        || url.path() != BROWSER_TAB_CONTEXT_MENU_BRIDGE_PATH
+    {
+        return false;
+    }
+    let mut action = None;
+    let mut browser_session_id = None;
+    let mut nonce = None;
+    for (key, value) in url.query_pairs() {
+        match key.as_ref() {
+            "action" => action = Some(value.into_owned()),
+            "browserSessionId" => browser_session_id = Some(value.into_owned()),
+            "nonce" => nonce = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+    let (Some(action), Some(browser_session_id), Some(nonce)) = (action, browser_session_id, nonce)
+    else {
+        return true;
+    };
+    let Some(renderer_browser_session_id) = current_browser_embedded_webview_session_id() else {
+        return true;
+    };
+    if matches!(action.as_str(), "current" | "others" | "right" | "all")
+        && consume_browser_tab_context_menu_invocation(
+            nonce.as_str(),
+            browser_session_id.as_str(),
+            renderer_browser_session_id.as_str(),
+            unix_time_ms(),
+        )
+    {
+        let _ = app.emit(
+            BROWSER_TAB_CONTEXT_MENU_EVENT,
+            BrowserTabContextMenuAction {
+                browser_session_id,
+                action,
+            },
+        );
+    }
+    true
+}
+
+fn browser_tab_context_menu_labels(locale: Option<&str>) -> BrowserTabContextMenuLabels {
+    if locale.unwrap_or_default().starts_with("zh") {
+        return BrowserTabContextMenuLabels {
+            close_current: "关闭标签页",
+            close_others: "关闭其他标签页",
+            close_right: "关闭右侧标签页",
+            close_all: "关闭全部标签页",
+        };
+    }
+    BrowserTabContextMenuLabels {
+        close_current: "Close tab",
+        close_others: "Close other tabs",
+        close_right: "Close tabs to the right",
+        close_all: "Close all tabs",
     }
 }
 
@@ -986,9 +1467,13 @@ fn eval_browser_renderer_script(
         }
     }
 
-    let label = browser_webview_label(browser_session_id);
+    if current_browser_embedded_webview_session_id().as_deref() != Some(browser_session_id) {
+        return Err(format!(
+            "Browser Agent embedded renderer is not active for session: {browser_session_id}"
+        ));
+    }
     let webview = app
-        .get_webview(label.as_str())
+        .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
         .ok_or_else(|| format!("Browser Agent renderer not found: {browser_session_id}"))?;
     webview.eval(script).map_err(|error| error.to_string())
 }
@@ -1008,9 +1493,13 @@ fn navigate_browser_renderer(
         }
     }
 
-    let label = browser_webview_label(browser_session_id);
+    if current_browser_embedded_webview_session_id().as_deref() != Some(browser_session_id) {
+        return Err(format!(
+            "Browser Agent embedded renderer is not active for session: {browser_session_id}"
+        ));
+    }
     let webview = app
-        .get_webview(label.as_str())
+        .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
         .ok_or_else(|| format!("Browser Agent renderer not found: {browser_session_id}"))?;
     webview.navigate(url).map_err(|error| error.to_string())
 }
@@ -1028,7 +1517,7 @@ fn resolve_browser_parent_window(
         .values()
         .find(|window| {
             window.label() != "about"
-                && !window.label().starts_with("browser-agent-webview-")
+                && window.label() != BROWSER_RENDERER_WEBVIEW_LABEL
                 && window.is_focused().unwrap_or(false)
         })
         .cloned()
@@ -1039,7 +1528,7 @@ fn resolve_browser_parent_window(
         return Ok(window);
     }
     if let Some(window) = windows.into_values().find(|window| {
-        window.label() != "about" && !window.label().starts_with("browser-agent-webview-")
+        window.label() != "about" && window.label() != BROWSER_RENDERER_WEBVIEW_LABEL
     }) {
         return Ok(window);
     }
@@ -1065,7 +1554,7 @@ fn spawn_browser_webview_session_patch(
 ) {
     tauri::async_runtime::spawn(async move {
         let now = unix_time_ms();
-        let label = browser_webview_label(browser_session_id.as_str());
+        let label = BROWSER_RENDERER_WEBVIEW_LABEL.to_string();
         let event = {
             let state = app.state::<AppState>();
             let mut sessions = state.browser_sessions.lock().await;
@@ -1121,30 +1610,49 @@ fn create_browser_child_webview(
         return Err("Browser Agent WebView bounds are too small.".to_string());
     }
 
-    let label = browser_webview_label(session.browser_session_id.as_str());
-    let url = session
+    let label = BROWSER_RENDERER_WEBVIEW_LABEL;
+    let url: tauri::Url = session
         .normalized_url
         .parse()
         .map_err(|error| format!("Invalid Browser Agent URL: {error}"))?;
-    bind_browser_renderer_session(session.browser_session_id.as_str());
-
-    if let Some(webview) = app.get_webview(label.as_str()) {
+    close_legacy_browser_child_webviews(app);
+    if let Some(webview) = app.get_webview(label) {
         webview
-            .close()
-            .map_err(|error| format!("Failed to reset Browser Agent WebView: {error}"))?;
+            .navigate(url)
+            .map_err(|error| format!("Failed to navigate Browser Agent WebView: {error}"))?;
+        let _ = webview.set_auto_resize(false);
+        webview
+            .set_bounds(browser_webview_rect(bounds))
+            .map_err(|error| error.to_string())?;
+        webview.show().map_err(|error| error.to_string())?;
+        return Ok(());
     }
 
     let window = resolve_browser_parent_window(app)?;
-    let session_id_for_navigation = session.browser_session_id.clone();
     let workspace_id_for_navigation = session.workspace_id.clone();
-    let session_id_for_load = session.browser_session_id.clone();
-    let session_id_for_title = session.browser_session_id.clone();
     let app_for_navigation = app.clone();
     let app_for_load = app.clone();
     let app_for_title = app.clone();
 
     let webview_builder = WebviewBuilder::new(label, WebviewUrl::External(url))
         .on_navigation(move |target_url| {
+            // renderer 已隐藏或被关闭后仍可能收到迟到的 navigation 回调；无 active
+            // binding 时不能回退到首次创建该 WebView 的 tab。
+            let Some(active_session_id) = current_browser_embedded_webview_session_id() else {
+                return false;
+            };
+            if handle_browser_tab_context_menu_navigation(&app_for_navigation, target_url.as_str()) {
+                return false;
+            }
+            // 元素选择器完成时通过 bridge URL 回传选中元素证据（与浮动窗同一通道）
+            if handle_browser_toolbar_navigation(
+                &app_for_navigation,
+                target_url.as_str(),
+                active_session_id.as_str(),
+                workspace_id_for_navigation.as_str(),
+            ) {
+                return false;
+            }
             if handle_browser_capture_navigation(target_url.as_str()) {
                 return false;
             }
@@ -1153,11 +1661,15 @@ fn create_browser_child_webview(
                 Some(workspace_id_for_navigation.as_str()),
             );
             if validation.allowed {
+                update_browser_embedded_webview_navigation_target(
+                    active_session_id.as_str(),
+                    target_url.as_str(),
+                );
                 return true;
             }
             spawn_browser_webview_session_patch(
                 app_for_navigation.clone(),
-                current_browser_renderer_session(session_id_for_navigation.as_str()),
+                active_session_id,
                 Some(BrowserSessionStatus::Blocked),
                 Some(target_url.to_string()),
                 None,
@@ -1168,13 +1680,19 @@ fn create_browser_child_webview(
         })
         .on_new_window(|_, _| NewWindowResponse::Deny)
         .on_page_load(move |_, payload| {
+            let Some(active_session_id) = browser_embedded_webview_page_load_session_id(
+                payload.url().as_str(),
+                payload.event(),
+            ) else {
+                return;
+            };
             let status = match payload.event() {
                 tauri::webview::PageLoadEvent::Started => BrowserSessionStatus::Loading,
                 tauri::webview::PageLoadEvent::Finished => BrowserSessionStatus::Ready,
             };
             spawn_browser_webview_session_patch(
                 app_for_load.clone(),
-                current_browser_renderer_session(session_id_for_load.as_str()),
+                active_session_id,
                 Some(status),
                 Some(payload.url().to_string()),
                 None,
@@ -1182,10 +1700,18 @@ fn create_browser_child_webview(
                 None,
             );
         })
-        .on_document_title_changed(move |_, title| {
+        .on_document_title_changed(move |webview, title| {
+            let Ok(current_url) = webview.url() else {
+                return;
+            };
+            let Some(active_session_id) =
+                browser_embedded_webview_title_session_id(current_url.as_str())
+            else {
+                return;
+            };
             spawn_browser_webview_session_patch(
                 app_for_title.clone(),
-                current_browser_renderer_session(session_id_for_title.as_str()),
+                active_session_id,
                 None,
                 None,
                 Some(title),
@@ -1225,10 +1751,13 @@ fn create_browser_agent_window(
             .close()
             .map_err(|error| format!("Failed to reset Browser Agent window: {error}"))?;
     }
-    if let Some(webview) =
-        app.get_webview(browser_webview_label(session.browser_session_id.as_str()).as_str())
+    if current_browser_embedded_webview_session_id().as_deref()
+        == Some(session.browser_session_id.as_str())
     {
-        let _ = webview.close();
+        if let Some(webview) = app.get_webview(BROWSER_RENDERER_WEBVIEW_LABEL) {
+            let _ = webview.close();
+        }
+        clear_browser_embedded_webview_session(session.browser_session_id.as_str());
     }
 
     let session_id_for_navigation = session.browser_session_id.clone();
@@ -1500,6 +2029,7 @@ pub(crate) async fn create_browser_agent_session(
         feature_phase: BrowserAgentFeaturePhase::ReadOnlySnapshot,
         platform_capability: platform::current_platform_capability(),
         linked_thread_id: None,
+        linked_task_run_id: None,
         linked_orchestration_task_id: None,
         last_snapshot_id: None,
         last_action_id: None,
@@ -1600,19 +2130,23 @@ pub(crate) async fn close_browser_agent_session(
     session.status = BrowserSessionStatus::Closed;
     session.updated_at = now;
     session.closed_at = Some(now);
-    let should_close_renderer = browser_renderer_session_binding()
+    let should_close_floating_window = browser_renderer_session_binding()
         .lock()
         .map(|binding| binding.as_deref() == Some(browser_session_id.as_str()))
         .unwrap_or(false);
+    let should_close_embedded_renderer = current_browser_embedded_webview_session_id()
+        .as_deref()
+        == Some(browser_session_id.as_str());
     clear_browser_renderer_session(browser_session_id.as_str());
-    if should_close_renderer {
+    clear_browser_embedded_webview_session(browser_session_id.as_str());
+    if should_close_floating_window {
         if let Some(window) = app.get_webview_window(BROWSER_RENDERER_WINDOW_LABEL) {
             let _ = window.close();
         }
-        if let Some(webview) =
-            app.get_webview(browser_webview_label(browser_session_id.as_str()).as_str())
-        {
-            let _ = webview.hide();
+    }
+    if should_close_embedded_renderer {
+        if let Some(webview) = app.get_webview(BROWSER_RENDERER_WEBVIEW_LABEL) {
+            let _ = webview.close();
         }
     }
     Ok(session.clone())
@@ -1726,7 +2260,17 @@ pub(crate) async fn mount_browser_agent_webview(
         ));
     }
 
-    create_browser_child_webview(&app, &session, &request.bounds)?;
+    // PageLoad / title callback 可能紧随 navigate 触发，必须先把唯一 renderer 绑定到
+    // 目标 tab；否则回调会把新页面标题和 URL 写回前一个 tab。
+    let previous_embedded_binding = current_browser_embedded_webview_binding();
+    begin_browser_embedded_webview_navigation(
+        session.browser_session_id.as_str(),
+        session.normalized_url.as_str(),
+    );
+    if let Err(error) = create_browser_child_webview(&app, &session, &request.bounds) {
+        restore_browser_embedded_webview_binding(previous_embedded_binding);
+        return Err(error);
+    }
     spawn_browser_webview_session_patch(
         app,
         session.browser_session_id.clone(),
@@ -1804,18 +2348,50 @@ pub(crate) async fn sync_browser_agent_webview_bounds(
     browser_session_id: String,
     bounds: BrowserWebviewBounds,
     app: AppHandle,
+    state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let label = browser_webview_label(browser_session_id.as_str());
+    let session = {
+        let sessions = state.browser_sessions.lock().await;
+        sessions
+            .get(browser_session_id.as_str())
+            .filter(|session| session.status != BrowserSessionStatus::Closed)
+            .cloned()
+    };
+    let Some(session) = session else {
+        return Ok(());
+    };
+
+    if let Some(binding) = current_browser_embedded_webview_binding() {
+        if binding.browser_session_id != browser_session_id {
+            // 旧 effect cleanup / ResizeObserver 可能晚到；它们不得改写当前 tab 的 renderer。
+            return Ok(());
+        }
+    }
+
     let webview = app
-        .get_webview(label.as_str())
+        .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
         .ok_or_else(|| format!("Browser Agent WebView not found: {browser_session_id}"))?;
     if !valid_webview_bounds(&bounds) {
-        webview.hide().map_err(|error| error.to_string())?;
+        // binding 为空代表 renderer 已被临时隐藏，无需重复 hide。
+        if current_browser_embedded_webview_session_id().as_deref()
+            == Some(browser_session_id.as_str())
+        {
+            webview.hide().map_err(|error| error.to_string())?;
+            clear_browser_embedded_webview_session(browser_session_id.as_str());
+        }
         return Ok(());
     }
+
+    // dock 恢复可见时只同步 bounds；不 navigate，页面状态不丢失。
     webview
         .set_bounds(browser_webview_rect(&bounds))
         .map_err(|error| error.to_string())?;
+    if current_browser_embedded_webview_binding().is_none() {
+        restore_browser_embedded_webview_session(
+            session.browser_session_id.as_str(),
+            session.normalized_url.as_str(),
+        );
+    }
     webview.show().map_err(|error| error.to_string())
 }
 
@@ -1824,12 +2400,125 @@ pub(crate) async fn hide_browser_agent_webview(
     browser_session_id: String,
     app: AppHandle,
 ) -> Result<(), String> {
-    if let Some(webview) =
-        app.get_webview(browser_webview_label(browser_session_id.as_str()).as_str())
+    if current_browser_embedded_webview_session_id().as_deref()
+        != Some(browser_session_id.as_str())
     {
+        return Ok(());
+    }
+    if let Some(webview) = app.get_webview(BROWSER_RENDERER_WEBVIEW_LABEL) {
         webview.hide().map_err(|error| error.to_string())?;
     }
+    clear_browser_embedded_webview_session(browser_session_id.as_str());
     Ok(())
+}
+
+/// 菜单注入当前 child WebView，和网页处于同一渲染层，不需要 hide 页面。
+#[tauri::command]
+pub(crate) async fn show_browser_agent_tab_context_menu_overlay(
+    request: BrowserTabContextMenuRequest,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if !request.x.is_finite() {
+        return Err("Invalid Browser Agent tab menu position.".to_string());
+    }
+
+    let target_is_live = {
+        let sessions = state.browser_sessions.lock().await;
+        sessions
+            .get(request.browser_session_id.as_str())
+            .map(|session| session.status != BrowserSessionStatus::Closed)
+            .unwrap_or(false)
+    };
+    if !target_is_live {
+        return Err(format!(
+            "Browser session is not available: {}",
+            request.browser_session_id
+        ));
+    }
+
+    let renderer_browser_session_id = current_browser_embedded_webview_session_id()
+        .ok_or_else(|| "Browser Agent WebView is not embedded.".to_string())?;
+    let webview = app
+        .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
+        .ok_or_else(|| "Browser Agent WebView is not available.".to_string())?;
+    let invocation = BrowserTabContextMenuInvocation::new(
+        request.browser_session_id.as_str(),
+        renderer_browser_session_id.as_str(),
+        unix_time_ms(),
+    );
+    let script = browser_tab_context_menu_overlay_script(
+        request.browser_session_id.as_str(),
+        invocation.nonce.as_str(),
+        request.x,
+        request.locale.as_deref(),
+        request.disabled_actions.as_slice(),
+        &request.theme,
+    )?;
+    register_browser_tab_context_menu_invocation(invocation.clone());
+    if let Err(error) = webview.eval(script) {
+        clear_browser_tab_context_menu_invocation(invocation.nonce.as_str());
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
+/// 在内嵌子 webview 中启动元素选择器（浮动窗由注入工具条自行 eval，内嵌无注入工具条）。
+/// 选中结果经 bridge URL 由子 webview 的 on_navigation 拦截后回传主窗口。
+#[tauri::command]
+pub(crate) async fn start_browser_agent_element_select(
+    browser_session_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let session = {
+        let sessions = state.browser_sessions.lock().await;
+        sessions
+            .get(browser_session_id.as_str())
+            .cloned()
+            .ok_or_else(|| format!("Browser session not found: {browser_session_id}"))?
+    };
+    if current_browser_embedded_webview_session_id().as_deref()
+        != Some(browser_session_id.as_str())
+    {
+        return Err(format!(
+            "Browser Agent WebView is not active for session: {browser_session_id}"
+        ));
+    }
+    let webview = app
+        .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
+        .ok_or_else(|| {
+            format!("Browser Agent WebView is not embedded: {browser_session_id}")
+        })?;
+    let script = browser_element_selector_script(
+        session.browser_session_id.as_str(),
+        session.workspace_id.as_str(),
+        None,
+    );
+    webview.eval(&script).map_err(|error| error.to_string())
+}
+
+/// 退出内嵌元素选择器：只跑页面内 cleanup，不再重新注入选择脚本。
+#[tauri::command]
+pub(crate) async fn stop_browser_agent_element_select(
+    browser_session_id: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    if current_browser_embedded_webview_session_id().as_deref()
+        != Some(browser_session_id.as_str())
+    {
+        return Err(format!(
+            "Browser Agent WebView is not active for session: {browser_session_id}"
+        ));
+    }
+    let webview = app
+        .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
+        .ok_or_else(|| {
+            format!("Browser Agent WebView is not embedded: {browser_session_id}")
+        })?;
+    webview
+        .eval(&browser_element_selector_stop_script())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1850,8 +2539,19 @@ pub(crate) async fn capture_browser_agent_snapshot(
     if session.status == BrowserSessionStatus::Closed {
         return Err(format!("Browser session is closed: {browser_session_id}"));
     }
-    let renderer_binding = current_browser_renderer_session_id();
-    let renderer_matches = renderer_binding.as_deref() == Some(browser_session_id.as_str());
+    let floating_renderer_matches = current_browser_renderer_session_id()
+        .as_deref()
+        .map(|bound_session_id| bound_session_id == browser_session_id)
+        .unwrap_or(false)
+        && app.get_webview_window(BROWSER_RENDERER_WINDOW_LABEL).is_some();
+    let embedded_renderer_matches = current_browser_embedded_webview_session_id()
+        .as_deref()
+        .map(|bound_session_id| bound_session_id == browser_session_id)
+        .unwrap_or(false)
+        && app
+            .get_webview(BROWSER_RENDERER_WEBVIEW_LABEL)
+            .is_some();
+    let renderer_matches = floating_renderer_matches || embedded_renderer_matches;
 
     let mut capture_warnings = Vec::new();
     if !renderer_matches {
@@ -2288,6 +2988,160 @@ mod tests {
         );
         assert_eq!(decision.selected_provider, "built_in_browser_agent");
         assert!(!decision.fallback_used);
+    }
+
+    #[test]
+    fn embedded_renderer_uses_a_stable_singleton_label() {
+        assert_eq!(
+            BROWSER_RENDERER_WEBVIEW_LABEL,
+            "browser-agent-webview-main",
+        );
+    }
+
+    #[test]
+    fn embedded_renderer_binding_does_not_replace_floating_renderer_binding() {
+        const FLOATING_SESSION_ID: &str = "test-floating-session";
+        const EMBEDDED_SESSION_ID: &str = "test-embedded-session";
+
+        clear_browser_renderer_session(FLOATING_SESSION_ID);
+        clear_browser_embedded_webview_session(EMBEDDED_SESSION_ID);
+        bind_browser_renderer_session(FLOATING_SESSION_ID);
+        begin_browser_embedded_webview_navigation(EMBEDDED_SESSION_ID, "https://embedded.example/");
+
+        assert_eq!(
+            current_browser_renderer_session_id().as_deref(),
+            Some(FLOATING_SESSION_ID),
+        );
+        assert_eq!(
+            current_browser_embedded_webview_session_id().as_deref(),
+            Some(EMBEDDED_SESSION_ID),
+        );
+
+        clear_browser_embedded_webview_session(EMBEDDED_SESSION_ID);
+        assert_eq!(
+            current_browser_renderer_session_id().as_deref(),
+            Some(FLOATING_SESSION_ID),
+        );
+        clear_browser_renderer_session(FLOATING_SESSION_ID);
+    }
+
+    #[test]
+    fn embedded_renderer_binding_rejects_late_page_and_title_callbacks() {
+        let mut binding =
+            EmbeddedBrowserWebviewBinding::navigating_to("session-b", "https://b.example/page");
+
+        assert_eq!(
+            binding.accepts_page_load(
+                "https://a.example/page",
+                tauri::webview::PageLoadEvent::Started,
+            ),
+            None,
+        );
+        assert_eq!(binding.accepts_title("https://a.example/page"), None);
+        assert_eq!(
+            binding.accepts_page_load(
+                "https://b.example/page",
+                tauri::webview::PageLoadEvent::Finished,
+            ),
+            None,
+        );
+
+        assert_eq!(
+            binding.accepts_page_load(
+                "https://b.example/page#section",
+                tauri::webview::PageLoadEvent::Started,
+            ),
+            Some("session-b".to_string()),
+        );
+        assert_eq!(binding.accepts_title("https://a.example/page"), None);
+        assert_eq!(
+            binding.accepts_title("https://b.example/page"),
+            Some("session-b".to_string()),
+        );
+        assert_eq!(
+            binding.accepts_page_load(
+                "https://b.example/page",
+                tauri::webview::PageLoadEvent::Finished,
+            ),
+            Some("session-b".to_string()),
+        );
+    }
+
+    #[test]
+    fn tab_context_menu_overlay_uses_private_bridge_and_preserves_disabled_items() {
+        let theme = BrowserTabContextMenuTheme {
+            color_scheme: "light".to_string(),
+            surface: "theme-surface".to_string(),
+            foreground: "theme-foreground".to_string(),
+            border: "theme-border".to_string(),
+            hover_surface: "theme-hover".to_string(),
+            disabled_foreground: "theme-disabled".to_string(),
+            shadow: "theme-shadow".to_string(),
+        };
+        let script = browser_tab_context_menu_overlay_script(
+            "session-42",
+            "menu-nonce-42",
+            88.0,
+            Some("zh-CN"),
+            &["right".to_string()],
+            &theme,
+        )
+        .expect("overlay script should serialize");
+
+        assert!(script.contains(BROWSER_TAB_CONTEXT_MENU_BRIDGE_HOST));
+        assert!(script.contains(BROWSER_TAB_CONTEXT_MENU_BRIDGE_PATH));
+        assert!(script.contains("关闭标签页"));
+        assert!(script.contains("left:min(88px"));
+        assert!(script.contains("top:16px"));
+        assert!(script.contains("button.disabled = disabled"));
+        assert!(script.contains("[\"right\",\"关闭右侧标签页\",true]"));
+        assert!(script.contains("\"surface\":\"theme-surface\""));
+        assert!(script.contains("--mossx-tab-menu-surface"));
+        assert!(script.contains("attachShadow({ mode: \"closed\" })"));
+        assert!(script.contains("event.composedPath().includes(host)"));
+        assert!(script.contains("&nonce="));
+        assert!(script.contains("menu-nonce-42"));
+        assert!(!script.contains("#111318"));
+    }
+
+    #[test]
+    fn tab_context_menu_invocation_is_scoped_expiring_and_one_time() {
+        let issued_at = 100_u64;
+        let invocation = BrowserTabContextMenuInvocation::new("target-b", "renderer-a", issued_at);
+        let nonce = invocation.nonce.clone();
+
+        assert!(invocation.authorizes(
+            nonce.as_str(),
+            "target-b",
+            "renderer-a",
+            issued_at + BROWSER_TAB_CONTEXT_MENU_BRIDGE_TTL_MS,
+        ));
+        assert!(!invocation.authorizes(nonce.as_str(), "target-c", "renderer-a", issued_at + 1,));
+        assert!(!invocation.authorizes(nonce.as_str(), "target-b", "renderer-c", issued_at + 1,));
+        assert!(!invocation.authorizes(
+            nonce.as_str(),
+            "target-b",
+            "renderer-a",
+            issued_at + BROWSER_TAB_CONTEXT_MENU_BRIDGE_TTL_MS + 1,
+        ));
+        assert!(!invocation.authorizes(nonce.as_str(), "target-b", "renderer-a", issued_at - 1,));
+
+        let mut active_invocation = Some(invocation);
+        assert!(consume_tab_context_menu_invocation(
+            &mut active_invocation,
+            nonce.as_str(),
+            "target-b",
+            "renderer-a",
+            issued_at + 1,
+        ));
+        assert!(active_invocation.is_none());
+        assert!(!consume_tab_context_menu_invocation(
+            &mut active_invocation,
+            nonce.as_str(),
+            "target-b",
+            "renderer-a",
+            issued_at + 2,
+        ));
     }
 
     #[test]

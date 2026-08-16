@@ -196,6 +196,7 @@ const workspaceB: WorkspaceInfo = {
 const baseSettings: AppSettings = {
   claudeBin: null,
   kimiBin: null,
+  piBin: null,
   grokBin: null,
   opencodeBin: null,
   dshBin: null,
