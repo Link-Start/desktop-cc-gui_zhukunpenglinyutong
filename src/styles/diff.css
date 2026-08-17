@@ -1564,6 +1564,7 @@ body[data-read-only-compare-resizing="true"] .read-only-compare-resizer::after {
   color: color-mix(in srgb, var(--status-error, #ff6e6e) 88%, var(--text-emphasis));
 }
 
+.diff-row-action--reveal:hover,
 .diff-row-action--preview-inline:hover,
 .diff-row-action--preview-modal:hover {
   background: color-mix(in srgb, var(--text-accent, #5aa9ff) 16%, var(--surface-control));

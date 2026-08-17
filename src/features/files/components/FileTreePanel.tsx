@@ -50,7 +50,7 @@ import {
   type WorkspaceDirectoryEntry,
 } from "../../../services/tauri";
 import { joinWorkspaceAbsolutePath } from "../../../utils/workspacePaths";
-import { detectRendererPlatform } from "../../../utils/rendererPlatform";
+import { getRevealInOsFileManagerLabelKey } from "../../../utils/rendererPlatform";
 import { appendWorkspaceFileListingBudgetDiagnostic } from "../../../services/rendererDiagnostics";
 import type {
   GitFileStatus,
@@ -77,6 +77,7 @@ import {
   type DetachedFileTreeDragBridgePayload,
 } from "../detachedFileTreeDragBridge";
 import { loadFileTreeStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import {
   CROSS_WINDOW_TREE_DRAG_REBROADCAST_THROTTLE_MS,
 } from "../utils/fileTreeDragBridge";
@@ -210,7 +211,16 @@ function hashFileTreeDiagnosticPath(path: string) {
   return hash.toString(36);
 }
 
-export function FileTreePanel({
+export function FileTreePanel(props: FileTreePanelProps) {
+  const stylesReady = useFeatureStylesReady(loadFileTreeStyles);
+  if (!stylesReady) {
+    return null;
+  }
+
+  return <FileTreePanelImpl {...props} />;
+}
+
+function FileTreePanelImpl({
   workspaceId,
   workspaceName,
   workspacePath,
@@ -247,9 +257,6 @@ export function FileTreePanel({
   onOpenFileHistory,
   revealRequest = null,
 }: FileTreePanelProps) {
-  useEffect(() => {
-    void loadFileTreeStyles();
-  }, []);
   const directoryEntries = directories ?? EMPTY_DIRECTORIES;
   const ignoredFileEntries = gitignoredFiles ?? EMPTY_SET;
   const ignoredDirectoryEntries = gitignoredDirectories ?? EMPTY_SET;
@@ -1200,16 +1207,10 @@ export function FileTreePanel({
     [workspacePath],
   );
 
-  const revealInOsLabel = useMemo(() => {
-    const platform = detectRendererPlatform();
-    if (platform === "windows") {
-      return t("files.revealInExplorer");
-    }
-    if (platform === "linux") {
-      return t("files.revealInFileManager");
-    }
-    return t("files.revealInFinder");
-  }, [t]);
+  const revealInOsLabel = useMemo(
+    () => t(getRevealInOsFileManagerLabelKey()),
+    [t],
+  );
 
   const previewImageSrc = useMemo(() => {
     if (!previewPath || previewKind !== "image") {

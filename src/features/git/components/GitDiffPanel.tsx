@@ -2,6 +2,8 @@ import type { GitFileDiff, GitHubPullRequest, GitLogEntry } from "../../../types
 import {
   getGitDiffs,
   getGitFileFullDiff,
+  openFolderInFileManager,
+  revealInFileManager,
   type CommitMessageEngine,
 } from "../../../services/tauri";
 import type {
@@ -98,6 +100,7 @@ import {
   openHtmlInBrowser,
 } from "../../files/utils/openHtmlInBrowser";
 import { pushErrorToast } from "../../../services/toasts";
+import { getRevealInOsFileManagerLabelKey } from "../../../utils/rendererPlatform";
 
 type ModeMenuLayout = {
   align: "left" | "right";
@@ -201,6 +204,7 @@ function DiffTreeSection({
   onFileClick,
   onOpenInlinePreview,
   onOpenFilePreview,
+  onRevealInFileManager,
   onOpenInBrowser,
   onShowFileMenu,
   collapsedFolders,
@@ -448,6 +452,11 @@ function DiffTreeSection({
                         ? () => onOpenFilePreview(file, section)
                         : undefined
                     }
+                    onRevealInFileManager={
+                      onRevealInFileManager
+                        ? () => onRevealInFileManager(file.path)
+                        : undefined
+                    }
                     onOpenInBrowser={
                       onOpenInBrowser
                         ? () => onOpenInBrowser(file.path)
@@ -471,6 +480,7 @@ function DiffTreeSection({
       onFileClick,
       onOpenInlinePreview,
       onOpenFilePreview,
+      onRevealInFileManager,
       onOpenInBrowser,
       onActivateFile,
       onShowFileMenu,
@@ -632,6 +642,11 @@ function DiffTreeSection({
                           ? () => onOpenFilePreview(file, section)
                           : undefined
                       }
+                      onRevealInFileManager={
+                        onRevealInFileManager
+                          ? () => onRevealInFileManager(file.path)
+                          : undefined
+                      }
                       onOpenInBrowser={
                         onOpenInBrowser
                           ? () => onOpenInBrowser(file.path)
@@ -686,6 +701,11 @@ function DiffTreeSection({
                   onOpenPreview={
                     onOpenFilePreview
                       ? () => onOpenFilePreview(file, section)
+                      : undefined
+                  }
+                  onRevealInFileManager={
+                    onRevealInFileManager
+                      ? () => onRevealInFileManager(file.path)
                       : undefined
                   }
                   onOpenInBrowser={
@@ -1081,6 +1101,66 @@ function GitDiffPanelImpl({
       });
     },
     [gitRoot, t, workspaceId, workspacePath],
+  );
+
+  const revealLocalFileInOsFileManager = useCallback(
+    (repositoryRoot: string | null | undefined, file: Pick<DiffFile, "path" | "status">) => {
+      if (!workspacePath?.trim()) {
+        pushErrorToast({
+          title: t(getRevealInOsFileManagerLabelKey()),
+          message: t("files.revealFailed", {
+            message: t("files.openInBrowserNoWorkspace"),
+          }),
+        });
+        return;
+      }
+      const workspaceRelativePath = resolveRepositoryWorkspaceFilePath(
+        workspacePath,
+        repositoryRoot ?? gitRoot,
+        file.path,
+      );
+      const absolutePath = joinWorkspaceAbsolutePath(
+        workspacePath,
+        workspaceRelativePath,
+      );
+      const reveal = isDeletedDiffFile(file)
+        ? openFolderInFileManager(absolutePath)
+        : revealInFileManager(absolutePath);
+      void reveal.catch((error) => {
+        console.warn("[git-diff] revealInFileManager failed", error);
+        pushErrorToast({
+          title: t(getRevealInOsFileManagerLabelKey()),
+          message: t("files.revealFailed", {
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        });
+      });
+    },
+    [gitRoot, t, workspacePath],
+  );
+
+  const handleRevealInFileManager = useCallback(
+    (path: string) => {
+      const file = allFiles.find(
+        (entry) => normalizeDiffPath(entry.path) === normalizeDiffPath(path),
+      );
+      revealLocalFileInOsFileManager(gitRoot, file ?? { path, status: "M" });
+    },
+    [allFiles, gitRoot, revealLocalFileInOsFileManager],
+  );
+
+  const handleRevealRepositoryInFileManager = useCallback(
+    (repositoryRoot: string, path: string) => {
+      const repositoryStatus = repositoryStatuses.find(
+        (status) => status.repositoryRoot === repositoryRoot,
+      );
+      const file = [
+        ...(repositoryStatus?.stagedFiles ?? []),
+        ...(repositoryStatus?.unstagedFiles ?? []),
+      ].find((entry) => normalizeDiffPath(entry.path) === normalizeDiffPath(path));
+      revealLocalFileInOsFileManager(repositoryRoot, file ?? { path, status: "M" });
+    },
+    [repositoryStatuses, revealLocalFileInOsFileManager],
   );
 
   const handleOpenInBrowser = useCallback(
@@ -2614,6 +2694,7 @@ function GitDiffPanelImpl({
               onOpenFilePreview={handleOpenRepositoryFilePreview}
               onOpenFileContent={(repositoryRoot, path) => onOpenFile?.(path, repositoryRoot)}
               onOpenInlinePreview={onSelectFile ? handleOpenRepositoryInlinePreview : undefined}
+              onRevealInFileManager={handleRevealRepositoryInFileManager}
               onOpenInBrowser={handleOpenRepositoryInBrowser}
               onShowFileMenu={showRepositoryFileMenu}
               onRefresh={onRefreshRepositoryStatuses}
@@ -2655,6 +2736,7 @@ function GitDiffPanelImpl({
                     onFileClick={handleFileClick}
                     onOpenInlinePreview={onSelectFile ? handleOpenInlinePreview : undefined}
                     onOpenFilePreview={onOpenFile ? handleOpenFileContent : undefined}
+                    onRevealInFileManager={handleRevealInFileManager}
                     onOpenInBrowser={handleOpenInBrowser}
                     onShowFileMenu={showFileMenu}
                     collapsedFolders={collapsedFolders}
@@ -2685,6 +2767,7 @@ function GitDiffPanelImpl({
                     onFileClick={handleFileClick}
                     onOpenInlinePreview={onSelectFile ? handleOpenInlinePreview : undefined}
                     onOpenFilePreview={onOpenFile ? handleOpenFileContent : undefined}
+                    onRevealInFileManager={handleRevealInFileManager}
                     onOpenInBrowser={handleOpenInBrowser}
                     onShowFileMenu={showFileMenu}
                   />
@@ -2714,6 +2797,7 @@ function GitDiffPanelImpl({
                     onFileClick={handleFileClick}
                     onOpenInlinePreview={onSelectFile ? handleOpenInlinePreview : undefined}
                     onOpenFilePreview={onOpenFile ? handleOpenFileContent : undefined}
+                    onRevealInFileManager={handleRevealInFileManager}
                     onOpenInBrowser={handleOpenInBrowser}
                     onShowFileMenu={showFileMenu}
                     collapsedFolders={collapsedFolders}
@@ -2743,6 +2827,7 @@ function GitDiffPanelImpl({
                     onFileClick={handleFileClick}
                     onOpenInlinePreview={onSelectFile ? handleOpenInlinePreview : undefined}
                     onOpenFilePreview={onOpenFile ? handleOpenFileContent : undefined}
+                    onRevealInFileManager={handleRevealInFileManager}
                     onOpenInBrowser={handleOpenInBrowser}
                     onShowFileMenu={showFileMenu}
                   />
