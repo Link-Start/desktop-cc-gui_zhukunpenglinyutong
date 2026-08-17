@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getCliVersionStatus } from "@/services/tauri";
+import type { CliInstallEngine, CliVersionStatus } from "@/types";
 import { useCliVersionStatus } from "./useCliVersionStatus";
 
 vi.mock("@/services/tauri", async () => {
@@ -26,10 +27,10 @@ describe("useCliVersionStatus", () => {
   });
 
   it("does not keep a slower previous engine response after switching tabs", async () => {
-    let resolveClaude: ((value: unknown) => void) | null = null;
+    let resolveClaude: ((value: CliVersionStatus) => void) | null = null;
     getCliVersionStatusMock.mockImplementation((engine) => {
       if (engine === "claude") {
-        return new Promise((resolve) => {
+        return new Promise<CliVersionStatus>((resolve) => {
           resolveClaude = resolve;
         });
       }
@@ -45,9 +46,9 @@ describe("useCliVersionStatus", () => {
     });
 
     const { result, rerender } = renderHook(
-      ({ engine }: { engine: "claude" | "dsh" }) =>
+      ({ engine }: { engine: CliInstallEngine }) =>
         useCliVersionStatus({ engine, enabled: true }),
-      { initialProps: { engine: "claude" as const } },
+      { initialProps: { engine: "claude" as CliInstallEngine } },
     );
 
     await act(async () => {

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { AppSettings, CodexDoctorResult } from "../../../types";
+import type { DshHostEnsureResult } from "../../../services/tauri";
 import { DshConnectionPanel } from "./DshConnectionPanel";
 
 const { runDshDoctorMock, ensureDshHostMock, cancelDshHostMock } = vi.hoisted(() => ({
@@ -131,18 +132,13 @@ describe("DshConnectionPanel", () => {
   });
 
   it("lets the user cancel an in-flight start", async () => {
-    let resolveStart: (() => void) | null = null;
+    let resolveStart: (value: DshHostEnsureResult) => void = () => {
+      throw new Error("ensureDshHost was not started");
+    };
     ensureDshHostMock.mockImplementation(
       () =>
-        new Promise((resolve) => {
-          resolveStart = () =>
-            resolve({
-              origin: "http://127.0.0.1:3080",
-              host: "127.0.0.1",
-              port: 3080,
-              ownership: "spawned",
-              describe: null,
-            });
+        new Promise<DshHostEnsureResult>((resolve) => {
+          resolveStart = resolve;
         }),
     );
     cancelDshHostMock.mockResolvedValue(undefined);
@@ -167,7 +163,15 @@ describe("DshConnectionPanel", () => {
     await waitFor(() => {
       expect(cancelDshHostMock).toHaveBeenCalledTimes(1);
     });
-    resolveStart?.();
+    await act(async () => {
+      resolveStart({
+        origin: "http://127.0.0.1:3080",
+        host: "127.0.0.1",
+        port: 3080,
+        ownership: "spawned",
+        describe: null,
+      });
+    });
   });
 
   it("saves host and port from the collapsed connection settings", async () => {
