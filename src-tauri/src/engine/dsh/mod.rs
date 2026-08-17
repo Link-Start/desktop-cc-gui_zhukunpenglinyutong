@@ -1,11 +1,13 @@
 //! DeepSeek Harness (DSH) native engine adapter.
 //!
 //! mossx is a second Host RPC client of a single persistent `dsh web`.
-//! Config / keys stay in `$DSH_HOME`; this module only talks Host RPC.
+//! Keys and provider profiles stay in `$DSH_HOME`. The only settings write
+//! is the narrow image-admission claim in `image_admission`.
 
 pub mod events;
 pub mod history;
 pub mod host;
+pub mod image_admission;
 pub mod session;
 pub mod supervisor;
 
@@ -205,7 +207,7 @@ pub async fn send_user_turn(
     if let Some(handle) = app.as_ref() {
         events::set_app_handle(handle.clone()).await;
     }
-    let (_snapshot, client) = ensure_ready(settings).await?;
+    let (snapshot, client) = ensure_ready(settings).await?;
     let workspace = session::create_workspace(&client, workspace_path).await?;
     let dsh_workspace_id = session::workspace_id_from_create(&workspace)?;
 
@@ -257,20 +259,33 @@ pub async fn send_user_turn(
     )
     .await;
 
-    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+    let selected = if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
         let Some((provider, model_id)) = session::split_model_selection(model, None) else {
             return Err(format!(
                 "DSH model must be a provider/model catalog id, got `{model}`"
             ));
         };
         session::select_model(&client, &native_session_id, &provider, &model_id, effort).await?;
+        Some((provider, model_id))
+    } else {
+        image_admission::selection_from_describe(&snapshot.describe)
+    };
+
+    let prompt_images = session::load_prompt_images(images, workspace_path)?;
+    if !prompt_images.is_empty() {
+        let Some((provider, model_id)) = selected else {
+            return Err(
+                "DSH image input needs a selected provider/model before mossx can declare vision"
+                    .to_string(),
+            );
+        };
+        image_admission::ensure_image_admission(&client, &provider, &model_id).await?;
     }
 
     // Subscribe immediately before prompt so this turn's `turn/end` cannot
     // race past the waiter. Do not inspect history first: a resumed
     // session already has a previous `turn/end`.
     let turn_waiter = events::subscribe_turn_end(&native_session_id).await;
-    let prompt_images = session::load_prompt_images(images, workspace_path)?;
     session::prompt(&client, &native_session_id, text, &prompt_images).await?;
     Ok(DshSendOutcome {
         native_session_id,

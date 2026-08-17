@@ -2,7 +2,10 @@ import type { ConversationItem, ThreadSummary } from "../../../types";
 import { previewThreadName } from "../../../utils/threadItems";
 import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
 import { asNumber, asString } from "../utils/threadNormalize";
-import { hasCodexBackgroundHelperPreview } from "../utils/codexBackgroundHelpers";
+import {
+  hasCodexBackgroundHelperPreview,
+  isCommitMessageHelperPreview,
+} from "../utils/codexBackgroundHelpers";
 import {
   isWeakSessionDisplayTitle,
   mergeSessionDisplaySummary,
@@ -166,8 +169,12 @@ export function threadIdMatchesHiddenAutomaticSessionSet(
   return false;
 }
 
+export function isAutomaticHelperSessionTitle(name: string | null | undefined): boolean {
+  return isCommitMessageHelperPreview(String(name ?? ""));
+}
+
 export function filterHiddenAutomaticThreadSummaries<
-  T extends { id: string; autoSession?: ThreadSummary["autoSession"] },
+  T extends { id: string; name?: string; autoSession?: ThreadSummary["autoSession"] },
 >(
   summaries: readonly T[],
   hiddenIds: ReadonlySet<string>,
@@ -177,11 +184,16 @@ export function filterHiddenAutomaticThreadSummaries<
   }
   if (hiddenIds.size === 0) {
     return summaries.filter(
-      (summary) => summary.autoSession?.visibility !== "hidden",
+      (summary) =>
+        summary.autoSession?.visibility !== "hidden" &&
+        !isAutomaticHelperSessionTitle(summary.name),
     );
   }
   return summaries.filter((summary) => {
     if (summary.autoSession?.visibility === "hidden") {
+      return false;
+    }
+    if (isAutomaticHelperSessionTitle(summary.name)) {
       return false;
     }
     return !threadIdMatchesHiddenAutomaticSessionSet(summary.id, hiddenIds);
@@ -1446,6 +1458,10 @@ function mergeNativeCliSessionSummaries(params: {
     if (isSharedControlPlaneSpawnTitle(session.firstMessage)) {
       return;
     }
+    // commit-message / title / memory helpers：native CLI 列表常丢 autoSession
+    if (isCommitMessageHelperPreview(session.firstMessage)) {
+      return;
+    }
     const prev = mergedById.get(id);
     const updatedAt = Number.isFinite(session.updatedAt)
       ? Math.max(0, session.updatedAt)
@@ -1484,7 +1500,14 @@ function mergeNativeCliSessionSummaries(params: {
       engineSource,
       ...(parentThreadId ? { parentThreadId } : {}),
     };
-    if (!prev || next.updatedAt >= prev.updatedAt) {
+    if (
+      !prev ||
+      next.updatedAt >= prev.updatedAt ||
+      (
+        isWeakSessionDisplayTitle(prev.name) &&
+        !isWeakSessionDisplayTitle(next.name)
+      )
+    ) {
       const merged = mergeSessionDisplaySummary(prev, next, {
         mappedTitle,
         customTitle,
@@ -1709,6 +1732,9 @@ export function mergeCodexCatalogSessionSummaries(
     }
     // ⚠️ 禁止：凡 Agent N + parentSessionId 就丢——会误杀 native Codex/Claude 子代理树。
     // 协作 worker 改名 Agent N 的主路径：hide set / collabNativeHideRegistry / MOSSX nativeTitle。
+    if (!nativeTitle && isCommitMessageHelperPreview(title)) {
+      return;
+    }
     if (
       engineSource === "codex" &&
       !nativeTitle &&

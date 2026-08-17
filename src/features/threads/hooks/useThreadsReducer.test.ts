@@ -169,6 +169,31 @@ describe("threadReducer", () => {
     });
   });
 
+  it("drops commit-message helper titles from setThreads even without autoSession", () => {
+    const next = threadReducer(initialState, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: "grok:commit-helper",
+          name: "Please generate a commit message. The commit message must follow",
+          updatedAt: 30,
+          engineSource: "grok",
+        },
+        {
+          id: "claude:user",
+          name: "当前收起逻辑与数据不一致",
+          updatedAt: 20,
+          engineSource: "claude",
+        },
+      ],
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "claude:user",
+    ]);
+  });
+
   it("does not churn state when selecting an already active read thread", () => {
     const selected = threadReducer(initialState, {
       type: "setActiveThreadId",
@@ -595,6 +620,50 @@ describe("threadReducer", () => {
       expect(items[0].id).toBe("user-1");
       expect(items[0].text).toBe("Hello there");
     }
+  });
+
+  it("skips DSH injected context when renaming from the first real user prompt", () => {
+    const next = threadReducer(
+      {
+        ...initialState,
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "dsh:session-1",
+              name: "Agent 133",
+              updatedAt: 1,
+              engineSource: "dsh",
+            },
+          ],
+        },
+        itemsByThread: {
+          "dsh:session-1": [
+            {
+              id: "dsh-context-1",
+              kind: "message",
+              role: "user",
+              text: "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.",
+            },
+          ],
+        },
+      },
+      {
+        type: "upsertItem",
+        workspaceId: "ws-1",
+        threadId: "dsh:session-1",
+        item: {
+          id: "dsh-user-1",
+          kind: "message",
+          role: "user",
+          text: "用户反馈：他的DSH 无法识别图片",
+        },
+        hasCustomName: false,
+      },
+    );
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe(
+      "用户反馈：他的DSH 无法识别图片",
+    );
   });
 
   it("reconciles optimistic user bubble when backend user message arrives", () => {

@@ -90,6 +90,7 @@ import {
 } from "./ComposerBranchBadge";
 import { ContextBar } from "./ChatInputBox/ContextBar";
 import { TokenIndicator } from "./ChatInputBox/TokenIndicator";
+import { DshSessionStatsLine } from "./DshSessionStatsLine";
 import type {
   ClaudeContextUsageViewModel,
   CodexCompactionSource,
@@ -3583,10 +3584,14 @@ function ComposerImpl({
             />
             {branchControl?.branchName ||
             showFooterUsageIndicator ||
-            isSharedSessionResolved ? (
+            isSharedSessionResolved ||
+            selectedEngine === "dsh" ? (
               <div className="composer-branch-row">
                 {branchControl?.branchName ? (
                   <ComposerBranchBadge {...branchControl} />
+                ) : null}
+                {selectedEngine === "dsh" ? (
+                  <DshSessionStatsLine usage={contextUsage} />
                 ) : null}
                 {showFooterUsageIndicator || isSharedSessionResolved ? (
                   <div className="composer-branch-row-trailing">

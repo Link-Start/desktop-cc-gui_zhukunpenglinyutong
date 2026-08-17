@@ -272,15 +272,6 @@ describe("useThreadActions native session bridges", () => {
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
-        id: "codex-history-1",
-        name: "Generate a concise git commit message for the following changes.",
-        updatedAt: 1_730_200_000_000,
-        engineSource: "codex",
-        source: "mossx",
-        provider: "openai",
-        sourceLabel: "mossx/openai",
-      },
-      {
         id: "claude:claude-fallback-1",
         name: "Claude recovered history",
         updatedAt: 1_730_100_000_000,

@@ -787,6 +787,41 @@ describe("threadReducer", () => {
     expect(next.threadStatusById["opencode:ses-1"]?.hasUnread).toBe(true);
   });
 
+  it("keeps a first-prompt title when a pending DSH thread converges onto Agent N", () => {
+    const next = threadReducer(
+      {
+        ...initialState,
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "dsh-pending-1",
+              name: "用户反馈：他的DSH 无法识别图片",
+              updatedAt: 100,
+              engineSource: "dsh",
+            },
+            {
+              id: "dsh:session-1",
+              name: "Agent 133",
+              updatedAt: 110,
+              engineSource: "dsh",
+            },
+          ],
+        },
+      },
+      {
+        type: "renameThreadId",
+        workspaceId: "ws-1",
+        oldThreadId: "dsh-pending-1",
+        newThreadId: "dsh:session-1",
+      },
+    );
+
+    expect(
+      next.threadsByWorkspace["ws-1"]?.find((thread) => thread.id === "dsh:session-1")
+        ?.name,
+    ).toBe("用户反馈：他的DSH 无法识别图片");
+  });
+
   it("does not revive a promoted Kimi pending alias from a stale history refresh", () => {
     const pendingThreadId = "kimi-pending-1";
     const canonicalThreadId = "kimi:session-real-1";

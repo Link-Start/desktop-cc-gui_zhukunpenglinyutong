@@ -1619,7 +1619,7 @@ const settings = {
         "Start dsh web the next time a conversation needs it and the host is down. Toggling does not start or stop it now.",
       dshAutoStartOn: "on",
       dshAutoStartOff: "off",
-      dshOpenUi: "Open DSH Settings",
+      dshOpenUi: "Open DSH Web UI",
       dshTryOpenUi: "Try opening anyway",
       dshStartNow: "Start now",
       dshStarting: "Starting…",
@@ -1629,7 +1629,8 @@ const settings = {
       dshChecking: "Probing the local host",
       dshCheckingHint: "Only host.describe counts. An open port is not enough.",
       dshHostConnected: "Host connected",
-      dshConnectedHint: "Connected to {{origin}}. Models and API keys stay in the DSH Web UI.",
+      dshConnectedOrigin: "Connected to {{origin}}",
+      dshConnectedHint: "Models and API keys stay in the DSH Web UI.",
       dshDownHint:
         "Cannot reach {{origin}}. Auto-start only applies to the next conversation; use Start now to launch immediately.",
       dshDescribeFailed: "Cannot reach the local host. Start dsh web, or use Start now.",
@@ -1638,6 +1639,7 @@ const settings = {
       dshHostDown: "Host not running",
       dshNotInstalled: "DSH CLI not installed",
       dshModelsHint: "Models come from the running DSH host.",
+      dshOwnershipHintLabel: "Note",
       dshOwnershipNote:
         "Configure models and API keys in the DSH Web UI. mossx only connects to this local host and will not add DSH providers here.",
       dshConnectionSettings: "Connection settings",

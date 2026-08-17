@@ -11,7 +11,7 @@ DSH 和 Claude / Codex 不是一类东西：模型和 API Key 永远在 DSH Web 
 ## What Changes
 
 - DSH 引擎详情第一屏改为 host 连接状态卡：检测中 / 未安装 / 未运行 / 已连接。
-- 已连接时只读展示 `host.describe` 的 provider / model / 会话数，主按钮是「打开 DSH 设置」；同卡提供「关闭」以停本机 host。
+- 已连接时只读展示 `host.describe` 的 provider / model / 会话数，主按钮是「打开 DSH Web UI」；同卡提供「关闭」以停本机 host。
 - 未运行时提供「立即启动」——走现有 supervisor `ensure_host`，与发送链路同一套 adopt / spawn 规则。启动中也可点「关闭」取消 pending spawn。
 - Host + Port 合并进可折叠「连接设置」；自动启动开关保留，文案写清「下次要用时的策略，不是当下动作」。
 - `host.describe` transport 噪声映射成可读 i18n，不把 reqwest URL 原文甩到设置页。

@@ -380,6 +380,18 @@ const messages = {
     builtInAgentUnavailableTitle: "内置智能体不可用",
     builtInAgentUnavailableMessage:
       "该智能体已被关闭或当前不可用，因此本次消息不会使用它的提示词。",
+    backgroundTaskFoldCompleted: "后台任务完成",
+    backgroundTaskFoldFailed: "后台任务失败",
+    backgroundTaskFoldRunning: "后台任务进行中",
+    backgroundTaskFoldNeutral: "后台任务",
+    backgroundTaskFoldExpand: "展开后台任务回执",
+    backgroundTaskFoldCollapse: "收起后台任务回执",
+    backgroundTaskFoldFieldTaskId: "task-id",
+    backgroundTaskFoldFieldToolUseId: "tool-use-id",
+    backgroundTaskFoldFieldOutputFile: "output-file",
+    backgroundTaskFoldFieldStatus: "status",
+    backgroundTaskFoldFieldSummary: "summary",
+    backgroundTaskFoldFieldResult: "result",
   },
 };
 

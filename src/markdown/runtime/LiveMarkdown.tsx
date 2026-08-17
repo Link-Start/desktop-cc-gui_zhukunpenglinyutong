@@ -266,10 +266,13 @@ function parseLightweightMarkdownBlocks(value: string, offsetBase = 0) {
     });
     quoteLines = [];
   };
-  const flushFlow = () => {
+  const flushNonListFlow = () => {
     flushParagraph();
-    flushList();
     flushQuote();
+  };
+  const flushFlow = () => {
+    flushNonListFlow();
+    flushList();
   };
 
   for (const line of lines) {
@@ -290,7 +293,8 @@ function parseLightweightMarkdownBlocks(value: string, offsetBase = 0) {
     } else {
       const trimmed = line.trim();
       if (!trimmed) {
-        flushFlow();
+        // 空行结束段落/引用，但 loose list（条目间空行）继续接到同一条 list。
+        flushNonListFlow();
       } else {
         const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
         if (headingMatch) {
@@ -307,12 +311,19 @@ function parseLightweightMarkdownBlocks(value: string, offsetBase = 0) {
           const unorderedMatch = trimmed.match(/^[-*+]\s+(.+)$/);
           const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/);
           if (unorderedMatch || orderedMatch) {
-            flushParagraph();
-            flushQuote();
-            listItems.push({
+            const nextItem = {
               text: (unorderedMatch?.[1] ?? orderedMatch?.[1] ?? "").trim(),
               ordered: Boolean(orderedMatch),
-            });
+            };
+            const pendingListOrdered = listItems[0]?.ordered;
+            if (
+              pendingListOrdered !== undefined &&
+              pendingListOrdered !== nextItem.ordered
+            ) {
+              flushList();
+            }
+            flushNonListFlow();
+            listItems.push(nextItem);
           } else if (trimmed.startsWith(">")) {
             flushParagraph();
             flushList();

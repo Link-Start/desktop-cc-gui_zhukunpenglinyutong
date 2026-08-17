@@ -23,6 +23,40 @@ describe("threadReducer context compaction lifecycle", () => {
     modelContextWindow: 200_000,
   } as const;
 
+  it("keeps existing sessionStats when a token-only update arrives", () => {
+    const withStats = threadReducer(initialState, {
+      type: "setThreadSessionStats",
+      threadId: "dsh:session-1",
+      sessionStats: {
+        turns: 1,
+        steps: 1,
+        llmMs: 9500,
+        toolMs: 0,
+        ttftMs: 8500,
+        ttftSteps: 1,
+        decodeMs: 1000,
+        decodeTokens: 72,
+      },
+    });
+    const next = threadReducer(withStats, {
+      type: "setThreadTokenUsage",
+      threadId: "dsh:session-1",
+      tokenUsage: sampleTokenUsage,
+    });
+
+    expect(next.tokenUsageByThread["dsh:session-1"]?.sessionStats).toEqual({
+      turns: 1,
+      steps: 1,
+      llmMs: 9500,
+      toolMs: 0,
+      ttftMs: 8500,
+      ttftSteps: 1,
+      decodeMs: 1000,
+      decodeTokens: 72,
+    });
+    expect(next.tokenUsageByThread["dsh:session-1"]?.total.inputTokens).toBe(10);
+  });
+
   it("appends a deduped context compacted message", () => {
     const withCompacted = threadReducer(initialState, {
       type: "appendContextCompacted",

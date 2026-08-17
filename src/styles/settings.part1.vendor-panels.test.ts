@@ -239,16 +239,21 @@ describe("vendor settings panel compact layout", () => {
 
     expect(panelRule).toContain("flex-direction: column;");
     expect(titleRule).toContain("color: var(--text-primary);");
-    expect(factsRule).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));");
+    expect(factsRule).toContain("display: flex;");
+    expect(factsRule).not.toContain("grid-template-columns");
     expect(toggleRule).toContain("color: var(--text-secondary);");
     expect(vendorPanelsCss).toContain(".dsh-status-dot-ok");
     expect(vendorPanelsCss).toContain(".dsh-address-fields");
-    const mainRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-main");
+    const headRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-head");
     const actionsRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-actions");
-    expect(mainRule).toContain("align-items: center;");
-    expect(mainRule).toContain("justify-content: space-between;");
+    const factRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-fact");
+    expect(headRule).toContain("align-items: flex-start;");
+    expect(headRule).toContain("justify-content: space-between;");
     expect(actionsRule).toContain("flex-wrap: nowrap;");
     expect(actionsRule).toContain("justify-content: flex-end;");
+    expect(factRule).toContain("background: none;");
+    expect(vendorPanelsCss).toContain(".dsh-ownership-hint");
+    expect(vendorPanelsCss).not.toContain(".dsh-ownership-note");
     expect(vendorPanelsCss).toContain(".dsh-status-card > * + *");
     expect(getCssRuleBlock(vendorPanelsCss, ".dsh-status-card > * + *")).toContain(
       "border-top: 0;",

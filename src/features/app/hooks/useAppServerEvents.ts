@@ -1589,6 +1589,23 @@ export function dispatchAppServerEvent(
 
   const { workspace_id, message } = payload;
   const method = String(message.method ?? "");
+  const earlyParams = (message.params as Record<string, unknown>) ?? {};
+
+  if (
+    method === "dsh/raw" &&
+    String(earlyParams.kind ?? "") === "dsh-session-stats"
+  ) {
+    const threadId = String(earlyParams.threadId ?? earlyParams.thread_id ?? "");
+    const sessionStats =
+      (earlyParams.sessionStats as Record<string, unknown> | undefined) ??
+      (earlyParams.session_stats as Record<string, unknown> | undefined);
+    if (threadId && sessionStats) {
+      handlers.onThreadTokenUsageUpdated?.(workspace_id, threadId, {
+        sessionStats,
+      });
+    }
+    return;
+  }
 
   if (method === "codex/connected") {
     handlers.onWorkspaceConnected?.(workspace_id);

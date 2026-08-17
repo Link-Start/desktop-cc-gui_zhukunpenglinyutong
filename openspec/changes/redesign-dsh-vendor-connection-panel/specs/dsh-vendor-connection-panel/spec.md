@@ -101,14 +101,18 @@ CLI配置管理里的 DeepSeek Harness 详情 MUST 把 host 连接状态作为�
 
 ### Requirement: Status actions sit beside the copy without crossing a divider
 
-状态卡 MUST 把文案与操作放在同一行容器内：操作靠右、相对整卡垂直居中、单行不换行。MUST NOT 让 `vendor-group-card` 的 sibling hairline 从按钮中间穿过。
+状态卡 MUST 把标题/说明与操作放在同一行容器内：操作靠右上、与标题行对齐、单行不换行。MUST NOT 把按钮沉到事实行下方。MUST NOT 让 `vendor-group-card` 的 sibling hairline 从按钮中间穿过。
+
+已连接时的 `provider` / `model` / `attachedSessions` MUST 以无底的 inline 元数据展示，MUST NOT 做成三块灰底卡。所有权说明 MUST 作为状态卡上方的独立提示（带「提示」标签），MUST NOT 塞进状态卡正文。
 
 #### Scenario: Connected card layout
 
 - **WHEN** 状态为已连接
-- **THEN** 「打开 DSH 设置」「关闭」「重新检测」MUST 在卡片右侧同一行
-- **AND** 按钮 MUST 相对整卡垂直居中
+- **THEN** 「打开 DSH Web UI」「关闭」「重新检测」MUST 在卡片右上同一行，与标题对齐
+- **AND** 按钮 MUST NOT 出现在事实行下方
 - **AND** 按钮与卡片底部分隔线之间 MUST 没有压线
+- **AND** 当前供应商 / 模型 / 已挂会话 MUST 以 inline 元数据展示，不得使用独立灰底卡片
+- **AND** 所有权说明 MUST 作为状态卡上方的独立提示，不得塞进状态卡正文
 
 ### Requirement: Connection settings are secondary
 

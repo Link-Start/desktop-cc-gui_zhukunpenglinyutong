@@ -13,6 +13,8 @@ describe("sessionDisplayProjection", () => {
     expect(isWeakSessionDisplayTitle("Claude Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("Grok Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("Kimi Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("DSH Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("DeepSeek Harness Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("分析左侧栏消失问题")).toBe(false);
   });
 

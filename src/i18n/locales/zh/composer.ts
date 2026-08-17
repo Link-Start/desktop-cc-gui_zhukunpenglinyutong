@@ -284,6 +284,9 @@ const composer = {
     contextLedgerActionOpenSourceDetail: "查看来源详情",
     contextLedgerDetailDialogTitle: "来源详情",
     contextLedgerDetailDialogClose: "关闭",
+    dshStatsTtftAverage: "首 token 平均 {{duration}}",
+    dshStatsTokensPerSecond: "{{throughput}} tok/s",
+    dshStatsCacheHit: "缓存命中 {{percent}}%",
     runStatus: {
       label: "本轮运行状态",
       panel: "运行状态详情",

@@ -4,6 +4,84 @@ import type { ThreadState } from "./useThreadsReducer";
 import { initialState, threadReducer } from "./useThreadsReducer";
 
 describe("threadReducer history restore", () => {
+  it("upgrades Agent N titles from hydrated first user messages", () => {
+    const next = threadReducer(
+      {
+        ...initialState,
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "dsh:session-1",
+              name: "Agent 133",
+              updatedAt: 1,
+              engineSource: "dsh",
+            },
+          ],
+        },
+      },
+      {
+        type: "setThreadItems",
+        threadId: "dsh:session-1",
+        items: [
+          {
+            id: "dsh-user-1",
+            kind: "message",
+            role: "user",
+            text: "用户反馈：他的DSH 无法识别图片",
+          },
+        ],
+      },
+    );
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe(
+      "用户反馈：他的DSH 无法识别图片",
+    );
+  });
+
+  it("upgrades Agent N titles when older first user messages are prepended", () => {
+    const next = threadReducer(
+      {
+        ...initialState,
+        threadsByWorkspace: {
+          "ws-1": [
+            {
+              id: "dsh:session-1",
+              name: "Agent 133",
+              updatedAt: 1,
+              engineSource: "dsh",
+            },
+          ],
+        },
+        itemsByThread: {
+          "dsh:session-1": [
+            {
+              id: "dsh-assistant-1",
+              kind: "message",
+              role: "assistant",
+              text: "这个问题很明确",
+            },
+          ],
+        },
+      },
+      {
+        type: "prependThreadItems",
+        threadId: "dsh:session-1",
+        items: [
+          {
+            id: "dsh-user-1",
+            kind: "message",
+            role: "user",
+            text: "用户反馈：他的DSH 无法识别图片",
+          },
+        ],
+      },
+    );
+
+    expect(next.threadsByWorkspace["ws-1"]?.[0]?.name).toBe(
+      "用户反馈：他的DSH 无法识别图片",
+    );
+  });
+
   it("preserves the local Codex compaction message through history reconcile", () => {
     const base: ThreadState = {
       ...initialState,

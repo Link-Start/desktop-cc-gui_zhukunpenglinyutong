@@ -1531,7 +1531,7 @@ const settings = {
         "下次对话需要 host 且它未运行时自动拉起。拨开关不会立刻启动或停止。",
       dshAutoStartOn: "开",
       dshAutoStartOff: "关",
-      dshOpenUi: "打开 DSH 设置",
+      dshOpenUi: "打开 DSH Web UI",
       dshTryOpenUi: "仍尝试打开",
       dshStartNow: "立即启动",
       dshStarting: "正在启动…",
@@ -1541,7 +1541,8 @@ const settings = {
       dshChecking: "正在探测本地 host",
       dshCheckingHint: "只信 host.describe，不把端口通当作已就绪。",
       dshHostConnected: "主机已连接",
-      dshConnectedHint: "已连接到 {{origin}}。模型和 API Key 仍在 DSH Web UI。",
+      dshConnectedOrigin: "已连接到 {{origin}}",
+      dshConnectedHint: "模型和 API Key 仍在 DSH Web UI。",
       dshDownHint:
         "连不上 {{origin}}。自动启动只影响下次对话；要现在拉起请点立即启动。",
       dshDescribeFailed: "连不上本地 host。确认 dsh web 已启动，或点立即启动。",
@@ -1550,6 +1551,7 @@ const settings = {
       dshHostDown: "主机未运行",
       dshNotInstalled: "未安装 DSH CLI",
       dshModelsHint: "模型来自正在运行的 DSH 主机。",
+      dshOwnershipHintLabel: "提示",
       dshOwnershipNote:
         "模型和 API Key 在 DSH Web UI 里配。mossx 只负责连上这台本地 host，不会在这里加供应商。",
       dshConnectionSettings: "连接设置",

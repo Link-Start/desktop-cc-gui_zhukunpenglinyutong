@@ -32,7 +32,7 @@
 - [x] 5.2 修 DSH 头泄漏 Claude 版本（provider key + request-id + engine filter）
 - [x] 5.3 已连接页也提供「关闭」；`stop_host` 可停本机 adopted listener
 - [x] 5.4 transport 错误映射 `dshDescribeFailed`
-- [x] 5.5 状态卡单一子节点 + 按钮相对整卡垂直居中，去掉压线 hairline
+- [x] 5.5 状态卡单一子节点 + 按钮靠右上与标题对齐，去掉压线 hairline；事实行改为 inline 元数据，所有权说明做成卡上独立提示
 - [x] 5.6 Windows 扫描 Hermes / Scoop / mise / fnm 常规 path
 
 ## 6. 验收

@@ -46,7 +46,7 @@ Phase S 已在本机 `dsh 0.1.0-rc.6` + `127.0.0.1:3080` 证实 Host RPC 可作�
 
 - 不内嵌 DSH Web UI，不把 mossx 做成 DSH client plugin。
 - 不在 mossx 内配置 DSH providers / API key / base URL。
-- 不调用 `settings.*` / `credentials.*` / `llm.discoverModels`。
+- 不调用 `credentials.*` / `llm.discoverModels`；不把 mossx 做成 DSH 配置面。附图准入的窄例外见 `fix-dsh-custom-route-image-admission`（只写 `llm-pi-ai` 的 `input` / `defaultInput`）。
 - 不用 ACP / headless / Python SDK 发主对话。
 - 不做 Shared Session / Squad / Provider Continuation（L3）。
 - 不把 DSH workspace 列表替代 mossx workspace。

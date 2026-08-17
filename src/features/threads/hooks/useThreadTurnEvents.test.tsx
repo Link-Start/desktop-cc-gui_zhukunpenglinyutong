@@ -40,6 +40,12 @@ vi.mock("../utils/threadNormalize", () => ({
   normalizePlanUpdate: vi.fn(),
   normalizeRateLimits: vi.fn(),
   normalizeTokenUsage: vi.fn(),
+  normalizeDshSessionStats: (value: unknown) => {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    return value;
+  },
 }));
 
 type SetupOverrides = {
@@ -371,6 +377,24 @@ describe("useThreadTurnEvents", () => {
       type: "hideThread",
       workspaceId: "ws-1",
       threadId: "thread-helper",
+    });
+  });
+
+  it("hides grok commit-message helper threads on start", () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "grok:commit-helper",
+        preview:
+          "Please generate a commit message. The commit message must follow the Conventional Commits specification and be written entirely in English.",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "grok:commit-helper",
     });
   });
 
@@ -1949,6 +1973,31 @@ describe("useThreadTurnEvents", () => {
       threadId: "thread-1",
       tokenUsage: normalized,
     });
+  });
+
+  it("patches sessionStats without replacing token counts", () => {
+    const { result, dispatch } = makeOptions();
+    const sessionStats = {
+      ttftMs: 8500,
+      ttftSteps: 1,
+      decodeMs: 1000,
+      decodeTokens: 72,
+    };
+
+    act(() => {
+      result.current.onThreadTokenUsageUpdated("ws-1", "dsh:session-1", {
+        sessionStats,
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadSessionStats",
+      threadId: "dsh:session-1",
+      sessionStats,
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "setThreadTokenUsage" }),
+    );
   });
 
   it("dispatches normalized rate limits updates", () => {

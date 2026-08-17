@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WORKSPACE_WALLPAPER,
+  isWorkspaceFluidWallpaperSupported,
+  resolveWorkspaceWallpaperMode,
   sanitizeCustomWallpaperPath,
   sanitizeWorkspaceWallpaper,
 } from "./workspaceWallpaper";
@@ -94,6 +96,44 @@ describe("workspaceWallpaper", () => {
     expect(sanitizeCustomWallpaperPath("/tmp/photo.jpeg")).toBe(
       "/tmp/photo.jpeg",
     );
+  });
+
+  it("disables fluid wallpaper on Windows and keeps it elsewhere", () => {
+    expect(isWorkspaceFluidWallpaperSupported(true)).toBe(false);
+    expect(isWorkspaceFluidWallpaperSupported(false)).toBe(true);
+    expect(
+      resolveWorkspaceWallpaperMode(
+        {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "mist",
+          veilOpacity: 12,
+        },
+        true,
+      ),
+    ).toBe("none");
+    expect(
+      resolveWorkspaceWallpaperMode(
+        {
+          mode: "custom",
+          customImagePath: "/tmp/wall.png",
+          fluidPreset: "mist",
+          veilOpacity: 12,
+        },
+        true,
+      ),
+    ).toBe("none");
+    expect(
+      resolveWorkspaceWallpaperMode(
+        {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "mist",
+          veilOpacity: 12,
+        },
+        false,
+      ),
+    ).toBe("fluid");
   });
 
   it("clamps frost blur to the readable chrome range", () => {

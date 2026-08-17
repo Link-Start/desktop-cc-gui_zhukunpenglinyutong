@@ -1,6 +1,7 @@
 import type { ThreadSummary } from "../../../types";
 import { prepareThreadItems } from "../../../utils/threadItems";
 import { isClaudeForkThreadId } from "../utils/claudeForkThread";
+import { shouldPreferExistingThreadName } from "./threadReducerThreadNaming";
 import type { ThreadState } from "./threadReducerTypes";
 
 export function attachReplacedThreadId(
@@ -99,6 +100,9 @@ export function renameThreadStateIdentity({
       dedupedById.set(thread.id, {
         ...current,
         ...thread,
+        name: shouldPreferExistingThreadName(current.name, thread.name)
+          ? current.name
+          : thread.name,
         sourceLabel: thread.sourceLabel ?? current.sourceLabel,
         providerProfileId:
           thread.providerProfileId ?? current.providerProfileId,

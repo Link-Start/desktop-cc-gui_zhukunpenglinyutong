@@ -103,6 +103,31 @@ describe("useThreadActions.helpers", () => {
     expect(filtered.map((row) => row.id)).toEqual(["claude:user-visible"]);
   });
 
+  it("filters commit-message helper titles even without autoSession or hidden ids", () => {
+    const filtered = filterHiddenAutomaticThreadSummaries(
+      [
+        {
+          id: "grok:commit-en",
+          name: "Please generate a commit message. The commit message must follow",
+          autoSession: null,
+        },
+        {
+          id: "grok:commit-zh",
+          name: "请生成一次提交（commit）信息，提交信息需遵循 Conventional Commits 规范",
+          autoSession: null,
+        },
+        {
+          id: "grok:user-visible",
+          name: "审查当前收起逻辑",
+          autoSession: null,
+        },
+      ],
+      new Set(),
+    );
+
+    expect(filtered.map((row) => row.id)).toEqual(["grok:user-visible"]);
+  });
+
   it("projects provider continuation at the top level without parentThreadId", () => {
     const [continuation] = mergeCodexCatalogSessionSummaries(
       [],
@@ -1064,6 +1089,41 @@ describe("useThreadActions.helpers", () => {
     ]);
   });
 
+  it("mergeGrokSessionSummaries drops commit-message helper firstMessage", () => {
+    const merged = mergeGrokSessionSummaries(
+      [
+        {
+          id: "grok:keep",
+          name: "用户 Grok 会话",
+          updatedAt: 1,
+          engineSource: "grok",
+        },
+      ],
+      [
+        {
+          sessionId: "commit-helper",
+          firstMessage:
+            "Please generate a commit message. The commit message must follow the Conventional Commits specification and be written entirely in English.",
+          updatedAt: 20,
+          fileSizeBytes: 10,
+        },
+        {
+          sessionId: "keep-user",
+          firstMessage: "当前收起逻辑与数据不一致",
+          updatedAt: 15,
+          fileSizeBytes: 10,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id).sort()).toEqual([
+      "grok:keep",
+      "grok:keep-user",
+    ]);
+  });
+
   it("mergeCodexCatalogSessionSummaries drops collab MOSSX worker before Agent N rename", () => {
     const multiLine =
       `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
@@ -1253,6 +1313,33 @@ describe("useThreadActions.helpers", () => {
       id: "dsh:sess-a",
       engineSource: "dsh",
       name: "hello from dsh",
+    });
+  });
+
+  it("lets a later DSH first-message title upgrade an older Agent N row", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:sess-a",
+          name: "Agent 133",
+          updatedAt: 200,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "sess-a",
+          firstMessage: "用户反馈：他的DSH 无法识别图片",
+          updatedAt: 30,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-a",
+      name: "用户反馈：他的DSH 无法识别图片",
     });
   });
 

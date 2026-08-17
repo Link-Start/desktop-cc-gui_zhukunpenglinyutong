@@ -97,137 +97,150 @@ export function DshConnectionPanel({
 
   return (
     <div className="dsh-connection-panel">
+      <p className="dsh-ownership-hint">
+        <span className="dsh-ownership-hint-badge">
+          {t("settings.vendor.dshOwnershipHintLabel")}
+        </span>
+        <span className="dsh-ownership-hint-copy">
+          {t("settings.vendor.dshOwnershipNote")}
+        </span>
+      </p>
       <section className="vendor-group-card dsh-status-card" aria-live="polite">
         <div className="dsh-status-main">
-          <div className="dsh-status-copy">
-            <div className="dsh-status-kicker">
-              <span
-                className={cn(
-                  "dsh-status-dot",
-                  view.kind === "connected" && "dsh-status-dot-ok",
-                  view.kind === "down" && "dsh-status-dot-down",
-                  view.kind === "missing" && "dsh-status-dot-down",
-                  (view.kind === "checking" || starting) && "dsh-status-dot-wait",
-                )}
-                aria-hidden
-              />
-              <h3 className="dsh-status-title">
-                {starting
-                  ? t("settings.vendor.dshStarting")
-                  : view.kind === "checking"
-                    ? t("settings.vendor.dshChecking")
+          <div className="dsh-status-head">
+            <div className="dsh-status-copy">
+              <div className="dsh-status-kicker">
+                <span
+                  className={cn(
+                    "dsh-status-dot",
+                    view.kind === "connected" && "dsh-status-dot-ok",
+                    view.kind === "down" && "dsh-status-dot-down",
+                    view.kind === "missing" && "dsh-status-dot-down",
+                    (view.kind === "checking" || starting) && "dsh-status-dot-wait",
+                  )}
+                  aria-hidden
+                />
+                <h3 className="dsh-status-title">
+                  {starting
+                    ? t("settings.vendor.dshStarting")
+                    : view.kind === "checking"
+                      ? t("settings.vendor.dshChecking")
+                      : view.kind === "missing"
+                        ? t("settings.vendor.dshNotInstalled")
+                        : view.kind === "down"
+                          ? t("settings.vendor.dshHostDown")
+                          : t("settings.vendor.dshHostConnected")}
+                </h3>
+                {view.kind === "connected" ? (
+                  <span className="dsh-status-origin">
+                    {t("settings.vendor.dshConnectedOrigin", {
+                      origin: view.origin,
+                    })}
+                  </span>
+                ) : null}
+              </div>
+              {view.kind !== "connected" ? (
+                <p className="dsh-status-meta">
+                  {view.kind === "down"
+                    ? t("settings.vendor.dshDownHint", { origin: view.origin })
                     : view.kind === "missing"
-                      ? t("settings.vendor.dshNotInstalled")
-                      : view.kind === "down"
-                        ? t("settings.vendor.dshHostDown")
-                        : t("settings.vendor.dshHostConnected")}
-              </h3>
+                      ? t("settings.vendor.dshMissingHint")
+                      : t("settings.vendor.dshCheckingHint")}
+                </p>
+              ) : null}
             </div>
-            <p className="dsh-status-meta">
-              {view.kind === "connected"
-                ? t("settings.vendor.dshConnectedHint", {
-                    origin: view.origin,
-                  })
-                : view.kind === "down"
-                  ? t("settings.vendor.dshDownHint", { origin: view.origin })
-                  : view.kind === "missing"
-                    ? t("settings.vendor.dshMissingHint")
-                    : t("settings.vendor.dshCheckingHint")}
+            <div className="dsh-status-actions">
+              {starting ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    void cancelStart();
+                  }}
+                >
+                  {t("settings.vendor.dshCancelStart")}
+                </Button>
+              ) : view.kind === "connected" ? (
+                <Button type="button" size="xs" onClick={openUi}>
+                  {t("settings.vendor.dshOpenUi")}
+                </Button>
+              ) : view.kind === "down" ? (
+                <Button
+                  type="button"
+                  size="xs"
+                  disabled={loading}
+                  onClick={() => {
+                    void startHost();
+                  }}
+                >
+                  {t("settings.vendor.dshStartNow")}
+                </Button>
+              ) : null}
+              {!starting && view.kind === "connected" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="dsh-status-stop"
+                  disabled={loading}
+                  onClick={() => {
+                    void cancelStart();
+                  }}
+                >
+                  {t("settings.vendor.dshStopService")}
+                </Button>
+              ) : null}
+              {!starting && view.kind === "down" ? (
+                <Button type="button" variant="outline" size="xs" onClick={openUi}>
+                  {t("settings.vendor.dshTryOpenUi")}
+                </Button>
+              ) : null}
+              {!starting && view.kind !== "missing" ? (
+                <Button
+                  type="button"
+                  variant={view.kind === "connected" || view.kind === "down" ? "outline" : "ghost"}
+                  size="xs"
+                  disabled={loading}
+                  onClick={() => {
+                    void refresh();
+                  }}
+                >
+                  {t("settings.vendor.dshRecheck")}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          {view.kind === "connected" &&
+          (view.provider || view.model || view.attachedSessions != null) ? (
+            <dl className="dsh-status-facts">
+              {view.provider ? (
+                <div className="dsh-status-fact">
+                  <dt>{t("settings.vendor.dshCurrentProvider")}</dt>
+                  <dd>{view.provider}</dd>
+                </div>
+              ) : null}
+              {view.model ? (
+                <div className="dsh-status-fact">
+                  <dt>{t("settings.vendor.dshCurrentModel")}</dt>
+                  <dd>{view.model}</dd>
+                </div>
+              ) : null}
+              {view.attachedSessions != null ? (
+                <div className="dsh-status-fact">
+                  <dt>{t("settings.vendor.dshAttachedSessions")}</dt>
+                  <dd>{view.attachedSessions}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+          {errorText && !(view.kind === "missing" && errorKind === "missing") ? (
+            <p className="dsh-status-error" role="alert">
+              {errorText}
             </p>
-            {view.kind === "connected" &&
-            (view.provider || view.model || view.attachedSessions != null) ? (
-              <dl className="dsh-status-facts">
-                {view.provider ? (
-                  <div className="dsh-status-fact">
-                    <dt>{t("settings.vendor.dshCurrentProvider")}</dt>
-                    <dd>{view.provider}</dd>
-                  </div>
-                ) : null}
-                {view.model ? (
-                  <div className="dsh-status-fact">
-                    <dt>{t("settings.vendor.dshCurrentModel")}</dt>
-                    <dd>{view.model}</dd>
-                  </div>
-                ) : null}
-                {view.attachedSessions != null ? (
-                  <div className="dsh-status-fact">
-                    <dt>{t("settings.vendor.dshAttachedSessions")}</dt>
-                    <dd>{view.attachedSessions}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            ) : null}
-            {errorText && !(view.kind === "missing" && errorKind === "missing") ? (
-              <p className="dsh-status-error" role="alert">
-                {errorText}
-              </p>
-            ) : null}
-          </div>
-          <div className="dsh-status-actions">
-            {starting ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={() => {
-                  void cancelStart();
-                }}
-              >
-                {t("settings.vendor.dshCancelStart")}
-              </Button>
-            ) : view.kind === "connected" ? (
-              <Button type="button" size="xs" onClick={openUi}>
-                {t("settings.vendor.dshOpenUi")}
-              </Button>
-            ) : view.kind === "down" ? (
-              <Button
-                type="button"
-                size="xs"
-                disabled={loading}
-                onClick={() => {
-                  void startHost();
-                }}
-              >
-                {t("settings.vendor.dshStartNow")}
-              </Button>
-            ) : null}
-            {!starting && view.kind === "connected" ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="dsh-status-stop"
-                disabled={loading}
-                onClick={() => {
-                  void cancelStart();
-                }}
-              >
-                {t("settings.vendor.dshStopService")}
-              </Button>
-            ) : null}
-            {!starting && view.kind === "down" ? (
-              <Button type="button" variant="outline" size="xs" onClick={openUi}>
-                {t("settings.vendor.dshTryOpenUi")}
-              </Button>
-            ) : null}
-            {!starting && view.kind !== "missing" ? (
-              <Button
-                type="button"
-                variant={view.kind === "connected" || view.kind === "down" ? "outline" : "ghost"}
-                size="xs"
-                disabled={loading}
-                onClick={() => {
-                  void refresh();
-                }}
-              >
-                {t("settings.vendor.dshRecheck")}
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </section>
-
-      <p className="dsh-ownership-note">{t("settings.vendor.dshOwnershipNote")}</p>
 
       <div className="vendor-settings-section">
         <button

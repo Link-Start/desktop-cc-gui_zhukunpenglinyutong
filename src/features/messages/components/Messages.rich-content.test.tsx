@@ -853,7 +853,7 @@ describe("Messages rich content", () => {
     expect(screen.queryByRole("button", { name: "engineTaskOutput.inspect" })).toBeNull();
   });
 
-  it("still renders non-subagent task-notification as an independent agent card", () => {
+  it("folds Background-style task-notification instead of the legacy agent card", () => {
     const items: ConversationItem[] = [
       {
         id: "bg-message-1",
@@ -880,8 +880,47 @@ describe("Messages rich content", () => {
       />,
     );
 
-    expect(container.querySelector(".message-agent-task-card")).toBeTruthy();
+    expect(container.querySelector(".message-agent-task-card")).toBeNull();
+    const fold = container.querySelector("[data-testid='background-task-notification-fold']");
+    expect(fold).toBeTruthy();
+    expect(container.textContent ?? "").not.toContain("<task-notification>");
+    expect(container.textContent ?? "").not.toContain("shell finished ok");
+    fireEvent.click(fold?.querySelector("button") as HTMLButtonElement);
     expect(container.textContent ?? "").toContain("shell finished ok");
+    fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
+    expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
+  });
+
+  it("still renders generic non-background task-notification as an independent agent card", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "custom-runner-1",
+        kind: "message",
+        role: "assistant",
+        text: `<task-notification>
+<task-id>job-1</task-id>
+<tool-use-id>call_job_1</tool-use-id>
+<output-file>/private/tmp/tasks/job-1.output</output-file>
+<status>completed</status>
+<summary>Custom runner finished</summary>
+<result>runner finished ok`,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".message-agent-task-card")).toBeTruthy();
+    expect(container.querySelector("[data-testid='background-task-notification-fold']")).toBeNull();
+    expect(container.textContent ?? "").toContain("runner finished ok");
     fireEvent.click(screen.getByRole("button", { name: "engineTaskOutput.inspect" }));
     expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
   });
@@ -1063,7 +1102,117 @@ describe("Messages rich content", () => {
 
     expect(container.querySelector(".message-agent-task-card")).toBeNull();
     expect(container.querySelector(".user-collapsible-text-content")).toBeNull();
+    expect(container.querySelector("[data-testid='background-task-notification-fold']")).toBeNull();
     expect(container.textContent ?? "").not.toContain("<task-notification>");
+  });
+
+  it("folds a user-role background wakeup without a blue bubble or raw XML", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "bg-user-receipt-1",
+        kind: "message",
+        role: "user",
+        text: `<task-notification>
+<task-id>b234djc13</task-id>
+<tool-use-id>call_00_URJyFRY1ub2SYctPuO899944</tool-use-id>
+<output-file>C:\\\\Users\\\\demo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\b234djc13.output</output-file>
+<status>completed</status>
+<summary>Background command "Rebuild Windows bundles with latest code" completed</summary>
+</task-notification>`,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".message-agent-task-fold")).toBeTruthy();
+    expect(container.querySelector(".message-bubble")).toBeNull();
+    expect(container.querySelector(".user-collapsible-text-content")).toBeNull();
+    expect(container.querySelector(".message-agent-task-card")).toBeNull();
+    expect(
+      container.querySelector('[data-agent-task-id="b234djc13"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector(
+        '[data-agent-tool-use-id="call_00_URJyFRY1ub2SYctPuO899944"]',
+      ),
+    ).toBeTruthy();
+    expect(container.textContent ?? "").not.toContain("<task-notification>");
+    expect(container.textContent ?? "").toContain("Rebuild Windows bundles with latest code");
+    const fold = container.querySelector("[data-testid='background-task-notification-fold']");
+    fireEvent.click(fold?.querySelector("button") as HTMLButtonElement);
+    expect(container.textContent ?? "").toContain("b234djc13");
+    expect(container.textContent ?? "").not.toContain("<task-notification>");
+    expect(container.querySelector(".message-agent-task-fold-kv")).toBeNull();
+    expect(screen.getByLabelText("engineTaskOutput.label")).toBeTruthy();
+  });
+
+  it("falls back to a single kv list when the wakeup has no output file", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "bg-user-receipt-no-output-1",
+        kind: "message",
+        role: "user",
+        text: `<task-notification>
+<task-id>nooutput1</task-id>
+<status>completed</status>
+<summary>Background command "Echo only" completed</summary>
+</task-notification>`,
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const fold = container.querySelector("[data-testid='background-task-notification-fold']");
+    fireEvent.click(fold?.querySelector("button") as HTMLButtonElement);
+    expect(container.querySelector(".message-agent-task-fold-kv")).toBeTruthy();
+    expect(container.textContent ?? "").toContain("nooutput1");
+    expect(container.textContent ?? "").not.toContain("<task-notification>");
+    expect(screen.queryByLabelText("engineTaskOutput.label")).toBeNull();
+  });
+
+  it("keeps ordinary user questions as a blue bubble", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "ordinary-user-1",
+        kind: "message",
+        role: "user",
+        text: "请帮我看一下 Windows 打包为什么失败",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".message.user")).toBeTruthy();
+    expect(container.querySelector(".user-collapsible-text-content")).toBeTruthy();
+    expect(container.querySelector("[data-testid='background-task-notification-fold']")).toBeNull();
+    expect(container.textContent ?? "").toContain("请帮我看一下 Windows 打包为什么失败");
   });
 
   it("scrolls to the matching agent-task anchor when requested by tool use id", async () => {
@@ -1099,7 +1248,8 @@ describe("Messages rich content", () => {
     ) as HTMLDivElement | null;
     expect(messagesContainer).toBeTruthy();
     expect(targetNode).toBeTruthy();
-    expect(container.querySelector(".message-agent-task-card")).toBeTruthy();
+    expect(container.querySelector("[data-testid='background-task-notification-fold']")).toBeTruthy();
+    expect(container.querySelector(".message-agent-task-card")).toBeNull();
     const scrollToSpy = vi.fn();
     if (messagesContainer) {
       messagesContainer.scrollTo = scrollToSpy;

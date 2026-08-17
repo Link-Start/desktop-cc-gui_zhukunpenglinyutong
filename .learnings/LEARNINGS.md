@@ -1,5 +1,67 @@
 # Learnings
 
+## [LRN-20260817-007] user_feedback
+
+**Logged**: 2026-08-17T20:33:20+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+DSH 会话侧栏会一直停在 `Agent N`，即使画布里已经有完整用户首条消息。
+
+### Details
+`ensureThread` 给新会话的默认名是 `Agent ${list.length + 1}`。DSH 列表标题常被 runtime context 洗成空串或 `DSH Session`，历史灌入走 `setThreadItems` / `prependThreadItems` 又不改名。pending → `dsh:` 换绑时弱标题还会盖掉已经从首条消息生成的好名字。
+
+### Suggested Action
+1. 历史灌入和 prepend 时，用首条真实用户消息升级弱标题。
+2. 忽略 DSH runtime context / goal injection，不要拿它们当标题。
+3. pending 换绑和 DSH list merge 都要保留更强的已有标题。
+
+### Metadata
+- Source: user_feedback
+- Related Files: src/features/threads/hooks/threadReducerThreadNaming.ts, src/features/threads/hooks/useThreadsReducer.ts, src/features/threads/hooks/threadReducerThreadIdentity.ts, src/features/threads/hooks/useThreadActions.helpers.ts, src/features/threads/utils/sessionDisplayProjection.ts
+- Tags: dsh, sidebar, thread-title, agent-n
+
+### Resolution
+- **Resolved**: 2026-08-17T20:33:20+08:00
+- **Notes**: Weak `Agent N` / `DSH Session` titles now upgrade from the first real user prompt on live upsert, history hydrate, prepend, pending rebind, and DSH list merge.
+
+---
+
+## [LRN-20260817-006] user_feedback
+
+**Logged**: 2026-08-17T19:17:54+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+思考区展开后段落之间空得太开，用户觉得「很多回车分隔」，观感不好。
+
+### Details
+User circled the large gaps inside a live thinking block (paragraph → “I’ll update 3 places:” → numbered items). This is mixed: reasoning models often emit one short sentence per blank-line paragraph, and our UI then amplifies it.
+
+Two UI amplifiers:
+1. `.reasoning-markdown > * + * { margin-top: 10px }` is overridden by later `.markdown > * + * { margin-top: 1.5em }` (same specificity). At 11px thinking font, that is ~16.5px plus list `margin: 0.4rem 0`.
+2. Live lightweight parser flushes lists on a blank line, so `1. / 2. / 3.` with empty lines become three separate `<ol>` that all start at `1.` and each take a full paragraph gap.
+
+Existing fragment normalizers only merge very short CJK shards (≤14 chars, ≥5 run), not ordinary English planning paragraphs.
+
+### Suggested Action
+Tighten thinking-only spacing (restore compact gap, beat `.markdown > * + *`), and optionally keep loose numbered lists as one list in lightweight mode. Do not collapse assistant body the same way.
+
+### Metadata
+- Source: user_feedback
+- Related Files: src/styles/messages.part2.css, src/features/messages/rows/components/ReasoningRow.tsx, src/markdown/runtime/LiveMarkdown.tsx
+- Tags: thinking, spacing, markdown, live-render
+
+### Resolution
+- **Resolved**: 2026-08-17T19:27:00+08:00
+- **Notes**: Thinking markdown now uses a more specific 0.4em gap so it beats `.markdown > * + * { 1.5em }`. Lightweight parser keeps loose numbered/bulleted items in one list across blank lines.
+
+---
+
 ## [LRN-20260817-005] correction
 
 **Logged**: 2026-08-17T02:50:47+08:00
