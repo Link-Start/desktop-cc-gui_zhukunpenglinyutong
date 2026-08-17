@@ -1,7 +1,27 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { EngineStatus, EngineType } from "../../../types";
 import { FirstRunCliStep } from "./FirstRunCliStep";
+
+function engineStatus(
+  engineType: EngineType,
+  overrides: Partial<Omit<EngineStatus, "engineType">> = {},
+): EngineStatus {
+  return {
+    engineType,
+    installed: false,
+    version: null,
+    binPath: null,
+    features: {
+      streaming: false,
+      imageInput: false,
+    },
+    models: [],
+    error: null,
+    ...overrides,
+  };
+}
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -17,13 +37,11 @@ describe("FirstRunCliStep", () => {
         selectedEngine="claude"
         onSelectEngine={vi.fn()}
         engineStatuses={[
-          {
-            engineType: "claude",
+          engineStatus("claude", {
             installed: true,
             version: "2.1.228 (Claude Code)",
-            path: "/usr/local/bin/claude",
-            error: null,
-          },
+            binPath: "/usr/local/bin/claude",
+          }),
         ]}
         cardStateByEngine={{
           claude: {
@@ -54,20 +72,16 @@ describe("FirstRunCliStep", () => {
         selectedEngine="claude"
         onSelectEngine={vi.fn()}
         engineStatuses={[
-          {
-            engineType: "claude",
+          engineStatus("claude", {
             installed: true,
             version: "2.1.228 (Claude Code)",
-            path: "/usr/local/bin/claude",
-            error: null,
-          },
-          {
-            engineType: "codex",
+            binPath: "/usr/local/bin/claude",
+          }),
+          engineStatus("codex", {
             installed: true,
             version: "codex-cli 0.98.0",
-            path: "/usr/local/bin/codex",
-            error: null,
-          },
+            binPath: "/usr/local/bin/codex",
+          }),
         ]}
         cardStateByEngine={{
           claude: {
@@ -139,14 +153,10 @@ describe("FirstRunCliStep", () => {
         selectedEngine="opencode"
         onSelectEngine={onSelectEngine}
         engineStatuses={[
-          {
-            engineType: "opencode",
-            installed: false,
-            version: null,
-            path: null,
+          engineStatus("opencode", {
             error:
               "Failed to execute opencode: No such file or directory (os error 2)",
-          },
+          }),
         ]}
         cardStateByEngine={{
           opencode: {
@@ -194,15 +204,7 @@ describe("FirstRunCliStep", () => {
       <FirstRunCliStep
         selectedEngine="opencode"
         onSelectEngine={vi.fn()}
-        engineStatuses={[
-          {
-            engineType: "opencode",
-            installed: false,
-            version: null,
-            path: null,
-            error: null,
-          },
-        ]}
+        engineStatuses={[engineStatus("opencode")]}
         cardStateByEngine={{
           opencode: {
             installed: false,
