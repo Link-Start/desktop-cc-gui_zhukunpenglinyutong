@@ -37,7 +37,7 @@ describe("readHistoryWindowSize", () => {
 
   it("defaults to off (0) in test mode", () => {
     expect(readHistoryWindowSize()).toBe(0);
-    expect(DEFAULT_HISTORY_WINDOW_SIZE).toBe(150);
+    expect(DEFAULT_HISTORY_WINDOW_SIZE).toBe(800);
   });
 
   it("reads a positive window size from localStorage", () => {
