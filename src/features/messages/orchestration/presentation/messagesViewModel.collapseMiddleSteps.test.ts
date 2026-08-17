@@ -191,7 +191,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(reasoningOnly.timelineItems.map((item) => item.id)).toEqual(["u2", "a2"]);
   });
 
-  it("merges the whole user-turn process onto the final assistant (no orphan)", () => {
+  it("keeps each assistant segment's contiguous process on its own chip", () => {
     const items: ConversationItem[] = [
       user("u1"),
       tool("t1"),
@@ -222,17 +222,25 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    // Turn-final ownership (fig3): t1+t2+t3 fold into a2; a1 plan text stays;
-    // trailing t4 (no following prose) stays live.
+    // Contiguous segmentation: t1 folds onto a1; t2+t3 fold onto a2;
+    // trailing t4 (no following prose) stays live. Prose stays interleaved.
     expect(result.timelineItems.map((item) => item.id)).toEqual([
       "u1",
       "a1",
       "a2",
       "t4",
     ]);
-    expect(result.phases.map((phase) => phase.phaseKey)).toEqual(["a2"]);
-    expect(result.phases[0]!.hiddenItemIds).toEqual(["t1", "t2", "t3"]);
-    expect(result.phases[0]!.count).toBeGreaterThanOrEqual(2);
+    expect(result.phases.map((phase) => phase.phaseKey)).toEqual(["a1", "a2"]);
+    expect(result.phases[0]).toMatchObject({
+      phaseKey: "a1",
+      hiddenItemIds: ["t1"],
+      breakdown: { reasoningCount: 0, toolCount: 1, exploreCount: 0 },
+    });
+    expect(result.phases[1]).toMatchObject({
+      phaseKey: "a2",
+      hiddenItemIds: ["t2", "t3"],
+      breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
+    });
   });
 
   it("folds a long trailing live process window into a chip plus the last three cards", () => {
@@ -263,10 +271,10 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(trailing?.collapsedAnchorItemId).toBe("t2");
   });
 
-  it("absorbs leading orphan reasoning across mid-turn assistant plan text", () => {
-    // Native Claude/Grok stream shape (fig1/fig2):
+  it("folds leading reasoning onto the adjacent plan instead of the final answer", () => {
+    // Native Claude/Grok stream shape:
     //   reasoning → assistant(plan) → tools/reasoning → assistant(final)
-    // Shared history already projects process-before-prose (fig3) without the orphan.
+    // Contiguous walk-back keeps the plan as a segment boundary.
     const items = [
       user("u1", "简单项目分析"),
       reasoning("r-orphan"),
@@ -281,20 +289,25 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       timelineSourceItems: items,
     });
 
-    expect(collapsed.phases).toHaveLength(1);
+    expect(collapsed.phases.map((phase) => phase.phaseKey)).toEqual([
+      "a-plan",
+      "a-final",
+    ]);
     expect(collapsed.phases[0]).toMatchObject({
-      phaseKey: "a-final",
+      phaseKey: "a-plan",
       insertBeforeItemId: "r-orphan",
       expanded: false,
-      breakdown: { reasoningCount: 2, toolCount: 2, exploreCount: 0 },
+      breakdown: { reasoningCount: 1, toolCount: 0, exploreCount: 0 },
+      hiddenItemIds: ["r-orphan"],
     });
-    expect(collapsed.phases[0]!.hiddenItemIds).toEqual([
-      "r-orphan",
-      "r2",
-      "t1",
-      "t2",
-    ]);
-    // Orphan reasoning + tools leave the surface; plan + final stay.
+    expect(collapsed.phases[1]).toMatchObject({
+      phaseKey: "a-final",
+      insertBeforeItemId: "r2",
+      expanded: false,
+      breakdown: { reasoningCount: 1, toolCount: 2, exploreCount: 0 },
+      hiddenItemIds: ["r2", "t1", "t2"],
+    });
+    // Process rows leave the surface; plan + final stay interleaved.
     expect(collapsed.timelineItems.map((item) => item.id)).toEqual([
       "u1",
       "a-plan",
@@ -304,14 +317,25 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       false,
     );
 
-    const expanded = resolveCollapsedTimelineItems({
+    const expandedPlan = resolveCollapsedTimelineItems({
+      activeEngine: "claude",
+      expandedPhaseKeys: new Set(["a-plan"]),
+      timelineSourceItems: items,
+    });
+    expect(expandedPlan.timelineItems.map((item) => item.id)).toEqual([
+      "u1",
+      "r-orphan",
+      "a-plan",
+      "a-final",
+    ]);
+
+    const expandedFinal = resolveCollapsedTimelineItems({
       activeEngine: "claude",
       expandedPhaseKeys: new Set(["a-final"]),
       timelineSourceItems: items,
     });
-    expect(expanded.timelineItems.map((item) => item.id)).toEqual([
+    expect(expandedFinal.timelineItems.map((item) => item.id)).toEqual([
       "u1",
-      "r-orphan",
       "a-plan",
       "r2",
       "t1",
@@ -331,7 +355,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(result.timelineItems.map((item) => item.id)).toEqual(["u1", "t1", "a1"]);
   });
 
-  it("remounts the turn-final phase when expanded", () => {
+  it("remounts only the expanded segment's contiguous process", () => {
     const items: ConversationItem[] = [
       user("u1"),
       reasoning("r1"),
@@ -345,8 +369,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
       activeEngine: "claude",
       timelineSourceItems: items,
     });
-    // Single turn-final phase on a2 owns r1/t1/r2/t2; a1 stays as plan text.
-    expect(collapsed.phases.map((phase) => phase.phaseKey)).toEqual(["a2"]);
+    expect(collapsed.phases.map((phase) => phase.phaseKey)).toEqual(["a1", "a2"]);
     expect(collapsed.timelineItems.map((item) => item.id)).toEqual([
       "u1",
       "a1",
@@ -361,10 +384,11 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     expect(expanded.phases.find((phase) => phase.phaseKey === "a2")?.expanded).toBe(
       true,
     );
+    expect(expanded.phases.find((phase) => phase.phaseKey === "a1")?.expanded).toBe(
+      false,
+    );
     expect(expanded.timelineItems.map((item) => item.id)).toEqual([
       "u1",
-      "r1",
-      "t1",
       "a1",
       "r2",
       "t2",
