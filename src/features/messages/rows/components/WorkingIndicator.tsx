@@ -2,12 +2,72 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ProxyStatusBadge } from "../../../../components/ProxyStatusBadge";
 import type { PresentationProfile } from "../../../../conversation-presentation/presentationProfile";
+import { isWindowsPlatform } from "../../../../utils/platform";
 import {
   formatDurationMs,
   type MessagesEngine,
   OPENCODE_NON_STREAMING_HINT_DELAY_MS,
   shouldDisplayWorkingActivityLabel,
 } from "../../utils/messagesRenderUtils";
+
+export const WORKING_GLYPH_FRAMES = [
+  "⠋",
+  "⠙",
+  "⠹",
+  "⠸",
+  "⠼",
+  "⠴",
+  "⠦",
+  "⠧",
+  "⠇",
+  "⠏",
+] as const;
+export const WORKING_GLYPH_FRAME_MS = 80;
+
+function SvgDashSpinner() {
+  return (
+    <svg
+      className="working-spinner working-spinner-dash"
+      viewBox="0 0 14 14"
+      width={14}
+      height={14}
+      aria-hidden
+    >
+      <circle cx="7" cy="7" r="5.2" />
+    </svg>
+  );
+}
+
+function GlyphFrameSpinner() {
+  const glyphRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const glyphNode = glyphRef.current;
+    if (!glyphNode) {
+      return undefined;
+    }
+    let frameIndex = 0;
+    const intervalId = window.setInterval(() => {
+      frameIndex = (frameIndex + 1) % WORKING_GLYPH_FRAMES.length;
+      glyphNode.textContent = WORKING_GLYPH_FRAMES[frameIndex];
+    }, WORKING_GLYPH_FRAME_MS);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  return (
+    <span
+      ref={glyphRef}
+      className="working-spinner working-spinner-glyph"
+      aria-hidden
+    >
+      {WORKING_GLYPH_FRAMES[0]}
+    </span>
+  );
+}
+
+function WorkingSpinner() {
+  return isWindowsPlatform() ? <GlyphFrameSpinner /> : <SvgDashSpinner />;
+}
 
 type WorkingIndicatorProps = {
   isThinking: boolean;
@@ -146,7 +206,7 @@ export const WorkingIndicator = memo(function WorkingIndicator({
               className="working-proxy-badge"
             />
           )}
-          <span className="working-spinner" aria-hidden />
+          <WorkingSpinner />
           <div className="working-timer">
             <span className="working-timer-clock">{formatDurationMs(elapsedMs)}</span>
           </div>

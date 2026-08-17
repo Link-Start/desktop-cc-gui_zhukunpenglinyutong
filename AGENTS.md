@@ -20,6 +20,12 @@
    - `.claude/**`、`.codex/**`、`.agents/skills/**`：host 适配与可选 skills
    - `.omx/**` 及其他本地运行态目录：不是长期仓库资产，不作为规范事实源
 
+解释性文档与可入库设计稿统一放 `docs/**`，不写回以上四层细则正文：
+
+- 文档：`docs/guides` / `analysis` / `architecture` / `plans` / `research` / `reports` 等，入口 `docs/README.md`
+- 设计稿（HTML 原型、选款页、视觉 mock）：`docs/designs/`
+- 禁止把要保留的设计稿放仓库根 `designs/` 或 `.artifacts/`
+
 ## 最小读取路径
 
 - 开始任务先读本文件。
@@ -28,6 +34,7 @@
   - `dev-guidelines/backend/index.md`
   - `dev-guidelines/guides/index.md`
   - 若任务本身在改规则入口或文档边界，再读 `dev-guidelines/guides/project-instruction-layering-guide.md`
+- 涉及 UI 原型 / 设计选款时，再读 `docs/designs/`。
 - 涉及 behavior/change/workflow 时，再读：
   - `openspec/README.md`
   - `openspec/project.md`

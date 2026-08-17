@@ -14,7 +14,7 @@ status: active
 1. 当前可执行代码、测试与配置。
 2. `openspec/**` 中的 behavior spec、proposal、design 与 tasks。
 3. `dev-guidelines/**` 中的 implementation rule 与 executable contract。
-4. `docs/**` 中的指南、参考、分析、计划、研究与报告。
+4. `docs/**` 中的指南、参考、分析、计划、研究、报告与设计稿。
 
 `docs/**` 不得覆盖更高优先级事实源。涉及当前行为的文档必须链接到可核对的代码、测试或规范。
 
@@ -30,9 +30,12 @@ status: active
 | Plan | `plans/` | 有时效边界的实施计划与清单 |
 | Research | `research/` | 调研、spike 和探索证据 |
 | Report | `reports/` | 阶段结果、影响评估与验收记录 |
+| Design | `designs/` | HTML 原型、选款页、视觉 mock；用于拍板对照，不是 shipped UI |
 | Archive | `archive/` | 已退出当前入口、但仍有追溯价值的内容 |
 
 同一事实只保留一个 canonical document。其他位置使用链接或 compatibility stub，不复制正文。
+
+可保留的设计稿必须进 `docs/designs/`。禁止把要入库的 HTML 原型 / 选款页放仓库根 `designs/` 或 `.artifacts/`（后者是 runtime / local-only）。存量 `docs/previews/`、`docs/prototypes/` 因高 fan-out 引用暂不搬迁；新稿一律进 `designs/`。
 
 ## 3. Published lifecycle taxonomy
 

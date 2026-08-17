@@ -6,7 +6,7 @@
 
 DSH 和 Claude / Codex 不是一类东西：模型和 API Key 永远在 DSH Web UI，mossx 只负责装 CLI + 连本地 host。现有薄表单让用户误以为要在 mossx 里加供应商，也接不上已有的 `dshHostDown` / `dshNotInstalled` 文案和 `host.describe` 结果。
 
-方案 A（连接优先）已在 `designs/dsh-vendor-settings/DSH Vendor Settings.html` 确认。
+方案 A（连接优先）已在 `docs/designs/dsh-vendor-settings/DSH Vendor Settings.html` 确认。
 
 ## What Changes
 

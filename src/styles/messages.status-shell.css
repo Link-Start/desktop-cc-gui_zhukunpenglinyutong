@@ -591,9 +591,46 @@
   white-space: nowrap;
 }
 
+/* Mac / Linux: 03 SVG dash。走 stroke-dashoffset，不 rotate 整个元素。 */
+.working-spinner-dash {
+  display: block;
+  border: none;
+  border-radius: 0;
+  animation: none;
+  will-change: auto;
+}
+
+.working-spinner-dash circle {
+  fill: none;
+  stroke: var(--text-stronger);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 18 22;
+  animation: working-dash 0.9s linear infinite;
+}
+
+/* Windows: 10 glyph frames. JS mutates textContent; no CSS animation. */
+.working-spinner-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  animation: none;
+  will-change: auto;
+  color: var(--text-stronger);
+  font: 12px/1 "SF Mono", Menlo, Monaco, "Microsoft YaHei Mono", ui-monospace, monospace;
+}
+
 @keyframes working-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes working-dash {
+  to {
+    stroke-dashoffset: -40;
   }
 }
 

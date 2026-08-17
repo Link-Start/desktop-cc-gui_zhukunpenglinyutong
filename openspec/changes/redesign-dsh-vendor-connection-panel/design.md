@@ -4,7 +4,7 @@
 
 DSH 是 persistent Node host。mossx 作为第二 client，配置（key / provider / catalog）归 DSH Web UI。`add-dsh-engine` 已交付 supervisor（adopt / spawn）和设置薄面板，但面板把 Host / Port 当主界面，状态文案没接上。
 
-原型：`designs/dsh-vendor-settings/DSH Vendor Settings.html` 方案 A。
+原型：`docs/designs/dsh-vendor-settings/DSH Vendor Settings.html` 方案 A。
 
 设置视觉基线：`docs/guides/ui/preference-settings-ui-guide.md`（preference row + 一块外壳）。
 

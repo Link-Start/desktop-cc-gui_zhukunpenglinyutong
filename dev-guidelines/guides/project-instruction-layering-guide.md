@@ -29,6 +29,8 @@
 - 改 behavior requirement / proposal / design / task：去 `openspec/**`
 - 改 session-start / global gate / rule priority：去 `AGENTS.md`
 - 改 hooks / commands / skills registration：去 `.claude/**` 或 `.codex/**`
+- 改解释性文档：去 `docs/**` 对应分区（入口 `docs/README.md` / `docs/GOVERNANCE.md`）
+- 新增可入库设计稿 / HTML 原型 / 选款页：去 `docs/designs/`
 
 ## 更新矩阵
 
@@ -41,6 +43,8 @@
 | OpenSpec 导航入口 | `openspec/README.md` | `AGENTS.md` |
 | host-specific hook 行为 | `.claude/**` / `.codex/**` | `openspec/**` |
 | runtime artifact ignore policy | `.gitignore` + `AGENTS.md` / 本 guide | `openspec/specs/**` 的实现细则 |
+| 解释性文档（指南 / 分析 / 计划 / 研究） | `docs/**` 对应分区 | `AGENTS.md`、`openspec/specs/**` |
+| 可入库设计稿 / HTML 原型 / 选款页 | `docs/designs/` | 仓库根 `designs/`、`.artifacts/`、`AGENTS.md` |
 
 ## Anti-Patterns
 
@@ -48,6 +52,7 @@
 - 在 `openspec/README.md` 重复 `openspec/project.md` 的 snapshot / metrics / backlog 正文
 - 在 session-start hook 中内联多份 spec index 正文或完整 active task 大列表
 - 把 `.omx/**`、本地 session state、临时研究快照提交为长期仓库资产
+- 把要保留的设计稿放仓库根 `designs/` 或 `.artifacts/`；可入库原型进 `docs/designs/`
 - 在 `.claude/**` 与 `.codex/**` 各写一套平行治理正文
 
 ## 维护原则
