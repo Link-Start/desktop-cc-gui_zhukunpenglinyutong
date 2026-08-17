@@ -101,8 +101,9 @@
   min-width: 0;
 }
 
-.reasoning-markdown > * + * {
-  margin-top: 10px;
+/* 思考区必须比后面的 .markdown > * + * { 1.5em } 更具体，否则 11px 字号会被正文文档化留白撑开 */
+.thinking-block .reasoning-markdown > * + * {
+  margin-top: 0.4em;
 }
 
 /* 首段不再加重加深：思考正文整体保持比正文更轻的层级 */
@@ -155,10 +156,18 @@
   padding-left: 1.5rem;
 }
 
+.thinking-block .reasoning-markdown :where(ul, ol) {
+  margin: 0.12em 0;
+}
+
 .reasoning-markdown :where(li) {
   margin: 0.16rem 0;
   line-height: 1.4;
   white-space: normal;
+}
+
+.thinking-block .reasoning-markdown :where(li) {
+  margin: 0.06em 0;
 }
 
 .reasoning-markdown :where(li > p) {

@@ -3,6 +3,7 @@ import type {
   WorkspaceWallpaperMode,
   WorkspaceWallpaperSettings,
 } from "../../../types";
+import { isWindowsPlatform } from "../../../utils/platform";
 import {
   DEFAULT_WORKSPACE_FLUID_PRESET,
   isWorkspaceFluidPresetId,
@@ -107,9 +108,19 @@ export function sanitizeWorkspaceWallpaper(
   return { ...DEFAULT_WORKSPACE_WALLPAPER };
 }
 
+export function isWorkspaceFluidWallpaperSupported(
+  isWindows: boolean = isWindowsPlatform(),
+): boolean {
+  return !isWindows;
+}
+
 export function resolveWorkspaceWallpaperMode(
   wallpaper: WorkspaceWallpaperSettings,
+  isWindows: boolean = isWindowsPlatform(),
 ): Exclude<WorkspaceWallpaperMode, never> {
+  if (!isWorkspaceFluidWallpaperSupported(isWindows)) {
+    return "none";
+  }
   if (wallpaper.mode === "custom" && !wallpaper.customImagePath) {
     return "fluid";
   }

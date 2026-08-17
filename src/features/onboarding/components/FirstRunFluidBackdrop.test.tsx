@@ -4,6 +4,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FluidParams, FluidShaderHandle } from "../utils/fluidShader";
 import { FirstRunFluidBackdrop } from "./FirstRunFluidBackdrop";
 
+const mocks = vi.hoisted(() => ({
+  isWindowsPlatform: vi.fn(() => false),
+}));
+
+vi.mock("../../../utils/platform", () => ({
+  isWindowsPlatform: mocks.isWindowsPlatform,
+}));
+
 const attachFluidShader = vi.hoisted(() =>
   vi.fn<
     (
@@ -33,6 +41,8 @@ vi.mock("../utils/fluidShader", async () => {
 describe("FirstRunFluidBackdrop", () => {
   afterEach(() => {
     attachFluidShader.mockClear();
+    mocks.isWindowsPlatform.mockReset();
+    mocks.isWindowsPlatform.mockReturnValue(false);
     document.documentElement.removeAttribute("data-theme");
   });
 
@@ -78,5 +88,14 @@ describe("FirstRunFluidBackdrop", () => {
   it("forwards the lite profile to the shader", () => {
     render(<FirstRunFluidBackdrop profile="lite" />);
     expect(attachFluidShader.mock.calls[0]?.[2]).toBe("lite");
+  });
+
+  it("uses a solid backdrop on Windows instead of the fluid shader", () => {
+    mocks.isWindowsPlatform.mockReturnValue(true);
+    const { container } = render(<FirstRunFluidBackdrop />);
+    const backdrop = screen.getByTestId("first-run-fluid");
+    expect(backdrop.dataset.solid).toBe("true");
+    expect(container.querySelector("canvas")).toBeNull();
+    expect(attachFluidShader).not.toHaveBeenCalled();
   });
 });

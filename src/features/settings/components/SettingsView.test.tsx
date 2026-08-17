@@ -58,6 +58,20 @@ vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
 
+const platformMocks = vi.hoisted(() => ({
+  isWindowsPlatform: vi.fn(() => false),
+}));
+
+vi.mock("../../../utils/platform", async () => {
+  const actual = await vi.importActual<typeof import("../../../utils/platform")>(
+    "../../../utils/platform",
+  );
+  return {
+    ...actual,
+    isWindowsPlatform: platformMocks.isWindowsPlatform,
+  };
+});
+
 vi.mock("@/features/computer-use/components/ComputerUseStatusCard", () => ({
   ComputerUseStatusCard: () => <div data-testid="computer-use-status-card" />,
 }));
@@ -174,6 +188,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  platformMocks.isWindowsPlatform.mockReset();
+  platformMocks.isWindowsPlatform.mockReturnValue(false);
   delete (window as any).queryLocalFonts;
 });
 
@@ -1656,6 +1672,16 @@ describe("SettingsView Display", () => {
         },
       }),
     );
+  });
+
+  it("hides the workspace wallpaper controls on Windows", async () => {
+    platformMocks.isWindowsPlatform.mockReturnValue(true);
+    renderDisplaySection();
+    await flushSettingsViewEffects();
+
+    expect(screen.queryByTestId("settings-workspace-wallpaper")).toBeNull();
+    expect(screen.queryByText("Page background")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Fluid" })).toBeNull();
   });
 
   it("hides remaining limits and message anchors while showing window transparency controls", async () => {

@@ -374,6 +374,24 @@ describe("useThreadTurnEvents", () => {
     });
   });
 
+  it("hides grok commit-message helper threads on start", () => {
+    const { result, dispatch } = makeOptions();
+
+    act(() => {
+      result.current.onThreadStarted("ws-1", {
+        id: "grok:commit-helper",
+        preview:
+          "Please generate a commit message. The commit message must follow the Conventional Commits specification and be written entirely in English.",
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "hideThread",
+      workspaceId: "ws-1",
+      threadId: "grok:commit-helper",
+    });
+  });
+
   it("keeps codex provider metadata from thread started events", () => {
     const { result, dispatch } = makeOptions();
 

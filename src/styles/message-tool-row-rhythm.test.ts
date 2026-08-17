@@ -63,4 +63,16 @@ describe("message activity row vertical rhythm", () => {
       "margin: 8px 0 12px;",
     );
   });
+
+  it("keeps thinking markdown tighter than the later document-style 1.5em gap", () => {
+    expect(
+      getCssRuleBlock(messagesPart2Css, ".thinking-block .reasoning-markdown > * + *"),
+    ).toContain("margin-top: 0.4em;");
+    expect(
+      getCssRuleBlock(messagesPart2Css, ".thinking-block .reasoning-markdown :where(ul, ol)"),
+    ).toContain("margin: 0.12em 0;");
+    expect(getCssRuleBlock(messagesPart2Css, ".markdown > * + *")).toContain(
+      "margin-top: 1.5em;",
+    );
+  });
 });

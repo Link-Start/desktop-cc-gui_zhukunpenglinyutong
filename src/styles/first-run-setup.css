@@ -32,6 +32,14 @@
     var(--surface-messages, #111214);
 }
 
+.first-run-fluid[data-solid="true"] {
+  background: var(--surface-messages, #111214);
+}
+
+.first-run-fluid[data-solid="true"]::after {
+  display: none;
+}
+
 .first-run-fluid-canvas {
   position: absolute;
   inset: 0;

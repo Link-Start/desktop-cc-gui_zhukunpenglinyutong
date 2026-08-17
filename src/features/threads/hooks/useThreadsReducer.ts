@@ -19,6 +19,7 @@ import {
   isCollabWorkerAgentNumberTitle,
   isSharedControlPlaneSpawnTitle,
 } from "./useThreadActions.helpers";
+import { isCommitMessageHelperPreview } from "../utils/codexBackgroundHelpers";
 import {
   isIncrementalDerivationEnabled,
   isReducerNoopGuardEnabled,
@@ -2569,7 +2570,8 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "setThreads": {
       const hidden = state.hiddenThreadIdsByWorkspace[action.workspaceId] ?? {};
       const isHiddenAutomaticThread = (thread: ThreadSummary) =>
-        thread.autoSession?.visibility === "hidden";
+        thread.autoSession?.visibility === "hidden" ||
+        isCommitMessageHelperPreview(thread.name);
       const existingThreads = state.threadsByWorkspace[action.workspaceId] ?? [];
       const now = Date.now();
       const promotedPendingAliases = new Set(

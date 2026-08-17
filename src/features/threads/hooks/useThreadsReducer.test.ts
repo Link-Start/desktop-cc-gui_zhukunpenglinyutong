@@ -169,6 +169,31 @@ describe("threadReducer", () => {
     });
   });
 
+  it("drops commit-message helper titles from setThreads even without autoSession", () => {
+    const next = threadReducer(initialState, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: "grok:commit-helper",
+          name: "Please generate a commit message. The commit message must follow",
+          updatedAt: 30,
+          engineSource: "grok",
+        },
+        {
+          id: "claude:user",
+          name: "当前收起逻辑与数据不一致",
+          updatedAt: 20,
+          engineSource: "claude",
+        },
+      ],
+    });
+
+    expect(next.threadsByWorkspace["ws-1"]?.map((thread) => thread.id)).toEqual([
+      "claude:user",
+    ]);
+  });
+
   it("does not churn state when selecting an already active read thread", () => {
     const selected = threadReducer(initialState, {
       type: "setActiveThreadId",
