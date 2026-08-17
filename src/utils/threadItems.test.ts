@@ -708,6 +708,34 @@ describe("threadItems", () => {
     expect(mergedTool.output).toBe("ok");
   });
 
+  it("keeps the human tool name when a later completion only carries a call id", () => {
+    const existing: ConversationItem = {
+      id: "call-read-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "read",
+      detail: JSON.stringify({ file_path: "src/index.js" }),
+      status: "started",
+      output: "",
+    };
+    const completed: ConversationItem = {
+      id: "call-read-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title:
+        "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc_dea0cf7d-ffe2-918e-bd8d-1f467cee29d2_0",
+      detail: "",
+      status: "completed",
+      output: "ok",
+    };
+
+    const merged = upsertItem([existing], completed);
+    const mergedTool = expectToolItem(merged[0]);
+    expect(mergedTool.title).toBe("read");
+    expect(mergedTool.status).toBe("completed");
+    expect(mergedTool.output).toBe("ok");
+  });
+
   it("upserts by id+kind and preserves entries with same id across kinds", () => {
     const existingAssistant: ConversationItem = {
       id: "shared-1",

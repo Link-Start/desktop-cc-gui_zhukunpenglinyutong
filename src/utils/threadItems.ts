@@ -23,6 +23,7 @@ import {
   normalizeFileChangeKind,
   shouldPreferExplicitFileChangeOutput,
 } from "./threadItemsFileChanges";
+import { isProviderToolCallId } from "./toolSemantics";
 import {
   compactMessageText,
   getNormalizedAssistantMessageText,
@@ -628,6 +629,22 @@ export function normalizeItem(
   return item;
 }
 
+function preferHumanToolTitle(existing: string, incoming: string): string {
+  const incomingTitle = incoming.trim();
+  const existingTitle = existing.trim();
+  if (!incomingTitle) {
+    return existing;
+  }
+  if (
+    isProviderToolCallId(incomingTitle) &&
+    existingTitle &&
+    !isProviderToolCallId(existingTitle)
+  ) {
+    return existing;
+  }
+  return incoming;
+}
+
 function mergeToolItemPreservingSnapshot(
   existing: Extract<ConversationItem, { kind: "tool" }>,
   incoming: Extract<ConversationItem, { kind: "tool" }>,
@@ -640,7 +657,7 @@ function mergeToolItemPreservingSnapshot(
   return {
     ...existing,
     ...incoming,
-    title: hasTitle ? incoming.title : existing.title,
+    title: hasTitle ? preferHumanToolTitle(existing.title, incoming.title) : existing.title,
     detail: hasDetail ? incoming.detail : existing.detail,
     output: hasOutput ? incoming.output : existing.output,
     changes: hasChanges ? incoming.changes : existing.changes,
@@ -1219,7 +1236,8 @@ export function buildConversationItem(
   }
   if (type === "mcpToolCall") {
     const server = asString(item.server ?? "");
-    const tool = asString(item.tool ?? "");
+    const rawTool = asString(item.tool ?? item.title ?? item.name ?? "");
+    const tool = isProviderToolCallId(rawTool) ? "" : rawTool;
     const argsPayload = item.arguments ?? item.input ?? null;
     const args = stringifyToolArguments(argsPayload);
     const output = asString(

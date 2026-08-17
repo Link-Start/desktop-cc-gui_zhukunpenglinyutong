@@ -24,6 +24,7 @@ const tools = {
     subtask: "子任务",
     todoList: "待办列表",
     userInputRequest: "询问用户问题",
+    genericCall: "工具调用",
     diffCompare: "Diff对比",
     result: "结果",
     claudeControlResumeFailed: "恢复失败",

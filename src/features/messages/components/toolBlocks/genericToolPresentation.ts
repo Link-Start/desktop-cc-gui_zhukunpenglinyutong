@@ -2,7 +2,7 @@ import type { ConversationItem } from "../../../../types";
 import { computeDiff } from "../../../../utils/diff";
 import {
   asRecord,
-  extractToolName,
+  resolveCanonicalToolName,
   getFileName,
   getFirstStringField,
   isBashTool,
@@ -699,7 +699,7 @@ function extractSummary(
 export function buildGenericToolPresentation(
   item: Extract<ConversationItem, { kind: "tool" }>,
 ): GenericToolPresentation {
-  const toolName = extractToolName(item.title);
+  const toolName = resolveCanonicalToolName(item.title, item.toolType, item.detail);
   const hasChanges = (item.changes ?? []).length > 0;
   const resolvedStatus = resolveToolStatus(item.status, Boolean(item.output) || hasChanges);
   const status = resolvedStatus === "processing" ? "pending" : resolvedStatus;

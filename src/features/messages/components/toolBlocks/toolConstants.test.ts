@@ -42,6 +42,10 @@ describe("resolveToolStatus", () => {
     expect(getToolDisplayName("askuserquestion")).toBe("询问用户问题");
   });
 
+  it("falls back to a generic tool label when the title is only a call id", () => {
+    expect(getToolDisplayName("")).toBe("工具调用");
+  });
+
   it("follows the active locale when component translation context is unavailable", async () => {
     await i18n.changeLanguage("en");
     expect(getToolDisplayName("webfetch")).toBe("Web fetch");

@@ -33,6 +33,24 @@ describe("buildGenericToolPresentation", () => {
     });
   });
 
+  it("infers a readable tool name when the title is only a provider call id", () => {
+    const item: ToolItem = {
+      id: "call-read-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title:
+        "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc_dea0cf7d-ffe2-918e-bd8d-1f467cee29d2_0",
+      detail: JSON.stringify({
+        file_path: "/Users/zhukunpeng/Desktop/appSettings.ts",
+      }),
+      status: "completed",
+    };
+
+    const presentation = buildGenericToolPresentation(item);
+    expect(presentation.toolName).toBe("read");
+    expect(presentation.summary).toContain("appSettings.ts");
+  });
+
   it("projects ExitPlan content without UI translation policy", () => {
     const item: ToolItem = {
       id: "tool-exit-plan",

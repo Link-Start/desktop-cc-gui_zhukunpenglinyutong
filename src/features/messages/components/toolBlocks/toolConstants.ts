@@ -13,6 +13,7 @@ import {
   buildCommandSummary,
   extractCommandFromTitle,
   extractToolName,
+  resolveCanonicalToolName,
   getFileName,
   getFirstCommandField,
   getFirstStringField,
@@ -45,6 +46,7 @@ export {
   buildCommandSummary,
   extractCommandFromTitle,
   extractToolName,
+  resolveCanonicalToolName,
   getFileName,
   getFirstCommandField,
   getFirstStringField,
@@ -190,6 +192,9 @@ function isAskUserQuestionDisplayName(toolName: string, title?: string): boolean
  */
 export function getToolDisplayName(toolName: string, title?: string, t?: (key: string) => string): string {
   const lower = toolName.toLowerCase();
+  if (!lower) {
+    return t ? t("tools.genericCall") : i18n.t("tools.genericCall");
+  }
 
   // AskUserQuestion (native / MCP) → locale "询问用户问题"
   if (isAskUserQuestionDisplayName(toolName, title)) {
@@ -275,9 +280,10 @@ export type ToolCategory =
 export function classifyToolCategory(item: {
   toolType: unknown;
   title: unknown;
+  detail?: unknown;
 }): ToolCategory {
   const toolType = normalizeRuntimeString(item.toolType);
-  const toolName = extractToolName(item.title);
+  const toolName = resolveCanonicalToolName(item.title, item.toolType, item.detail);
   const lower = toolName.toLowerCase();
 
   // 优先级0：subAgent 跨引擎统一识别（strip / status-panel / enrich；幕布不再组 squad）

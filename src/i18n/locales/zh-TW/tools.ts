@@ -27,6 +27,7 @@ const tools = {
     "subtask": "子任務",
     "todoList": "待辦清單",
     "userInputRequest": "詢問使用者問題",
+    "genericCall": "工具呼叫",
     "diffCompare": "差異比對",
     "result": "結果",
     "claudeControlResumeFailed": "繼續失敗",
