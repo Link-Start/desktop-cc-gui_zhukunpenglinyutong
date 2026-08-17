@@ -2,13 +2,21 @@
 
 use super::host::{origin_from_host_port, DshHostClient};
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 
+// Windows Defender + npm plugin-tree boot is slower. Mac shebang spawn was
+// already healthy at 20s; do not stretch the Unix wait just because Win needs it.
+#[cfg(windows)]
+const SPAWN_READY_TIMEOUT: Duration = Duration::from_secs(45);
+#[cfg(not(windows))]
 const SPAWN_READY_TIMEOUT: Duration = Duration::from_secs(20);
 const SPAWN_POLL: Duration = Duration::from_millis(250);
+const SPAWN_LOG_LIMIT: usize = 8 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct DshRuntimeSettings {
@@ -53,6 +61,7 @@ struct LiveHost {
 struct SupervisorState {
     live: Option<LiveHost>,
     pending_child: Option<Child>,
+    pending_logs: Arc<std::sync::Mutex<String>>,
     spawn_generation: u64,
 }
 
@@ -81,6 +90,7 @@ fn state() -> &'static Mutex<SupervisorState> {
         Mutex::new(SupervisorState {
             live: None,
             pending_child: None,
+            pending_logs: Arc::new(std::sync::Mutex::new(String::new())),
             spawn_generation: 0,
         })
     })
@@ -134,18 +144,19 @@ pub async fn ensure_host(settings: &DshRuntimeSettings) -> Result<DshHostSnapsho
         }
 
         let bin = resolve_dsh_bin(settings.bin_path.as_deref())?;
-        let child = spawn_dsh_web(&bin, &settings.host, settings.port)?;
+        let spawned = spawn_dsh_web(&bin, &settings.host, settings.port)?;
         if let Some(previous) = guard.pending_child.take() {
             let _ = kill_child(previous).await;
         }
         guard.spawn_generation = guard.spawn_generation.wrapping_add(1);
         let generation = guard.spawn_generation;
-        guard.pending_child = Some(child);
+        guard.pending_child = Some(spawned.child);
+        guard.pending_logs = spawned.logs;
         generation
     };
 
     let origin = wanted_origin;
-    let wait_result = wait_until_ready(&origin).await;
+    let wait_result = wait_until_ready(&origin, spawn_generation).await;
     let mut guard = state().lock().await;
     let cancelled = guard.spawn_generation != spawn_generation;
     let pending = guard.pending_child.take();
@@ -369,36 +380,313 @@ pub async fn probe_describe(origin: &str) -> Result<serde_json::Value, String> {
 
 pub fn resolve_dsh_bin(custom: Option<&str>) -> Result<String, String> {
     if let Some(custom) = custom.map(str::trim).filter(|value| !value.is_empty()) {
-        let path = std::path::PathBuf::from(custom);
+        let resolved = crate::backend::app_server::resolve_launchable_cli_binary(custom);
+        let path = PathBuf::from(&resolved);
         if path.exists() {
-            return Ok(custom.to_string());
+            return Ok(resolved);
         }
         return Err(format!("DSH binary not found: {custom}"));
     }
     crate::backend::app_server::find_cli_binary("dsh", None)
-        .map(|path| path.to_string_lossy().to_string())
+        .map(|path| {
+            crate::backend::app_server::resolve_launchable_cli_binary(&path.to_string_lossy())
+        })
         .ok_or_else(|| "dsh CLI is not installed".to_string())
 }
 
-fn spawn_dsh_web(bin: &str, host: &str, port: u16) -> Result<Child, String> {
-    let mut cmd = build_command(bin);
+struct SpawnedProcess {
+    child: Child,
+    logs: Arc<std::sync::Mutex<String>>,
+}
+
+fn spawn_dsh_web(bin: &str, host: &str, port: u16) -> Result<SpawnedProcess, String> {
+    #[cfg(windows)]
+    repair_windows_dsh_sharp_esm(bin);
+    let mut cmd = build_dsh_web_command(bin, host, port);
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(false);
+    apply_platform_spawn_context(&mut cmd, bin);
+    let mut child = cmd.spawn().map_err(|error| {
+        format!("failed to spawn `{bin} web --host {host} --port {port}`: {error}")
+    })?;
+    let logs = drain_child_stdio(&mut child);
+    Ok(SpawnedProcess { child, logs })
+}
+
+/// Windows GUI cwd is often System32 / the install dir, which breaks first-run
+/// DSH profile init. Mac / Linux keep the process cwd: the shebang `dsh` is a
+/// real executable, and inheriting the app cwd matches the previous contract.
+fn apply_platform_spawn_context(cmd: &mut Command, bin: &str) {
+    #[cfg(windows)]
+    if let Some(home) = dirs::home_dir() {
+        cmd.current_dir(home);
+    }
+    if let Some(path_env) = crate::backend::app_server::build_codex_path_env(Some(bin)) {
+        cmd.env("PATH", path_env);
+    }
+}
+
+fn build_dsh_web_command(bin: &str, host: &str, port: u16) -> Command {
+    #[cfg(windows)]
+    {
+        return build_windows_dsh_web_command(bin, host, port);
+    }
+    #[cfg(not(windows))]
+    {
+        // Mac / Linux: `dsh` is a real shebang script. Do not rewrite to
+        // `node lib/bin.js` — that Windows workaround would skip nvm/hermes PATH
+        // resolution the Unix wrapper already owns.
+        let mut cmd = crate::backend::app_server::build_command_for_binary(bin);
+        cmd.arg("web")
+            .arg("--host")
+            .arg(host)
+            .arg("--port")
+            .arg(port.to_string());
+        cmd
+    }
+}
+
+/// Windows npm bins are a POSIX shim + `.cmd` + `.ps1`. CreateProcess on the
+/// shim is os error 193. `cmd /c dsh.cmd web …` also drops args when the path
+/// is quoted. Prefer `node.exe lib/bin.js` so the long-lived host is our child.
+#[cfg(windows)]
+fn build_windows_dsh_web_command(bin: &str, host: &str, port: u16) -> Command {
+    if let Some((node, script)) = resolve_windows_node_cli_launch(bin) {
+        let mut cmd = crate::utils::async_command(node);
+        cmd.arg(script)
+            .arg("web")
+            .arg("--host")
+            .arg(host)
+            .arg("--port")
+            .arg(port.to_string());
+        return cmd;
+    }
+    let bin_lower = bin.to_ascii_lowercase();
+    if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
+        let mut cmd = crate::utils::async_command("cmd");
+        let line = format!(
+            "\"\"{bin}\" web --host {host} --port {port}\"",
+            bin = bin.replace('"', ""),
+        );
+        cmd.arg("/D").arg("/S").arg("/C").arg(line);
+        return cmd;
+    }
+    let mut cmd = crate::backend::app_server::build_command_for_binary(bin);
     cmd.arg("web")
         .arg("--host")
         .arg(host)
         .arg("--port")
-        .arg(port.to_string())
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .kill_on_drop(false);
-    if let Some(path_env) = crate::backend::app_server::build_codex_path_env(Some(bin)) {
-        cmd.env("PATH", path_env);
+        .arg(port.to_string());
+    cmd
+}
+
+#[cfg(windows)]
+fn resolve_windows_node_cli_launch(bin: &str) -> Option<(String, PathBuf)> {
+    let script = resolve_dsh_js_entry(bin)?;
+    let node = crate::backend::app_server::find_cli_binary("node", None)?;
+    Some((node.to_string_lossy().into_owned(), script))
+}
+
+/// Windows npm has been observed to extract `sharp/dist/constructor.mjs` as a
+/// 0-byte file. The official tarball is not empty; Mac installs are fine.
+/// `dsh web` then dies in `attachment-local` with "does not provide an export
+/// named 'default'". Re-export the intact CJS twin. Never call this on Unix.
+#[cfg(any(windows, test))]
+const SHARP_CONSTRUCTOR_ESM_SHIM: &str = "\
+import { createRequire } from 'node:module';\n\
+const require = createRequire(import.meta.url);\n\
+export default require('./constructor.cjs');\n";
+
+#[cfg(windows)]
+fn repair_windows_dsh_sharp_esm(bin: &str) {
+    for path in sharp_constructor_mjs_candidates(bin) {
+        match repair_empty_sharp_constructor_mjs(&path) {
+            Ok(true) => log::warn!(
+                "[dsh] repaired empty Windows sharp constructor.mjs at {}",
+                path.display()
+            ),
+            Ok(false) => {}
+            Err(error) => log::warn!("[dsh] Windows sharp constructor repair skipped: {error}"),
+        }
     }
-    cmd.spawn()
-        .map_err(|error| format!("failed to spawn `{bin} web --host {host} --port {port}`: {error}"))
+}
+
+#[cfg(any(windows, test))]
+fn sharp_constructor_mjs_candidates(bin: &str) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let Some(script) = resolve_dsh_js_entry(bin) else {
+        return out;
+    };
+    let Some(dsh_pkg) = script.parent().and_then(Path::parent) else {
+        return out;
+    };
+    push_unique(
+        &mut out,
+        dsh_pkg
+            .join("node_modules")
+            .join("sharp")
+            .join("dist")
+            .join("constructor.mjs"),
+    );
+    push_unique(
+        &mut out,
+        dsh_pkg
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh-attachment-local")
+            .join("node_modules")
+            .join("sharp")
+            .join("dist")
+            .join("constructor.mjs"),
+    );
+    if let Some(nm) = dsh_pkg.parent().and_then(Path::parent) {
+        push_unique(
+            &mut out,
+            nm.join("sharp").join("dist").join("constructor.mjs"),
+        );
+    }
+    out
+}
+
+#[cfg(any(windows, test))]
+fn push_unique(out: &mut Vec<PathBuf>, path: PathBuf) {
+    if !out.iter().any(|existing| existing == &path) {
+        out.push(path);
+    }
+}
+
+#[cfg(any(windows, test))]
+fn repair_empty_sharp_constructor_mjs(constructor_mjs: &Path) -> Result<bool, String> {
+    let constructor_cjs = constructor_mjs.with_file_name("constructor.cjs");
+    if !constructor_cjs.is_file() {
+        return Ok(false);
+    }
+    let needs_repair = match std::fs::metadata(constructor_mjs) {
+        Ok(meta) => meta.len() == 0,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Err(error) => {
+            return Err(format!(
+                "failed to stat {}: {error}",
+                constructor_mjs.display()
+            ));
+        }
+    };
+    if !needs_repair {
+        return Ok(false);
+    }
+    std::fs::write(constructor_mjs, SHARP_CONSTRUCTOR_ESM_SHIM)
+        .map_err(|error| format!("failed to repair {}: {error}", constructor_mjs.display()))?;
+    Ok(true)
+}
+
+fn resolve_dsh_js_entry(bin: &str) -> Option<PathBuf> {
+    let path = Path::new(bin);
+    let ext = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    if ext.as_deref() == Some("js") && path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    let dir = path.parent()?;
+    let candidate = dir
+        .join("node_modules")
+        .join("@deepseek-ai")
+        .join("dsh")
+        .join("lib")
+        .join("bin.js");
+    candidate.is_file().then_some(candidate)
+}
+
+fn drain_child_stdio(child: &mut Child) -> Arc<std::sync::Mutex<String>> {
+    let logs = Arc::new(std::sync::Mutex::new(String::new()));
+    if let Some(stdout) = child.stdout.take() {
+        spawn_stdio_drain(stdout, logs.clone());
+    }
+    if let Some(stderr) = child.stderr.take() {
+        spawn_stdio_drain(stderr, logs.clone());
+    }
+    logs
+}
+
+fn spawn_stdio_drain<R>(reader: R, logs: Arc<std::sync::Mutex<String>>)
+where
+    R: tokio::io::AsyncRead + Send + Unpin + 'static,
+{
+    tokio::spawn(async move {
+        use tokio::io::AsyncReadExt;
+        let mut reader = reader;
+        let mut buf = vec![0_u8; 4096];
+        loop {
+            match reader.read(&mut buf).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if let Ok(mut slot) = logs.lock() {
+                        if slot.len() >= SPAWN_LOG_LIMIT {
+                            continue;
+                        }
+                        slot.push_str(&String::from_utf8_lossy(&buf[..n]));
+                        if slot.len() > SPAWN_LOG_LIMIT {
+                            slot.truncate(SPAWN_LOG_LIMIT);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn read_spawn_logs(logs: &Arc<std::sync::Mutex<String>>) -> String {
+    logs.lock().map(|slot| slot.clone()).unwrap_or_default()
+}
+
+fn log_suffix(logs: &str) -> String {
+    let trimmed = logs.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    format!(" Output: {}", extract_spawn_log_summary(trimmed))
+}
+
+fn extract_spawn_log_summary(logs: &str) -> String {
+    let interesting = logs.lines().find(|line| {
+        let lower = line.to_ascii_lowercase();
+        lower.contains("error:")
+            || lower.contains("not a valid win32")
+            || lower.contains("os error")
+            || lower.contains("plugin tree")
+    });
+    let text = interesting.unwrap_or(logs).trim();
+    if text.len() > 400 {
+        format!("{}…", &text[..400])
+    } else {
+        text.to_string()
+    }
+}
+
+fn format_spawn_exit(origin: &str, status: std::process::ExitStatus, logs: &str) -> String {
+    format!(
+        "dsh web exited before becoming ready at {origin} ({status}).{}",
+        log_suffix(logs)
+    )
 }
 
 fn classify_spawn_error(origin: &str, spawn_err: &str) -> String {
+    if spawn_err.contains("constructor.mjs")
+        && spawn_err.contains("does not provide an export named 'default'")
+    {
+        return format!(
+            "{spawn_err} Windows npm 常把 sharp/dist/constructor.mjs 装成 0 字节（Mac 完整安装不会）。请重装 `npm install -g @deepseek-ai/dsh` 后重试。"
+        );
+    }
+    if spawn_err.contains("exited before becoming ready")
+        || spawn_err.contains("not a valid Win32")
+        || spawn_err.contains("os error 193")
+    {
+        return spawn_err.to_string();
+    }
     if spawn_err.contains("HTTP")
         || spawn_err.contains("connection refused")
         || spawn_err.contains("timed out")
@@ -413,7 +701,7 @@ fn classify_spawn_error(origin: &str, spawn_err: &str) -> String {
     spawn_err.to_string()
 }
 
-async fn wait_until_ready(origin: &str) -> Result<serde_json::Value, String> {
+async fn wait_until_ready(origin: &str, generation: u64) -> Result<serde_json::Value, String> {
     let deadline = tokio::time::Instant::now() + SPAWN_READY_TIMEOUT;
     let mut last_error = "host.describe not ready".to_string();
     while tokio::time::Instant::now() < deadline {
@@ -421,33 +709,50 @@ async fn wait_until_ready(origin: &str) -> Result<serde_json::Value, String> {
             Ok(describe) => return Ok(describe),
             Err(error) => last_error = error,
         }
+        {
+            let mut guard = state().lock().await;
+            if guard.spawn_generation != generation {
+                return Err("DSH host start was cancelled.".to_string());
+            }
+            if let Some(status) = guard
+                .pending_child
+                .as_mut()
+                .and_then(|child| child.try_wait().ok().flatten())
+            {
+                let logs = read_spawn_logs(&guard.pending_logs);
+                return Err(format_spawn_exit(origin, status, &logs));
+            }
+        }
         tokio::time::sleep(SPAWN_POLL).await;
     }
+    let logs = {
+        let guard = state().lock().await;
+        read_spawn_logs(&guard.pending_logs)
+    };
     Err(format!(
-        "spawned dsh web did not become ready at {origin}: {last_error}"
+        "spawned dsh web did not become ready at {origin}: {last_error}{}",
+        log_suffix(&logs)
     ))
 }
 
 async fn kill_child(mut child: Child) -> Result<(), String> {
+    #[cfg(windows)]
+    if let Some(pid) = child.id() {
+        let _ = tokio::task::spawn_blocking(move || {
+            crate::utils::std_command("taskkill")
+                .arg("/PID")
+                .arg(pid.to_string())
+                .arg("/T")
+                .arg("/F")
+                .status()
+        })
+        .await;
+    }
     match child.kill().await {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::InvalidInput => Ok(()),
         Err(error) => Err(error.to_string()),
     }
-}
-
-fn build_command(bin: &str) -> Command {
-    #[cfg(windows)]
-    {
-        let bin_lower = bin.to_lowercase();
-        if bin_lower.ends_with(".cmd") || bin_lower.ends_with(".bat") {
-            let mut cmd = crate::utils::async_command("cmd");
-            cmd.arg("/c");
-            cmd.arg(bin);
-            return cmd;
-        }
-    }
-    crate::utils::async_command(bin)
 }
 
 pub fn client_for_snapshot(snapshot: &DshHostSnapshot) -> Result<Arc<DshHostClient>, String> {
@@ -464,6 +769,255 @@ mod tests {
         assert!(!should_kill_host(DshHostOwnership::Adopted, true));
         assert!(!should_kill_host(DshHostOwnership::Spawned, false));
         assert!(!should_kill_host(DshHostOwnership::Adopted, false));
+    }
+
+    #[test]
+    fn spawn_ready_timeout_is_platform_specific() {
+        #[cfg(windows)]
+        assert_eq!(SPAWN_READY_TIMEOUT, Duration::from_secs(45));
+        #[cfg(not(windows))]
+        assert_eq!(SPAWN_READY_TIMEOUT, Duration::from_secs(20));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_resolve_dsh_bin_keeps_shebang_even_if_cmd_sibling_exists() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-unix-shim-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        let shebang = root.join("dsh");
+        std::fs::write(&shebang, "#!/usr/bin/env node\n").expect("write shebang");
+        std::fs::write(root.join("dsh.cmd"), "@echo off\n").expect("write cmd sibling");
+
+        let resolved = resolve_dsh_bin(Some(shebang.to_string_lossy().as_ref()))
+            .expect("unix shebang should stay launchable");
+        assert_eq!(Path::new(&resolved), shebang.as_path());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_dsh_bin_prefers_cmd_when_posix_shim_is_configured() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-bin-shim-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        let posix_shim = root.join("dsh");
+        let cmd_path = root.join("dsh.cmd");
+        std::fs::write(&posix_shim, "#!/bin/sh\n").expect("write posix shim");
+        std::fs::write(&cmd_path, "@echo off\n").expect("write cmd wrapper");
+
+        let resolved = resolve_dsh_bin(Some(posix_shim.to_string_lossy().as_ref()))
+            .expect("posix shim should remap to cmd");
+        assert_eq!(Path::new(&resolved), cmd_path.as_path());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolve_dsh_js_entry_from_npm_layout() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-js-entry-{}", uuid::Uuid::new_v4()));
+        let script = root
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh")
+            .join("lib")
+            .join("bin.js");
+        std::fs::create_dir_all(script.parent().expect("parent")).expect("create npm layout");
+        std::fs::write(&script, "#!/usr/bin/env node\n").expect("write bin.js");
+        let cmd_path = root.join("dsh.cmd");
+        std::fs::write(&cmd_path, "@echo off\n").expect("write cmd wrapper");
+
+        assert_eq!(
+            resolve_dsh_js_entry(cmd_path.to_string_lossy().as_ref()),
+            Some(script.clone())
+        );
+        assert_eq!(
+            resolve_dsh_js_entry(script.to_string_lossy().as_ref()),
+            Some(script)
+        );
+        assert_eq!(
+            resolve_dsh_js_entry(root.join("missing.cmd").to_string_lossy().as_ref()),
+            None
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn classify_keeps_windows_launch_and_early_exit_errors() {
+        assert!(classify_spawn_error(
+            "http://127.0.0.1:3080",
+            "dsh web exited before becoming ready at http://127.0.0.1:3080 (exit code: 1). Output: %1 is not a valid Win32 application"
+        )
+        .contains("not a valid Win32"));
+        assert!(
+            classify_spawn_error("http://127.0.0.1:3080", "os error 193").contains("os error 193")
+        );
+        let constructor_err = classify_spawn_error(
+            "http://127.0.0.1:3080",
+            "dsh web exited before becoming ready at http://127.0.0.1:3080 (exit code: 1). Output: Error: dsh: plugin tree failed to load: The requested module './constructor.mjs' does not provide an export named 'default'",
+        );
+        assert!(constructor_err.contains("constructor.mjs"));
+        assert!(constructor_err.contains("Windows npm"));
+        assert!(constructor_err.contains("npm install -g @deepseek-ai/dsh"));
+    }
+
+    #[test]
+    fn repairs_zero_byte_sharp_constructor_mjs() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-sharp-empty-{}", uuid::Uuid::new_v4()));
+        let dist = root.join("node_modules").join("sharp").join("dist");
+        std::fs::create_dir_all(&dist).expect("create sharp dist");
+        std::fs::write(
+            dist.join("constructor.cjs"),
+            "module.exports = function Sharp() {};\n",
+        )
+        .expect("write cjs");
+        let mjs = dist.join("constructor.mjs");
+        std::fs::write(&mjs, "").expect("write empty mjs");
+
+        assert!(repair_empty_sharp_constructor_mjs(&mjs).expect("repair empty"));
+        let body = std::fs::read_to_string(&mjs).expect("read repaired mjs");
+        assert!(body.contains("createRequire"));
+        assert!(body.contains("constructor.cjs"));
+        assert!(!repair_empty_sharp_constructor_mjs(&mjs).expect("second repair is no-op"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn does_not_touch_healthy_sharp_constructor_mjs() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-sharp-healthy-{}", uuid::Uuid::new_v4()));
+        let dist = root.join("dist");
+        std::fs::create_dir_all(&dist).expect("create dist");
+        std::fs::write(dist.join("constructor.cjs"), "module.exports = 1;\n").expect("write cjs");
+        let mjs = dist.join("constructor.mjs");
+        std::fs::write(&mjs, "export default class Sharp {}\n").expect("write healthy mjs");
+
+        assert!(!repair_empty_sharp_constructor_mjs(&mjs).expect("healthy skip"));
+        assert_eq!(
+            std::fs::read_to_string(&mjs).expect("read healthy"),
+            "export default class Sharp {}\n"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn skips_sharp_repair_when_constructor_cjs_missing() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-sharp-no-cjs-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        let mjs = root.join("constructor.mjs");
+        std::fs::write(&mjs, "").expect("write empty mjs");
+
+        assert!(!repair_empty_sharp_constructor_mjs(&mjs).expect("skip without cjs"));
+        assert_eq!(std::fs::metadata(&mjs).expect("stat").len(), 0);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn sharp_candidates_follow_npm_dsh_layout() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-sharp-cands-{}", uuid::Uuid::new_v4()));
+        let script = root
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh")
+            .join("lib")
+            .join("bin.js");
+        std::fs::create_dir_all(script.parent().expect("parent")).expect("create npm layout");
+        std::fs::write(&script, "#!/usr/bin/env node\n").expect("write bin.js");
+        let cmd_path = root.join("dsh.cmd");
+        std::fs::write(&cmd_path, "@echo off\n").expect("write cmd wrapper");
+
+        let candidates = sharp_constructor_mjs_candidates(cmd_path.to_string_lossy().as_ref());
+        let hoisted = root
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh")
+            .join("node_modules")
+            .join("sharp")
+            .join("dist")
+            .join("constructor.mjs");
+        assert!(
+            candidates.iter().any(|path| path == &hoisted),
+            "expected hoisted sharp constructor candidate, got {candidates:?}"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn spawn_log_summary_prefers_the_error_line() {
+        let logs = "node noise\nError: dsh: plugin tree failed to load: sharp constructor\n    at boot (index.js:1186:9)\nNode.js v24.15.0\n";
+        assert_eq!(
+            extract_spawn_log_summary(logs),
+            "Error: dsh: plugin tree failed to load: sharp constructor"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_repair_entry_fixes_empty_constructor_in_npm_layout() {
+        let root = std::env::temp_dir().join(format!(
+            "ccgui-dsh-sharp-win-entry-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let script = root
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh")
+            .join("lib")
+            .join("bin.js");
+        let dist = root
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh")
+            .join("node_modules")
+            .join("sharp")
+            .join("dist");
+        std::fs::create_dir_all(script.parent().expect("parent")).expect("create bin dir");
+        std::fs::create_dir_all(&dist).expect("create sharp dist");
+        std::fs::write(&script, "#!/usr/bin/env node\n").expect("write bin.js");
+        std::fs::write(
+            dist.join("constructor.cjs"),
+            "module.exports = function Sharp() {};\n",
+        )
+        .expect("write cjs");
+        std::fs::write(dist.join("constructor.mjs"), "").expect("write empty mjs");
+        let cmd_path = root.join("dsh.cmd");
+        std::fs::write(&cmd_path, "@echo off\n").expect("write cmd wrapper");
+
+        repair_windows_dsh_sharp_esm(cmd_path.to_string_lossy().as_ref());
+        let body = std::fs::read_to_string(dist.join("constructor.mjs")).expect("read repaired");
+        assert!(body.contains("createRequire"));
+        assert!(body.contains("constructor.cjs"));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_launch_prefers_node_script_when_npm_layout_exists() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-node-launch-{}", uuid::Uuid::new_v4()));
+        let script = root
+            .join("node_modules")
+            .join("@deepseek-ai")
+            .join("dsh")
+            .join("lib")
+            .join("bin.js");
+        std::fs::create_dir_all(script.parent().expect("parent")).expect("create npm layout");
+        std::fs::write(&script, "console.log('ok')\n").expect("write bin.js");
+        let cmd_path = root.join("dsh.cmd");
+        std::fs::write(&cmd_path, "@echo off\n").expect("write cmd wrapper");
+
+        let resolved = resolve_windows_node_cli_launch(cmd_path.to_string_lossy().as_ref());
+        if crate::backend::app_server::find_cli_binary("node", None).is_some() {
+            let (node, found_script) = resolved.expect("node + bin.js should resolve");
+            assert!(node.to_ascii_lowercase().ends_with("node.exe") || node.ends_with("node"));
+            assert_eq!(found_script, script);
+        } else {
+            assert!(resolved.is_none());
+        }
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

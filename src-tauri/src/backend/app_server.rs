@@ -169,8 +169,9 @@ pub(crate) use crate::backend::app_server_cli::{
     can_retry_wrapper_compatibility_launch, can_retry_wrapper_launch, check_cli_binary,
     check_codex_installation, classify_endpoint_failure, codex_args_override_instructions,
     codex_external_spec_priority_config_arg, probe_codex_app_server, resolve_codex_launch_context,
-    visible_console_fallback_enabled_from_env, wrapper_kind_for_binary, CodexAppServerLaunchMode,
-    CodexAppServerLaunchOptions, CodexAppServerProbeStatus, CodexLaunchContext,
+    resolve_launchable_cli_binary, visible_console_fallback_enabled_from_env,
+    wrapper_kind_for_binary, CodexAppServerLaunchMode, CodexAppServerLaunchOptions,
+    CodexAppServerProbeStatus, CodexLaunchContext,
 };
 #[allow(unused_imports)]
 pub use crate::backend::app_server_cli::{

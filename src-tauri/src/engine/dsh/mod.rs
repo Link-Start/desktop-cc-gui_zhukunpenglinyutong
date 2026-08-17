@@ -122,7 +122,7 @@ pub async fn detect_dsh_status(settings: &DshRuntimeSettings) -> EngineStatus {
     let bin = bin_path
         .as_ref()
         .map(|path| path.to_string_lossy().to_string())
-        .unwrap_or_else(|| "dsh".to_string());
+        .unwrap_or_else(|| crate::backend::app_server::resolve_launchable_cli_binary("dsh"));
     let path_env = build_codex_path_env(custom_bin);
     let (installed, version, error) = probe_cli_version_local(&bin, path_env.as_ref()).await;
     if !installed {
@@ -573,7 +573,8 @@ fn dsh_home_dir() -> Option<PathBuf> {
 
 fn resolve_bin_path(custom_bin: Option<&str>) -> Option<PathBuf> {
     if let Some(custom) = custom_bin.filter(|value| !value.trim().is_empty()) {
-        let path = PathBuf::from(custom);
+        let resolved = crate::backend::app_server::resolve_launchable_cli_binary(custom);
+        let path = PathBuf::from(&resolved);
         if path.exists() {
             return Some(path);
         }

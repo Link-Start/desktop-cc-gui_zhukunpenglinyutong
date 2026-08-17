@@ -131,6 +131,31 @@ describe("DshConnectionPanel", () => {
     });
   });
 
+  it("shows the spawn exit output when Windows start fails", async () => {
+    runDshDoctorMock.mockResolvedValue({
+      ...connectedDoctor(),
+      appServerOk: false,
+      hostDescribe: {
+        ok: false,
+        origin: "http://127.0.0.1:3080",
+        error: "connection refused",
+      },
+    });
+    ensureDshHostMock.mockRejectedValue(
+      new Error(
+        "dsh web exited before becoming ready at http://127.0.0.1:3080 (exit code: 1). Output: Error: dsh: plugin tree failed to load: sharp",
+      ),
+    );
+    renderPanel();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "settings.vendor.dshStartNow" })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "settings.vendor.dshStartNow" }));
+    await waitFor(() => {
+      expect(screen.getByRole("alert").textContent).toMatch(/plugin tree failed to load/);
+    });
+  });
+
   it("lets the user cancel an in-flight start", async () => {
     let resolveStart: (value: DshHostEnsureResult) => void = () => {
       throw new Error("ensureDshHost was not started");
@@ -211,6 +236,25 @@ describe("DshConnectionPanel", () => {
     await waitFor(() => {
       expect(screen.getByLabelText("settings.vendor.dshHost")).toBeTruthy();
     });
+  });
+
+  it("shows a Windows launch error instead of swallowing it as a generic missing hint", async () => {
+    runDshDoctorMock.mockResolvedValue({
+      ok: false,
+      codexBin: "dsh",
+      version: null,
+      appServerOk: false,
+      details: "%1 is not a valid Win32 application",
+      path: null,
+      nodeOk: true,
+      nodeVersion: "v24.15.0",
+      nodeDetails: null,
+    });
+    renderPanel();
+    await waitFor(() => {
+      expect(screen.getByText("settings.vendor.dshNotInstalled")).toBeTruthy();
+    });
+    expect(screen.getByText("%1 is not a valid Win32 application")).toBeTruthy();
   });
 
   it("persists auto-start without spawning the host", async () => {

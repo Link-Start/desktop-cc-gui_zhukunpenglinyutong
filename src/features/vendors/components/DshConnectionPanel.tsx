@@ -157,7 +157,7 @@ export function DshConnectionPanel({
                 ) : null}
               </dl>
             ) : null}
-            {errorText && view.kind !== "missing" ? (
+            {errorText && !(view.kind === "missing" && errorKind === "missing") ? (
               <p className="dsh-status-error" role="alert">
                 {errorText}
               </p>

@@ -50,6 +50,23 @@ CLI配置管理里的 DeepSeek Harness 详情 MUST 把 host 连接状态作为�
 - **THEN** 系统 MAY spawn `dsh web`
 - **AND** 成功后页面 MUST 重新探测并转为 connected（或展示 spawn 错误）
 
+#### Scenario: Windows start uses a CreateProcess-safe launch
+
+- **WHEN** 用户在 Windows 上点击「立即启动」且本机有 npm / Hermes 的 `dsh` 包装器
+- **THEN** mossx MUST 通过 CreateProcess-safe 路径拉起 `dsh web`（优先 `node.exe` + `lib/bin.js`，否则 `cmd /D /S /C dsh.cmd`）
+- **AND** MUST NOT 直接执行无扩展 POSIX shim（否则 os error 193 / `%1 is not a valid Win32 application`）
+- **AND** 若 resolved DSH tree 里 `sharp/dist/constructor.mjs` 缺失或 0 字节、且 `constructor.cjs` 存在，MUST 先写 ESM re-export shim 再 spawn（Windows npm 会把该文件装成空文件，Mac 完整 tarball 不会）
+- **AND** 若子进程在 `host.describe` 就绪前退出，MUST 把 stderr / 退出码带回设置页，不得只报 port occupied
+
+#### Scenario: macOS start keeps the shebang launch
+
+- **WHEN** 用户在 macOS 上点击「立即启动」
+- **THEN** mossx MUST 直接执行已解析的 `dsh` shebang：`dsh web --host --port`
+- **AND** MUST NOT 改写成 `node lib/bin.js`
+- **AND** MUST NOT 把 child cwd 改成 `$HOME`
+- **AND** MUST NOT 改写 `sharp/dist/constructor.mjs`
+- **AND** 就绪超时 MUST 保持 20s
+
 #### Scenario: Toggle auto-start
 
 - **WHEN** 用户打开或关闭「自动启动主机」

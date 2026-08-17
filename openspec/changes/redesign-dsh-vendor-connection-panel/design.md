@@ -61,6 +61,10 @@ Ownership note
 
 Windows 探测：`find_cli_binary("dsh")` 额外扫 `%USERPROFILE%\.hermes\node[\bin]`、`%LOCALAPPDATA%\hermes\node[\bin]`、Scoop shims / nodejs current、mise shims、fnm 当前 shell 目录。GUI 进程 PATH 经常没有这些前缀。
 
+Windows 启动：探测能跑 `dsh --version` 不等于能拉起长驻 `dsh web`。npm 全局 bin 是 POSIX shim + `.cmd` + `.ps1`；CreateProcess 打 shim 是 os error 193。`cmd /c dsh.cmd web …` 在路径被引号包住时还会丢掉 `web` 参数，且 `child.kill()` 只杀 cmd、不杀 node 孙进程。supervisor 优先 `node.exe lib/bin.js web --host --port`，stderr 必须排空并在提前退出时回传；cwd 落到 user home（GUI cwd 常是 System32）；就绪超时 45s；关闭仍走 `taskkill /T`。另：Windows npm 会把 `sharp/dist/constructor.mjs` 装成 0 字节（官方 tarball 非空），`dsh web` 加载 `attachment-local` 时直接 `does not provide an export named 'default'`。spawn 前若该文件空/缺失且 `constructor.cjs` 在，写 `createRequire` ESM shim；Mac 禁止走这条修复。
+
+Mac / Linux 启动：保持 shebang `dsh web --host --port`，**禁止**改写成 `node lib/bin.js`（nvm / Hermes 包装器自己解析 node）。cwd 继承进程原值，不改 `$HOME`。**禁止**改写 `sharp/dist/constructor.mjs`。就绪超时维持 20s。关闭仍是 `child.kill()` + `lsof`/`kill`，不用 `taskkill`。stderr 排空与提前退出回传是跨平台诊断，不改变 Unix 拉起方式。
+
 ### 4. host.describe 展示
 
 只读三格，缺字段就藏：

@@ -39,3 +39,10 @@
 
 - [x] 6.1 用户确认设置页可用，回写提案后提交
 - [ ] 6.2 归档本 change（verify / sync / archive 另做）
+
+## 7. Windows 启动按钮
+
+- [x] 7.1 supervisor 启动改走 `node.exe` + `bin.js`（或 `cmd /D /S /C`），禁止执行 POSIX shim
+- [x] 7.2 子进程提前退出时带回 stderr；Windows `kill_child` 用 `taskkill /T`
+- [ ] 7.3 本机点「立即启动」验收：host.describe 成功；关闭仍可用
+- [x] 7.4 Windows spawn 前修复 0 字节 `sharp/dist/constructor.mjs`（Mac 不改写）；本机 `node lib/bin.js web` 已打出 `dsh web: http://127.0.0.1:13080`

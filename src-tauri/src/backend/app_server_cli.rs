@@ -862,11 +862,48 @@ impl CodexAppServerLaunchOptions {
     }
 }
 
+/// Resolve a CLI name or path to something CreateProcess can actually launch.
+///
+/// Windows npm global bins ship three files: an extensionless POSIX shim, a
+/// `.cmd` wrapper, and a `.ps1` wrapper. CreateProcess matches the exact
+/// filename before PATHEXT, so `Command::new("dsh")` or a path to the
+/// extensionless shim tries to execute `#!/bin/sh` and fails with os error 193.
+/// Mac does not have this problem because the shim is a real shebang script.
+pub(crate) fn resolve_launchable_cli_binary(name_or_path: &str) -> String {
+    let trimmed = name_or_path.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let path = Path::new(trimmed);
+    if path.exists() {
+        #[cfg(windows)]
+        {
+            return prefer_windows_executable_variant(path.to_path_buf())
+                .to_string_lossy()
+                .into_owned();
+        }
+        #[cfg(not(windows))]
+        {
+            return trimmed.to_string();
+        }
+    }
+
+    let looks_like_path = path.is_absolute() || trimmed.contains('/') || trimmed.contains('\\');
+    if looks_like_path {
+        return trimmed.to_string();
+    }
+
+    find_cli_binary(trimmed, None)
+        .map(|found| found.to_string_lossy().into_owned())
+        .unwrap_or_else(|| trimmed.to_string())
+}
+
 fn resolve_codex_binary(codex_bin: Option<&str>) -> String {
     if let Some(custom) = codex_bin {
         let trimmed = custom.trim();
         if !trimmed.is_empty() {
-            return trimmed.to_string();
+            return resolve_launchable_cli_binary(trimmed);
         }
     }
 
@@ -2324,6 +2361,62 @@ mod tests {
             ps1_path
         );
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_launchable_cli_prefers_cmd_over_posix_shim() {
+        let root =
+            std::env::temp_dir().join(format!("ccgui-dsh-posix-shim-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        let posix_shim = root.join("dsh");
+        let cmd_path = root.join("dsh.cmd");
+        std::fs::write(&posix_shim, "#!/bin/sh\n").expect("write posix shim");
+        std::fs::write(&cmd_path, "@echo off\n").expect("write cmd wrapper");
+
+        assert_eq!(
+            PathBuf::from(resolve_launchable_cli_binary(
+                posix_shim.to_string_lossy().as_ref()
+            )),
+            cmd_path
+        );
+        assert_eq!(
+            resolve_launchable_cli_binary(r"C:\definitely\missing\dsh"),
+            r"C:\definitely\missing\dsh"
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn check_cli_binary_resolves_bare_dsh_name_to_cmd_wrapper() {
+        let Some(found) = find_cli_binary("dsh", None) else {
+            return;
+        };
+        let is_cmd = found
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.eq_ignore_ascii_case("cmd"));
+        if !is_cmd {
+            return;
+        }
+
+        let resolved = resolve_launchable_cli_binary("dsh");
+        assert!(
+            resolved.to_ascii_lowercase().ends_with("dsh.cmd"),
+            "bare dsh name should resolve to the npm .cmd wrapper, got {resolved}"
+        );
+        let launch_context = resolve_codex_launch_context(Some("dsh"));
+        assert_eq!(launch_context.wrapper_kind, "cmd-wrapper");
+        let version = check_cli_binary("dsh", None)
+            .await
+            .expect("dsh.cmd --version should launch on Windows");
+        assert!(
+            version
+                .as_deref()
+                .is_some_and(|value| !value.trim().is_empty()),
+            "expected a DSH version string, got {version:?}"
+        );
     }
 
     #[test]
