@@ -1198,6 +1198,11 @@ pub(crate) struct AppSettings {
     pub(crate) canvas_width_mode: String,
     #[serde(default = "default_layout_mode", rename = "layoutMode")]
     pub(crate) layout_mode: String,
+    #[serde(
+        default = "default_workspace_wallpaper",
+        rename = "workspaceWallpaper"
+    )]
+    pub(crate) workspace_wallpaper: WorkspaceWallpaperSettings,
     #[serde(default = "default_ui_font_family", rename = "uiFontFamily")]
     pub(crate) ui_font_family: String,
     #[serde(default = "default_code_font_family", rename = "codeFontFamily")]
@@ -1493,6 +1498,40 @@ fn default_canvas_width_mode() -> String {
 
 fn default_layout_mode() -> String {
     "default".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkspaceWallpaperSettings {
+    #[serde(default = "default_workspace_wallpaper_mode")]
+    pub(crate) mode: String,
+    #[serde(default)]
+    pub(crate) custom_image_path: Option<String>,
+    #[serde(default = "default_workspace_wallpaper_fluid_preset")]
+    pub(crate) fluid_preset: String,
+    #[serde(default = "default_workspace_wallpaper_veil_opacity")]
+    pub(crate) veil_opacity: u8,
+}
+
+fn default_workspace_wallpaper_mode() -> String {
+    "none".to_string()
+}
+
+fn default_workspace_wallpaper_fluid_preset() -> String {
+    "mist".to_string()
+}
+
+fn default_workspace_wallpaper_veil_opacity() -> u8 {
+    12
+}
+
+fn default_workspace_wallpaper() -> WorkspaceWallpaperSettings {
+    WorkspaceWallpaperSettings {
+        mode: default_workspace_wallpaper_mode(),
+        custom_image_path: None,
+        fluid_preset: default_workspace_wallpaper_fluid_preset(),
+        veil_opacity: default_workspace_wallpaper_veil_opacity(),
+    }
 }
 
 fn default_ui_font_family() -> String {
@@ -2018,6 +2057,7 @@ impl Default for AppSettings {
             ),
             canvas_width_mode: default_canvas_width_mode(),
             layout_mode: default_layout_mode(),
+            workspace_wallpaper: default_workspace_wallpaper(),
             ui_font_family: default_ui_font_family(),
             code_font_family: default_code_font_family(),
             code_font_size: default_code_font_size(),

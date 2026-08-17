@@ -32,6 +32,7 @@ import Search from "lucide-react/dist/esm/icons/search";
 import Sun from "lucide-react/dist/esm/icons/sun";
 import TerminalSquare from "lucide-react/dist/esm/icons/terminal-square";
 import type { LucideIcon } from "lucide-react";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { Switch } from "@/components/ui/switch";
 import {
   DEFAULT_OPEN_APP_ID,
@@ -47,7 +48,12 @@ import {
   getClientUiControlDefinition,
   type ClientUiVisibilityIconKey,
 } from "@/features/client-ui-visibility/utils/clientUiVisibility";
-import type { AppSettings, ThemePresetId } from "../../../../../types";
+import type {
+  AppSettings,
+  ThemePresetId,
+  WorkspaceWallpaperFluidPreset,
+  WorkspaceWallpaperMode,
+} from "../../../../../types";
 import {
   CODE_FONT_SIZE_DEFAULT,
   DEFAULT_CODE_FONT_FAMILY,
@@ -59,6 +65,16 @@ import {
   sanitizeDockIconId,
   type DockIconId,
 } from "../../../../theme/utils/dockIcon";
+import {
+  WORKSPACE_FLUID_PRESETS,
+  fluidToneColors,
+} from "../../../../onboarding/utils/fluidTones";
+import {
+  MAX_WORKSPACE_WALLPAPER_VEIL_OPACITY,
+  MIN_WORKSPACE_WALLPAPER_VEIL_OPACITY,
+  sanitizeWorkspaceWallpaper,
+  sanitizeWorkspaceWallpaperVeilOpacity,
+} from "../../../../theme/utils/workspaceWallpaper";
 import { LanguageSelector } from "../../LanguageSelector";
 import { SyntaxAndDiffPreview } from "./SyntaxAndDiffPreview";
 
@@ -326,6 +342,61 @@ export function BasicAppearanceSection({
   const clientUiVisibility = useClientUiVisibility();
   const selectedOpenAppIconSrc = resolveSelectedOpenAppIconSrc(appSettings);
   const selectedDockIconId = sanitizeDockIconId(appSettings.dockIconId);
+  const wallpaper = sanitizeWorkspaceWallpaper(appSettings.workspaceWallpaper);
+
+  // Local draft for the frost slider: onChange only moves the draft, the
+  // (expensive) full-settings persist runs once on release. Committing per
+  // input event would fire a whole-file settings write per tick and fight the
+  // controlled value while the async round-trip is in flight.
+  const [veilDraft, setVeilDraft] = useState(wallpaper.veilOpacity);
+  useEffect(() => {
+    setVeilDraft(wallpaper.veilOpacity);
+  }, [wallpaper.veilOpacity]);
+
+  const persistWallpaper = (
+    next: Partial<{
+      mode: WorkspaceWallpaperMode;
+      customImagePath: string | null;
+      fluidPreset: WorkspaceWallpaperFluidPreset;
+      veilOpacity: number;
+    }>,
+  ) => {
+    void onUpdateAppSettings({
+      ...appSettings,
+      workspaceWallpaper: sanitizeWorkspaceWallpaper({
+        ...wallpaper,
+        ...next,
+      }),
+    });
+  };
+
+  const commitVeilDraft = () => {
+    const next = sanitizeWorkspaceWallpaperVeilOpacity(veilDraft);
+    if (next === wallpaper.veilOpacity) {
+      return;
+    }
+    persistWallpaper({ veilOpacity: next });
+  };
+
+  const handleChooseCustomWallpaper = async () => {
+    const selection = await openFileDialog({
+      multiple: false,
+      directory: false,
+      filters: [
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"],
+        },
+      ],
+    });
+    if (typeof selection !== "string" || !selection.trim()) {
+      return;
+    }
+    persistWallpaper({
+      mode: "custom",
+      customImagePath: selection.trim(),
+    });
+  };
   const resolvedAppearanceLabel = t(
     resolvedAppearanceTheme === "light" ? "settings.themeLight" : "settings.themeDark",
   );
@@ -429,6 +500,158 @@ export function BasicAppearanceSection({
               <span>{t("settings.themeCustom")}</span>
             </button>
           </div>
+        </div>
+
+        <div
+          className={`settings-pref-row settings-pref-row--stack${
+            wallpaper.mode === "custom" || wallpaper.mode === "fluid"
+              ? " is-expanded"
+              : ""
+          }`}
+          data-testid="settings-workspace-wallpaper"
+        >
+          <div className="settings-pref-row-main">
+            <div className="settings-pref-meta">
+              <div className="settings-pref-title">
+                {t("settings.workspaceWallpaper")}
+              </div>
+              <div className="settings-pref-desc">
+                {t("settings.workspaceWallpaperDesc")}
+              </div>
+            </div>
+            <div
+              className="settings-pref-control settings-pref-segmented"
+              role="radiogroup"
+              aria-label={t("settings.workspaceWallpaper")}
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={wallpaper.mode === "fluid"}
+                className={`settings-pref-segment ${
+                  wallpaper.mode === "fluid" ? "is-active" : ""
+                }`}
+                onClick={() => persistWallpaper({ mode: "fluid" })}
+              >
+                <span>{t("settings.workspaceWallpaperFluid")}</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={wallpaper.mode === "none"}
+                className={`settings-pref-segment ${
+                  wallpaper.mode === "none" ? "is-active" : ""
+                }`}
+                onClick={() => persistWallpaper({ mode: "none" })}
+              >
+                <span>{t("settings.workspaceWallpaperNone")}</span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={wallpaper.mode === "custom"}
+                className={`settings-pref-segment ${
+                  wallpaper.mode === "custom" ? "is-active" : ""
+                }`}
+                onClick={() => persistWallpaper({ mode: "custom" })}
+              >
+                <span>{t("settings.workspaceWallpaperCustom")}</span>
+              </button>
+            </div>
+          </div>
+          {wallpaper.mode === "fluid" ? (
+            <div
+              className="settings-pref-inline-control settings-wallpaper-presets"
+              role="radiogroup"
+              aria-label={t("settings.workspaceWallpaperPreset")}
+            >
+              {WORKSPACE_FLUID_PRESETS.map((preset) => {
+                const tones = fluidToneColors(false, preset.hue, preset.depth);
+                const active = wallpaper.fluidPreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    className={`settings-wallpaper-swatch${active ? " is-active" : ""}`}
+                    title={t(`settings.workspaceWallpaperPreset_${preset.id}`)}
+                    aria-label={t(`settings.workspaceWallpaperPreset_${preset.id}`)}
+                    onClick={() => persistWallpaper({ fluidPreset: preset.id })}
+                  >
+                    <span
+                      style={{
+                        background: `linear-gradient(135deg, ${tones.color1} 0%, ${tones.color2} 52%, ${tones.color3} 100%)`,
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          {wallpaper.mode === "custom" ? (
+            <div className="settings-pref-inline-control settings-wallpaper-custom">
+              <button
+                type="button"
+                className="settings-web-btn"
+                onClick={() => {
+                  void handleChooseCustomWallpaper();
+                }}
+              >
+                {t("settings.workspaceWallpaperChoose")}
+              </button>
+              {wallpaper.customImagePath ? (
+                <>
+                  <span
+                    className="settings-pref-value settings-wallpaper-path"
+                    title={wallpaper.customImagePath}
+                  >
+                    {wallpaper.customImagePath}
+                  </span>
+                  <button
+                    type="button"
+                    className="settings-pref-reset"
+                    onClick={() =>
+                      persistWallpaper({
+                        mode: "custom",
+                        customImagePath: null,
+                      })
+                    }
+                  >
+                    {t("settings.workspaceWallpaperClear")}
+                  </button>
+                </>
+              ) : (
+                <span className="settings-pref-desc">
+                  {t("settings.workspaceWallpaperMissing")}
+                </span>
+              )}
+            </div>
+          ) : null}
+          {wallpaper.mode !== "none" ? (
+            <div className="settings-pref-inline-control">
+              <input
+                type="range"
+                min={MIN_WORKSPACE_WALLPAPER_VEIL_OPACITY}
+                max={MAX_WORKSPACE_WALLPAPER_VEIL_OPACITY}
+                step={1}
+                className="settings-input settings-input--range"
+                aria-label={t("settings.workspaceWallpaperVeil")}
+                value={veilDraft}
+                onChange={(event) =>
+                  setVeilDraft(Number(event.target.value))
+                }
+                onPointerUp={commitVeilDraft}
+                onKeyUp={commitVeilDraft}
+                onBlur={commitVeilDraft}
+              />
+              <span className="settings-pref-value">
+                {t("settings.workspaceWallpaperVeilValue", {
+                  value: veilDraft,
+                })}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {appSettings.theme === "custom" ? (

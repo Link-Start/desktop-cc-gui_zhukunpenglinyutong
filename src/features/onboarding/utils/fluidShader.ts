@@ -197,9 +197,13 @@ function hexToRgb(value: string): [number, number, number] {
   ];
 }
 
+export type FluidShaderProfile = "full" | "lite";
+
 export interface FluidShaderHandle {
   setParams: (params: FluidParams) => void;
   stir: (x: number, y: number, vx: number, vy: number) => void;
+  pause: () => void;
+  resume: () => void;
   dispose: () => void;
 }
 
@@ -207,6 +211,8 @@ function noopHandle(): FluidShaderHandle {
   return {
     setParams: () => undefined,
     stir: () => undefined,
+    pause: () => undefined,
+    resume: () => undefined,
     dispose: () => undefined,
   };
 }
@@ -226,9 +232,15 @@ function prefersReducedMotion(): boolean {
 export function attachFluidShader(
   canvas: HTMLCanvasElement,
   params: FluidParams,
+  profile: FluidShaderProfile = "full",
 ): FluidShaderHandle {
+  const lite = profile === "lite";
   const gl = canvas.getContext("webgl2", {
     alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    desynchronized: true,
     premultipliedAlpha: false,
     powerPreference: "low-power",
   });
@@ -378,13 +390,24 @@ export function attachFluidShader(
   let flowHeight = 0;
   let flip = false;
   let current: FluidParams = { ...params };
-  const dprCap = Math.min(window.devicePixelRatio || 1, 1.5);
-  width = Math.max(1, Math.round(canvas.clientWidth * dprCap));
-  height = Math.max(1, Math.round(canvas.clientHeight * dprCap));
+  const dprCap = lite ? 1 : Math.min(window.devicePixelRatio || 1, 1.5);
+  const resolutionScale = lite ? 0.5 : 1;
+  const fps = lite ? 12 : 30;
+  const measureCanvasSize = (): { nextWidth: number; nextHeight: number } => ({
+    nextWidth: Math.max(
+      1,
+      Math.round(canvas.clientWidth * dprCap * resolutionScale),
+    ),
+    nextHeight: Math.max(
+      1,
+      Math.round(canvas.clientHeight * dprCap * resolutionScale),
+    ),
+  });
+  ({ nextWidth: width, nextHeight: height } = measureCanvasSize());
   canvas.width = width;
   canvas.height = height;
-  flowWidth = Math.max(1, Math.round(width / 4));
-  flowHeight = Math.max(1, Math.round(height / 4));
+  flowWidth = Math.max(1, Math.round(width / (lite ? 6 : 4)));
+  flowHeight = Math.max(1, Math.round(height / (lite ? 6 : 4)));
 
   const initial = new Uint8Array(flowWidth * flowHeight * 4);
   for (let i = 0; i < flowWidth * flowHeight; i += 1) {
@@ -402,22 +425,29 @@ export function attachFluidShader(
   const start = performance.now();
   let raf = 0;
   let previous = 0;
-  const step = 1000 / 30;
+  let paused = false;
+  let disposed = false;
+  const step = 1000 / fps;
+
+  const syncCanvasSize = (): void => {
+    const { nextWidth, nextHeight } = measureCanvasSize();
+    if (nextWidth === width && nextHeight === height) {
+      return;
+    }
+    width = nextWidth;
+    height = nextHeight;
+    canvas.width = width;
+    canvas.height = height;
+  };
 
   const frame = (now: number): void => {
+    if (disposed || paused) {
+      raf = 0;
+      return;
+    }
     raf = requestAnimationFrame(frame);
     if (now - previous < step) return;
     previous = now - ((now - previous) % step);
-
-    const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
-    const nextWidth = Math.max(1, Math.round(canvas.clientWidth * ratio));
-    const nextHeight = Math.max(1, Math.round(canvas.clientHeight * ratio));
-    if (nextWidth !== width || nextHeight !== height) {
-      width = nextWidth;
-      height = nextHeight;
-      canvas.width = width;
-      canvas.height = height;
-    }
 
     const p = current;
 
@@ -466,11 +496,37 @@ export function attachFluidShader(
     gl.uniform1f(display.shapeScale, p.shapeScale / 100);
     gl.uniform1f(display.distortion, p.distortion / 100);
     gl.uniform1f(display.swirl, p.swirl / 50);
-    gl.uniform1f(display.swirlIterations, p.swirlIterations);
+    gl.uniform1f(
+      display.swirlIterations,
+      lite ? Math.min(p.swirlIterations, 4) : p.swirlIterations,
+    );
     gl.uniform1f(display.distortBoost, p.distortBoost);
     gl.uniform1f(display.noiseBoost, p.noiseBoost);
     gl.uniform1f(display.swirlBoost, p.swirlBoost);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+
+  const stopLoop = (): void => {
+    if (raf !== 0) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    }
+  };
+
+  const startLoop = (): void => {
+    if (disposed || paused || prefersReducedMotion() || raf !== 0) {
+      return;
+    }
+    previous = 0;
+    raf = requestAnimationFrame(frame);
+  };
+
+  const handleHidden = (): void => {
+    if (document.hidden) {
+      stopLoop();
+      return;
+    }
+    startLoop();
   };
 
   const handle: FluidShaderHandle = {
@@ -478,17 +534,43 @@ export function attachFluidShader(
       current = { ...next };
     },
     stir: () => undefined,
+    pause: () => {
+      paused = true;
+      stopLoop();
+    },
+    resume: () => {
+      if (disposed) {
+        return;
+      }
+      paused = false;
+      startLoop();
+    },
     dispose: () => {
-      cancelAnimationFrame(raf);
+      disposed = true;
+      paused = true;
+      stopLoop();
+      window.removeEventListener("resize", syncCanvasSize);
+      document.removeEventListener("visibilitychange", handleHidden);
+      resizeObserver?.disconnect();
     },
   };
 
+  window.addEventListener("resize", syncCanvasSize);
+  document.addEventListener("visibilitychange", handleHidden);
+  const resizeObserver =
+    typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(() => {
+          syncCanvasSize();
+        });
+  resizeObserver?.observe(canvas);
+
   if (prefersReducedMotion()) {
     frame(performance.now());
-    cancelAnimationFrame(raf);
+    stopLoop();
     return handle;
   }
 
-  raf = requestAnimationFrame(frame);
+  startLoop();
   return handle;
 }

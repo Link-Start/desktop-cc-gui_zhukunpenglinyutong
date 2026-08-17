@@ -1,12 +1,4 @@
-# message-process-phase-collapse Specification
-
-## Purpose
-
-定义对话幕布（Native + Shared 共用 Messages 核）过程相位折叠契约：每个有可见正文的
-assistant 只折叠紧挨在它正上方的连续 process run，hard-unmount 折叠体，按时间线分段
-穿插呈现。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Process Phase Collapse MUST Use Contiguous Segmentation
 

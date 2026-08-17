@@ -35,3 +35,5 @@ import "./styles/panel-lock.css";
 import "./styles/subagent-ui.css";
 // 统一滚动条兜底清单（须最后加载，覆盖未登记的滚动容器）
 import "./styles/scrollbars.css";
+// Wallpaper translucency must win over later shell / messages / composer fills.
+import "./styles/workspace-wallpaper.css";

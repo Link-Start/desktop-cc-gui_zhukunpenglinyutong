@@ -27,6 +27,7 @@ import {
   getStartupTraceSnapshot,
   resetStartupTraceForTests,
 } from "../../startup-orchestration/utils/startupTrace";
+import { resetWorkspaceWallpaperStoreForTests } from "../../theme/utils/workspaceWallpaperStore";
 
 vi.mock("../../../services/tauri", () => ({
   getAppSettings: vi.fn(),
@@ -73,6 +74,7 @@ describe("useAppSettings", () => {
     takeSettingsRecoveryNoticeMock.mockResolvedValue(null);
     window.localStorage.clear();
     resetStartupTraceForTests();
+    resetWorkspaceWallpaperStoreForTests();
   });
 
   afterEach(() => {
@@ -116,6 +118,12 @@ describe("useAppSettings", () => {
     );
     expect(result.current.settings.canvasWidthMode).toBe("narrow");
     expect(result.current.settings.layoutMode).toBe("default");
+    expect(result.current.settings.workspaceWallpaper).toEqual({
+      mode: "none",
+      customImagePath: null,
+      fluidPreset: "mist",
+      veilOpacity: 12,
+    });
     expect(result.current.settings.userMsgColor).toBe("");
     expect(result.current.settings.uiFontFamily).toBe(DEFAULT_UI_FONT_FAMILY);
     expect(result.current.settings.uiFontFamily).not.toMatch(/^Monaco,/);

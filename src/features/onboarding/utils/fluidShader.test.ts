@@ -9,6 +9,8 @@ describe("attachFluidShader", () => {
     expect(() => {
       handle.setParams(SITE_FLUID_PARAMS);
       handle.stir(0.5, 0.5, 0, 0);
+      handle.pause();
+      handle.resume();
       handle.dispose();
     }).not.toThrow();
   });

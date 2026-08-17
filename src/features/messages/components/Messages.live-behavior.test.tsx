@@ -2992,6 +2992,86 @@ describe("Messages live behavior", () => {
     });
   });
 
+  it("interleaves a process chip above each assistant segment in one turn", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "user-segmented",
+        kind: "message",
+        role: "user",
+        text: "请分段处理",
+      },
+      {
+        id: "tool-segment-1",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read first.ts",
+        detail: "first.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-segment-1",
+        kind: "message",
+        role: "assistant",
+        text: "第一段结论",
+      },
+      {
+        id: "tool-segment-2a",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read second-a.ts",
+        detail: "second-a.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "tool-segment-2b",
+        kind: "tool",
+        toolType: "fileRead",
+        title: "Read second-b.ts",
+        detail: "second-b.ts",
+        status: "completed",
+        output: "",
+      },
+      {
+        id: "assistant-segment-2",
+        kind: "message",
+        role: "assistant",
+        text: "第二段结论",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const chips = Array.from(
+      container.querySelectorAll(".messages-process-phase-toggle"),
+    );
+    expect(chips).toHaveLength(2);
+    expect(chips[0]?.textContent ?? "").toContain("工具调用 1 次");
+    expect(chips[1]?.textContent ?? "").toContain("工具调用 2 次");
+    expect(container.textContent ?? "").not.toContain("Read first.ts");
+    expect(container.textContent ?? "").not.toContain("Read second-a.ts");
+
+    const surface = container.textContent ?? "";
+    const chip1At = surface.indexOf("工具调用 1 次");
+    const prose1At = surface.indexOf("第一段结论");
+    const chip2At = surface.indexOf("工具调用 2 次");
+    const prose2At = surface.indexOf("第二段结论");
+    expect(chip1At).toBeGreaterThan(-1);
+    expect(chip1At).toBeLessThan(prose1At);
+    expect(prose1At).toBeLessThan(chip2At);
+    expect(chip2At).toBeLessThan(prose2At);
+  });
+
   it("collapses each historical turn phase independently", () => {
     const items: ConversationItem[] = [
       {

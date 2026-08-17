@@ -7,27 +7,45 @@ import {
   attachFluidShader,
   SITE_FLUID_PARAMS,
   type FluidParams,
+  type FluidShaderHandle,
+  type FluidShaderProfile,
 } from "../utils/fluidShader";
 import {
-  FIRST_RUN_FLUID_DEPTH,
-  FIRST_RUN_FLUID_HUE,
+  DEFAULT_WORKSPACE_FLUID_PRESET,
   fluidToneColors,
+  resolveWorkspaceFluidPreset,
+  type WorkspaceFluidPresetId,
 } from "../utils/fluidTones";
 
-function buildFluidParams(dark: boolean): FluidParams {
-  const tones = fluidToneColors(dark, FIRST_RUN_FLUID_HUE, FIRST_RUN_FLUID_DEPTH);
+function buildFluidParams(
+  dark: boolean,
+  presetId: WorkspaceFluidPresetId,
+): FluidParams {
+  const preset = resolveWorkspaceFluidPreset(presetId);
   return {
     ...SITE_FLUID_PARAMS,
-    ...tones,
+    ...fluidToneColors(dark, preset.hue, preset.depth),
   };
 }
 
-export function FirstRunFluidBackdrop() {
+export function FirstRunFluidBackdrop({
+  paused = false,
+  presetId = DEFAULT_WORKSPACE_FLUID_PRESET,
+  profile = "full",
+}: {
+  paused?: boolean;
+  presetId?: WorkspaceFluidPresetId;
+  profile?: FluidShaderProfile;
+} = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const handleRef = useRef<FluidShaderHandle | null>(null);
   const [dark, setDark] = useState(
     () => readDocumentThemeAppearance() === "dark",
   );
-  const params = useMemo(() => buildFluidParams(dark), [dark]);
+  const params = useMemo(
+    () => buildFluidParams(dark, presetId),
+    [dark, presetId],
+  );
 
   useEffect(() => {
     if (typeof MutationObserver === "undefined" || typeof document === "undefined") {
@@ -48,16 +66,43 @@ export function FirstRunFluidBackdrop() {
     return () => observer.disconnect();
   }, []);
 
+  // Params changes (preset / light-dark flip) are pushed through setParams so
+  // the WebGL context survives; only a profile switch re-attaches.
+  const paramsRef = useRef(params);
+  paramsRef.current = params;
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) {
       return undefined;
     }
-    const handle = attachFluidShader(canvas, params);
+    const handle = attachFluidShader(canvas, paramsRef.current, profile);
+    handleRef.current = handle;
+    if (paused) {
+      handle.pause();
+    }
     return () => {
+      handleRef.current = null;
       handle.dispose();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
+
+  useEffect(() => {
+    handleRef.current?.setParams(params);
   }, [params]);
+
+  useEffect(() => {
+    const handle = handleRef.current;
+    if (!handle) {
+      return;
+    }
+    if (paused) {
+      handle.pause();
+      return;
+    }
+    handle.resume();
+  }, [paused]);
 
   return (
     <div
