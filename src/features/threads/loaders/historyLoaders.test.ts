@@ -826,6 +826,49 @@ describe("history loaders", () => {
     );
   });
 
+  it("hydrates dsh token usage and sessionStats from history", async () => {
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession: vi.fn().mockResolvedValue({
+        messages: [],
+        usage: {
+          inputTokens: 4,
+          outputTokens: 20,
+          cacheReadInputTokens: 96,
+          cacheWriteInputTokens: 12,
+          sessionStats: {
+            turns: 1,
+            steps: 1,
+            llmMs: 9500,
+            toolMs: 0,
+            ttftMs: 8500,
+            ttftSteps: 1,
+            decodeMs: 1000,
+            decodeTokens: 72,
+          },
+        },
+      }),
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(snapshot.tokenUsage).toMatchObject({
+      total: {
+        inputTokens: 4,
+        outputTokens: 20,
+        cachedInputTokens: 96,
+      },
+      contextUsageSource: "dsh_history",
+      cacheWriteInputTokens: 12,
+      sessionStats: {
+        ttftMs: 8500,
+        ttftSteps: 1,
+        decodeMs: 1000,
+        decodeTokens: 72,
+      },
+    });
+  });
+
   it("returns an empty dsh snapshot when workspace path is missing", async () => {
     const loader = createDshHistoryLoader({
       workspaceId: "ws-dsh",

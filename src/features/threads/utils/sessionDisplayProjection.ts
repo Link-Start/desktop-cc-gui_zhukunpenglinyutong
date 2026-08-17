@@ -6,7 +6,7 @@ import {
 import { isDshRuntimeContextText } from "../../../utils/dshRuntimeContext";
 
 const GENERIC_SESSION_TITLE_PATTERN =
-  /^(codex session|claude session|gemini session|opencode session|grok session|kimi session)$/i;
+  /^(codex session|claude session|gemini session|opencode session|grok session|kimi session|pi session|dsh session|deepseek harness session)$/i;
 const ORDINAL_AGENT_TITLE_PATTERN = /^agent\s+\d+$/i;
 const SHORT_HEX_TITLE_PATTERN = /^[a-f0-9]{4,8}$/i;
 // 历史遗留:斜杠命令原始记录曾被直接剪成标题(如 "<command-m"),视为无效标题

@@ -6,9 +6,25 @@ export type TokenUsageBreakdown = {
   reasoningOutputTokens: number;
 };
 
+/** DSH host `sessionStats` projection — whole-log wall times, not the paged window. */
+export type DshSessionStats = {
+  turns: number;
+  steps: number;
+  llmMs: number;
+  toolMs: number;
+  ttftMs: number;
+  ttftSteps: number;
+  decodeMs: number;
+  decodeTokens: number;
+};
+
 export type ThreadTokenUsage = {
   total: TokenUsageBreakdown;
   last: TokenUsageBreakdown;
+  /** Optional DSH-only speed projection; other engines leave this unset. */
+  sessionStats?: DshSessionStats | null;
+  /** Optional DSH billed cache-write bucket used only for cache-hit %. */
+  cacheWriteInputTokens?: number | null;
   modelContextWindow: number | null;
   contextUsageSource?: string | null;
   contextUsageFreshness?:

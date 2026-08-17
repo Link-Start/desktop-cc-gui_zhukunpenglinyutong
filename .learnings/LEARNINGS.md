@@ -1,5 +1,34 @@
 # Learnings
 
+## [LRN-20260817-007] user_feedback
+
+**Logged**: 2026-08-17T20:33:20+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+DSH 会话侧栏会一直停在 `Agent N`，即使画布里已经有完整用户首条消息。
+
+### Details
+`ensureThread` 给新会话的默认名是 `Agent ${list.length + 1}`。DSH 列表标题常被 runtime context 洗成空串或 `DSH Session`，历史灌入走 `setThreadItems` / `prependThreadItems` 又不改名。pending → `dsh:` 换绑时弱标题还会盖掉已经从首条消息生成的好名字。
+
+### Suggested Action
+1. 历史灌入和 prepend 时，用首条真实用户消息升级弱标题。
+2. 忽略 DSH runtime context / goal injection，不要拿它们当标题。
+3. pending 换绑和 DSH list merge 都要保留更强的已有标题。
+
+### Metadata
+- Source: user_feedback
+- Related Files: src/features/threads/hooks/threadReducerThreadNaming.ts, src/features/threads/hooks/useThreadsReducer.ts, src/features/threads/hooks/threadReducerThreadIdentity.ts, src/features/threads/hooks/useThreadActions.helpers.ts, src/features/threads/utils/sessionDisplayProjection.ts
+- Tags: dsh, sidebar, thread-title, agent-n
+
+### Resolution
+- **Resolved**: 2026-08-17T20:33:20+08:00
+- **Notes**: Weak `Agent N` / `DSH Session` titles now upgrade from the first real user prompt on live upsert, history hydrate, prepend, pending rebind, and DSH list merge.
+
+---
+
 ## [LRN-20260817-006] user_feedback
 
 **Logged**: 2026-08-17T19:17:54+08:00

@@ -22,6 +22,7 @@ import {
 } from "../utils/claudeForkThread";
 import {
   asString,
+  normalizeDshSessionStats,
   normalizePlanUpdate,
   normalizeRateLimits,
   normalizeTokenUsage,
@@ -629,6 +630,24 @@ export function useThreadTurnEvents({
   const onThreadTokenUsageUpdated = useCallback(
     (workspaceId: string, threadId: string, tokenUsage: Record<string, unknown>) => {
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
+      const sessionStats = normalizeDshSessionStats(
+        tokenUsage.sessionStats ?? tokenUsage.session_stats,
+      );
+      const hasTokenEnvelope =
+        tokenUsage.total != null ||
+        tokenUsage.last != null ||
+        tokenUsage.inputTokens != null ||
+        tokenUsage.input_tokens != null ||
+        tokenUsage.outputTokens != null ||
+        tokenUsage.output_tokens != null;
+      if (!hasTokenEnvelope && sessionStats) {
+        dispatch({
+          type: "setThreadSessionStats",
+          threadId,
+          sessionStats,
+        });
+        return;
+      }
       dispatch({
         type: "setThreadTokenUsage",
         threadId,

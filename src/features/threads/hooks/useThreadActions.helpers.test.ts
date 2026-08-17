@@ -1316,6 +1316,33 @@ describe("useThreadActions.helpers", () => {
     });
   });
 
+  it("lets a later DSH first-message title upgrade an older Agent N row", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:sess-a",
+          name: "Agent 133",
+          updatedAt: 200,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "sess-a",
+          firstMessage: "用户反馈：他的DSH 无法识别图片",
+          updatedAt: 30,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-a",
+      name: "用户反馈：他的DSH 无法识别图片",
+    });
+  });
+
   it("mergeDsh clears leaked baseline with empty sessions", () => {
     const hidden = new Set(["dsh:leaked"]);
     const merged = mergeDshSessionSummaries(

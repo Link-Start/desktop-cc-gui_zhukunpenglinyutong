@@ -18,7 +18,7 @@ Goals：
 - 已连接 / 启动中可显式「关闭」本机 host；远程 origin 不杀。
 - 自动启动开关只解释策略。
 - Host/Port 收进连接设置。
-- 状态卡按钮与文案左右分栏、相对整卡垂直居中，不压 `vendor-group-card` 分隔线。
+- 状态卡按钮与标题左右分栏、靠右上，不压 `vendor-group-card` 分隔线。
 
 Non-Goals：见 proposal。
 
@@ -28,8 +28,8 @@ Non-Goals：见 proposal。
 
 ```text
 CliBrandHeader（安装/版本，沿用 CliLifecycle）
-Status card          ← 主路径
-Ownership note
+Ownership hint       ← 独立提示，不进状态卡
+Status card          ← 主路径：标题+操作同一行
 连接设置（可折叠）    ← Host+Port、自动启动、自定义路径
 ```
 
@@ -45,7 +45,7 @@ Ownership note
 | checking | 尚无 doctor 结果，或刷新中且无缓存 | 无 |
 | missing | `dsh --version` 失败 / doctor.ok=false 且无 version | 安装最新版（现有 lifecycle） |
 | down | CLI 在，`host.describe` 失败 | 立即启动 + 仍尝试打开 + 重新检测 |
-| connected | `host.describe` 成功 | 打开 DSH 设置 + 关闭 + 重新检测 |
+| connected | `host.describe` 成功 | 打开 DSH Web UI + 关闭 + 重新检测 |
 
 探测失败不得报成「未安装」。
 
@@ -54,7 +54,7 @@ Ownership note
 - **探测**：复用 `dsh_doctor`。doctor 已 probe `host.describe` 且 **never spawn**。前端解析 `hostDescribe`（ok / origin / describe / error）。
 - **立即启动**：新 command `ensure_dsh_host` → `runtime_settings_for_explicit_start` + `ensure_ready`。关着自动启动也能被这个按钮拉起（按钮是用户显式意图，覆盖「下次自动」策略）。若 CLI 不在，返回可读错误，不假装成功。
 - **关闭**：`cancel_dsh_host` → `stop_host`。取消 pending spawn；若配置的是本机 Host，再停掉该 port 上仍在应答 `host.describe` 的 listener（含 adopted）。远程 Host 返回可读错误，不杀。`drop_host`（mossx 退出）仍不杀 adopted。
-- **打开 DSH 设置**：仍 `openUrl(http://host:port)`，不要求先 connected（用户可能自己刚起）。
+- **打开 DSH Web UI**：仍 `openUrl(http://host:port)`，不要求先 connected（用户可能自己刚起）。
 - **transport 文案**：`host.describe transport: error sending request for url (...)` 映射为 `dshDescribeFailed`，不把 reqwest 原文写进状态卡。
 
 `dshAutoStart` 语义不变：只影响发送/会话链路的 `ensure_host`。设置页拨开关不 spawn、不杀进程。
@@ -63,13 +63,13 @@ Windows 探测：`find_cli_binary("dsh")` 额外扫 `%USERPROFILE%\.hermes\node[
 
 ### 4. host.describe 展示
 
-只读三格，缺字段就藏：
+只读 inline 元数据，缺字段就藏；不要做成三块灰底卡：
 
 - `provider`
 - `model`
 - `attachedSessions`
 
-禁止在 mossx 里改这些值。
+禁止在 mossx 里改这些值。所有权说明作为状态卡上方的独立提示（「提示」标签 + 正文），不塞进状态卡。
 
 ### 5. 组件落位
 
@@ -77,7 +77,7 @@ Windows 探测：`find_cli_binary("dsh")` 额外扫 `%USERPROFILE%\.hermes\node[
 - `src/features/vendors/hooks/useDshHostStatus.ts`：doctor 探测 + ensure 启动
 - `src/features/vendors/utils/dshHostStatus.ts`：纯函数映射 doctor → view model
 - `src/services/tauri/dshHost.ts`：`ensureDshHost` / `cancelDshHost`
-- 样式落在现有 `settings.part1.vendor-panels.css`，不另起主题。状态卡必须是单一子节点（`.dsh-status-main`），避免 `vendor-group-card > * + *` 在标题与正文之间画分隔线把按钮压住。按钮组相对整卡垂直居中、靠右一行。
+- 样式落在现有 `settings.part1.vendor-panels.css`，不另起主题。状态卡必须是单一子节点（`.dsh-status-main`），避免 `vendor-group-card > * + *` 在标题与正文之间画分隔线把按钮压住。按钮组放在 `.dsh-status-head` 右上，与标题对齐；事实行是无底 inline 元数据。
 
 ### 6. ADR
 

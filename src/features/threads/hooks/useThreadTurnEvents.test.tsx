@@ -40,6 +40,12 @@ vi.mock("../utils/threadNormalize", () => ({
   normalizePlanUpdate: vi.fn(),
   normalizeRateLimits: vi.fn(),
   normalizeTokenUsage: vi.fn(),
+  normalizeDshSessionStats: (value: unknown) => {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    return value;
+  },
 }));
 
 type SetupOverrides = {
@@ -1967,6 +1973,31 @@ describe("useThreadTurnEvents", () => {
       threadId: "thread-1",
       tokenUsage: normalized,
     });
+  });
+
+  it("patches sessionStats without replacing token counts", () => {
+    const { result, dispatch } = makeOptions();
+    const sessionStats = {
+      ttftMs: 8500,
+      ttftSteps: 1,
+      decodeMs: 1000,
+      decodeTokens: 72,
+    };
+
+    act(() => {
+      result.current.onThreadTokenUsageUpdated("ws-1", "dsh:session-1", {
+        sessionStats,
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadSessionStats",
+      threadId: "dsh:session-1",
+      sessionStats,
+    });
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "setThreadTokenUsage" }),
+    );
   });
 
   it("dispatches normalized rate limits updates", () => {

@@ -1500,7 +1500,14 @@ function mergeNativeCliSessionSummaries(params: {
       engineSource,
       ...(parentThreadId ? { parentThreadId } : {}),
     };
-    if (!prev || next.updatedAt >= prev.updatedAt) {
+    if (
+      !prev ||
+      next.updatedAt >= prev.updatedAt ||
+      (
+        isWeakSessionDisplayTitle(prev.name) &&
+        !isWeakSessionDisplayTitle(next.name)
+      )
+    ) {
       const merged = mergeSessionDisplaySummary(prev, next, {
         mappedTitle,
         customTitle,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  normalizeDshSessionStats,
   normalizePlanStepStatus,
   normalizePlanUpdate,
   parseReviewTarget,
@@ -103,5 +104,32 @@ describe("threadNormalize plan helpers", () => {
       type: "custom",
       instructions: "/review.custom run",
     });
+  });
+});
+
+describe("normalizeDshSessionStats", () => {
+  it("accepts camelCase and snake_case host projections", () => {
+    expect(
+      normalizeDshSessionStats({
+        ttft_ms: 8500,
+        ttft_steps: 1,
+        decode_ms: 1000,
+        decode_tokens: 72,
+      }),
+    ).toEqual({
+      turns: 0,
+      steps: 0,
+      llmMs: 0,
+      toolMs: 0,
+      ttftMs: 8500,
+      ttftSteps: 1,
+      decodeMs: 1000,
+      decodeTokens: 72,
+    });
+  });
+
+  it("returns null when every field is empty", () => {
+    expect(normalizeDshSessionStats({})).toBeNull();
+    expect(normalizeDshSessionStats(null)).toBeNull();
   });
 });

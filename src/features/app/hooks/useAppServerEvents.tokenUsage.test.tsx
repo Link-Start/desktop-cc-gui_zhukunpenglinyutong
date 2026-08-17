@@ -401,4 +401,50 @@ describe("useAppServerEvents token usage", () => {
       root.unmount();
     });
   });
+
+  it("routes dsh sessionStats raw frames to token usage updates", async () => {
+    const handlers: Handlers = {
+      onThreadTokenUsageUpdated: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-dsh",
+        message: {
+          method: "dsh/raw",
+          params: {
+            kind: "dsh-session-stats",
+            threadId: "dsh:session-1",
+            sessionStats: {
+              ttftMs: 8500,
+              ttftSteps: 1,
+              decodeMs: 1000,
+              decodeTokens: 72,
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onThreadTokenUsageUpdated).toHaveBeenCalledWith(
+      "ws-dsh",
+      "dsh:session-1",
+      {
+        sessionStats: {
+          ttftMs: 8500,
+          ttftSteps: 1,
+          decodeMs: 1000,
+          decodeTokens: 72,
+        },
+      },
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

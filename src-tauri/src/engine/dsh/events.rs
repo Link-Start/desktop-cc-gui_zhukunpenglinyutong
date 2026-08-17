@@ -529,8 +529,44 @@ pub fn project_mux_frame(
                 completed: false,
             }]
         }
+        "session/projection" => project_session_projection(frame, binding),
         "session/subscribed" | "approval/resolved" | "question/resolved" | "session/queue"
-        | "session/jobs" | "session/projection" | "stream/error" => Vec::new(),
+        | "session/jobs" | "stream/error" => Vec::new(),
+        _ => Vec::new(),
+    }
+}
+
+fn project_session_projection(
+    frame: &Value,
+    binding: &DshSessionBinding,
+) -> Vec<EngineEvent> {
+    let key = frame.get("key").and_then(Value::as_str).unwrap_or("");
+    let value = frame.get("value").cloned().unwrap_or(Value::Null);
+    match key {
+        "tokenUsage" => vec![EngineEvent::UsageUpdate {
+            workspace_id: binding.workspace_id.clone(),
+            input_tokens: int_field(&value, &["uncachedInputTokens", "inputTokens", "input"]),
+            output_tokens: int_field(&value, &["outputTokens", "output"]),
+            cached_tokens: int_field(&value, &["cacheReadTokens", "cachedTokens"]),
+            model_context_window: None,
+            context_used_tokens: None,
+            context_usage_source: Some("live".to_string()),
+            context_usage_freshness: Some("live".to_string()),
+            context_used_percent: None,
+            context_remaining_percent: None,
+            context_tool_usages: None,
+            context_tool_usages_truncated: None,
+            context_category_usages: None,
+        }],
+        "sessionStats" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-session-stats",
+                "threadId": binding.thread_id,
+                "sessionStats": value,
+            }),
+        }],
         _ => Vec::new(),
     }
 }
@@ -1257,5 +1293,75 @@ mod tests {
             }
         });
         assert!(project_session_event(&plugin, &binding(), "session-1").is_empty());
+    }
+
+    #[test]
+    fn projects_token_usage_projection_as_usage_update() {
+        let events = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "sessionId": "session-1",
+                "key": "tokenUsage",
+                "value": {
+                    "uncachedInputTokens": 100,
+                    "outputTokens": 20,
+                    "cacheReadTokens": 400
+                },
+                "seq": 9
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match events.first() {
+            Some(EngineEvent::UsageUpdate {
+                input_tokens,
+                output_tokens,
+                cached_tokens,
+                ..
+            }) => {
+                assert_eq!(*input_tokens, Some(100));
+                assert_eq!(*output_tokens, Some(20));
+                assert_eq!(*cached_tokens, Some(400));
+            }
+            other => panic!("expected UsageUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_session_stats_projection_as_raw() {
+        let events = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "sessionId": "session-1",
+                "key": "sessionStats",
+                "value": {
+                    "ttftMs": 8500,
+                    "ttftSteps": 1,
+                    "decodeMs": 1000,
+                    "decodeTokens": 72
+                },
+                "seq": 10
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match events.first() {
+            Some(EngineEvent::Raw { engine, data, .. }) => {
+                assert_eq!(*engine, EngineType::Dsh);
+                assert_eq!(
+                    data.get("kind").and_then(Value::as_str),
+                    Some("dsh-session-stats")
+                );
+                assert_eq!(
+                    data.pointer("/sessionStats/ttftMs").and_then(Value::as_i64),
+                    Some(8500)
+                );
+            }
+            other => panic!("expected Raw session stats, got {other:?}"),
+        }
     }
 }

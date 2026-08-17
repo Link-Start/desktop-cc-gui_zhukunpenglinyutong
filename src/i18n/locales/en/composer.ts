@@ -301,6 +301,9 @@ const composer = {
     noteCardPreviewExpand: "Expand note",
     noteCardPreviewCollapse: "Collapse note",
     noteCardArchivedBadge: "Archived",
+    dshStatsTtftAverage: "TTFT avg {{duration}}",
+    dshStatsTokensPerSecond: "{{throughput}} tok/s",
+    dshStatsCacheHit: "Cache hit {{percent}}%",
     runStatus: {
       label: "Turn run status",
       panel: "Run status details",

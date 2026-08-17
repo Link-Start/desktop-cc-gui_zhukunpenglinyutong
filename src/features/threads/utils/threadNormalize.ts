@@ -1,4 +1,5 @@
 import type {
+  DshSessionStats,
   RateLimitSnapshot,
   ReviewTarget,
   ThreadTokenUsage,
@@ -154,7 +155,32 @@ export function normalizeTokenUsage(raw: Record<string, unknown>): ThreadTokenUs
     contextCategoryUsages: normalizeContextCategoryUsages(
       raw.contextCategoryUsages ?? raw.context_category_usages,
     ),
+    sessionStats: normalizeDshSessionStats(
+      raw.sessionStats ?? raw.session_stats,
+    ),
+    cacheWriteInputTokens: optionalNumber(
+      raw.cacheWriteInputTokens ?? raw.cache_write_input_tokens,
+    ),
   };
+}
+
+export function normalizeDshSessionStats(value: unknown): DshSessionStats | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const stats: DshSessionStats = {
+    turns: asNumber(record.turns),
+    steps: asNumber(record.steps),
+    llmMs: asNumber(record.llmMs ?? record.llm_ms),
+    toolMs: asNumber(record.toolMs ?? record.tool_ms),
+    ttftMs: asNumber(record.ttftMs ?? record.ttft_ms),
+    ttftSteps: asNumber(record.ttftSteps ?? record.ttft_steps),
+    decodeMs: asNumber(record.decodeMs ?? record.decode_ms),
+    decodeTokens: asNumber(record.decodeTokens ?? record.decode_tokens),
+  };
+  const hasAnyValue = Object.values(stats).some((entry) => entry > 0);
+  return hasAnyValue ? stats : null;
 }
 
 export function normalizeRateLimits(raw: Record<string, unknown>): RateLimitSnapshot {

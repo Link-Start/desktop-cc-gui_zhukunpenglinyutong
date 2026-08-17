@@ -96,10 +96,25 @@ describe("DshConnectionPanel", () => {
     await waitFor(() => {
       expect(screen.getByText("settings.vendor.dshHostConnected")).toBeTruthy();
     });
+    const title = screen.getByText("settings.vendor.dshHostConnected");
+    const origin = screen.getByText("settings.vendor.dshConnectedOrigin");
+    expect(title.parentElement).toBe(origin.parentElement);
+    expect(origin.className).toContain("dsh-status-origin");
     expect(runDshDoctorMock).toHaveBeenCalled();
+    expect(screen.getByText("settings.vendor.dshOwnershipHintLabel")).toBeTruthy();
+    expect(screen.getByText("settings.vendor.dshOwnershipNote")).toBeTruthy();
+    expect(document.querySelector(".dsh-status-card")?.textContent).not.toContain(
+      "settings.vendor.dshOwnershipNote",
+    );
+    expect(screen.getByText("settings.vendor.dshCurrentProvider")).toBeTruthy();
     expect(screen.getByText("grok")).toBeTruthy();
     expect(screen.getByText("grok-4.6")).toBeTruthy();
     expect(screen.getByText("31")).toBeTruthy();
+    expect(document.querySelector(".dsh-ownership-hint")).toBeTruthy();
+    expect(document.querySelector(".dsh-status-head")).toBeTruthy();
+    expect(document.querySelector(".dsh-status-facts")?.className).toBe(
+      "dsh-status-facts",
+    );
     fireEvent.click(screen.getByRole("button", { name: "settings.vendor.dshOpenUi" }));
     expect(openUrlMock).toHaveBeenCalledWith("http://127.0.0.1:3080");
     fireEvent.click(screen.getByRole("button", { name: "settings.vendor.dshStopService" }));
@@ -123,6 +138,7 @@ describe("DshConnectionPanel", () => {
     await waitFor(() => {
       expect(screen.getByText("settings.vendor.dshHostDown")).toBeTruthy();
     });
+    expect(screen.queryByText("settings.vendor.dshConnectedOrigin")).toBeNull();
     expect(screen.queryByText("settings.vendor.dshNotInstalled")).toBeNull();
     expect(screen.getByText("settings.vendor.dshDescribeFailed")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "settings.vendor.dshStartNow" }));

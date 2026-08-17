@@ -53,6 +53,6 @@
 
 - Shared / Squad
 - Provider Continuation（L3）
-- mossx 写 DSH settings
+- mossx 写 DSH settings（除 `fix-dsh-custom-route-image-admission` 的窄例外：附图时只声明 `llm-pi-ai` 模态）
 - DSH subagent 深度投影
 - 多 host / 远程 DSH
