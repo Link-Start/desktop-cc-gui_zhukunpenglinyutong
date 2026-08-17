@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   FIRST_RUN_FLUID_DEPTH,
   FIRST_RUN_FLUID_HUE,
+  WORKSPACE_FLUID_PRESETS,
   fluidToneColors,
+  resolveWorkspaceFluidPreset,
 } from "./fluidTones";
 
 describe("fluidToneColors", () => {
@@ -28,5 +30,17 @@ describe("fluidToneColors", () => {
       return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
     expect(luminance(tones.color3)).toBeLessThan(luminance(tones.color1));
+  });
+
+  it("keeps unknown fluid presets on the first-run mist wash", () => {
+    expect(resolveWorkspaceFluidPreset("nope").id).toBe("mist");
+    expect(WORKSPACE_FLUID_PRESETS.map((preset) => preset.id)).toEqual([
+      "mist",
+      "aurora",
+      "dusk",
+      "orchid",
+      "ember",
+      "ink",
+    ]);
   });
 });

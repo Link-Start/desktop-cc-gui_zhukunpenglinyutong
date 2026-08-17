@@ -618,6 +618,13 @@ export function DesktopLayout({
           <>
             {updateToastNode}
             {showHome && homeNode}
+            {showHome ? (
+              <div
+                className="home-titlebar-drag-strip"
+                data-tauri-drag-region
+                aria-hidden
+              />
+            ) : null}
 
             {showWorkspace && (
               <>

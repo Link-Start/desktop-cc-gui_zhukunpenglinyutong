@@ -16,6 +16,37 @@ export const HUE_BASE = 217;
 export const FIRST_RUN_FLUID_HUE = 320;
 export const FIRST_RUN_FLUID_DEPTH = 25;
 
+export const WORKSPACE_FLUID_PRESETS = [
+  { id: "mist", hue: 320, depth: 25 },
+  { id: "aurora", hue: 150, depth: 28 },
+  { id: "dusk", hue: 40, depth: 22 },
+  { id: "orchid", hue: 250, depth: 26 },
+  { id: "ember", hue: 5, depth: 20 },
+  { id: "ink", hue: 200, depth: 8 },
+] as const;
+
+export type WorkspaceFluidPresetId = (typeof WORKSPACE_FLUID_PRESETS)[number]["id"];
+
+export const DEFAULT_WORKSPACE_FLUID_PRESET: WorkspaceFluidPresetId = "mist";
+
+export function isWorkspaceFluidPresetId(
+  value: unknown,
+): value is WorkspaceFluidPresetId {
+  return (
+    typeof value === "string" &&
+    WORKSPACE_FLUID_PRESETS.some((preset) => preset.id === value)
+  );
+}
+
+export function resolveWorkspaceFluidPreset(
+  value: unknown,
+): (typeof WORKSPACE_FLUID_PRESETS)[number] {
+  return (
+    WORKSPACE_FLUID_PRESETS.find((preset) => preset.id === value) ??
+    WORKSPACE_FLUID_PRESETS[0]
+  );
+}
+
 function hsl(h: number, s: number, l: number): string {
   const c = (1 - Math.abs(2 * l - 1)) * s;
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));

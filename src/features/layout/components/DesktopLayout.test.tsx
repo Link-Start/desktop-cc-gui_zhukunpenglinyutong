@@ -98,6 +98,25 @@ describe("DesktopLayout", () => {
     clientStorageMock.writeClientStoreValue.mockReset();
   });
 
+  it("keeps a local home titlebar drag lane without covering workspace chrome", () => {
+    const { container, rerender } = renderDesktopLayout({
+      showHome: true,
+      showWorkspace: false,
+    });
+
+    const homeDragStrip = container.querySelector(".home-titlebar-drag-strip");
+    expect(homeDragStrip).toBeTruthy();
+    expect(homeDragStrip?.hasAttribute("data-tauri-drag-region")).toBe(true);
+
+    rerender(
+      createDesktopLayout({
+        showHome: false,
+        showWorkspace: true,
+      }),
+    );
+    expect(container.querySelector(".home-titlebar-drag-strip")).toBeNull();
+  });
+
   it("renders Extensions as a workspace-independent page", () => {
     const { container, getByText, queryByText } = renderDesktopLayout({
       showExtensions: true,

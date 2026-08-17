@@ -1,0 +1,247 @@
+.workspace-wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  contain: paint;
+}
+
+.workspace-wallpaper .first-run-fluid,
+.workspace-wallpaper-image {
+  position: absolute;
+  inset: 0;
+}
+
+.workspace-wallpaper-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.92) contrast(0.96);
+}
+
+.workspace-wallpaper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: color-mix(
+    in srgb,
+    var(--workspace-wallpaper-wash, #ededf0)
+      var(--workspace-wallpaper-wash-opacity, 10%),
+    transparent
+  );
+}
+
+.workspace-wallpaper .first-run-fluid::after {
+  background: color-mix(
+    in srgb,
+    var(--surface-messages, #111214) 12%,
+    transparent
+  );
+}
+
+:root[data-theme="light"] .workspace-wallpaper .first-run-fluid::after {
+  background: color-mix(in srgb, #ffffff 8%, transparent);
+}
+
+/*
+ * Wallpaper is an explicit appearance choice. Punch through the solid
+ * desktop / reduced-transparency tokens so chrome uses the same surfaces
+ * at a translucent mix. Popovers and bubbles keep their own opaque tokens.
+ *
+ * One veil for every chrome pane: the sidebar mix is the reference
+ * (34% #ededf0 / 32% #121212). Main and right-panel used to sit thinner
+ * and then get mixed again, which left the conversation and file tree
+ * showing the raw image.
+ */
+/*
+ * Frost lives only on :root so the Settings slider (inline style on
+ * documentElement) can change it. Redeclaring it on .app would pin every
+ * chrome pane at 24px and make the slider appear broken.
+ */
+:root[data-workspace-wallpaper] {
+  --workspace-wallpaper-frost: 12px;
+}
+
+:root[data-workspace-wallpaper],
+:root[data-workspace-wallpaper] .app,
+:root[data-workspace-wallpaper] .app.reduced-transparency,
+:root[data-workspace-wallpaper] .app.layout-desktop.sidebar-collapsed,
+:root[data-workspace-wallpaper][data-theme="light"] .app.reduced-transparency,
+:root[data-workspace-wallpaper][data-theme="light"] .app.windows-desktop,
+:root[data-workspace-wallpaper][data-theme="light"] .app.layout-desktop.sidebar-collapsed {
+  --workspace-wallpaper-wash: #ededf0;
+  --workspace-wallpaper-wash-opacity: 8%;
+  --workspace-wallpaper-veil: color-mix(in srgb, #ededf0 16%, transparent);
+  --desktop-shell-background: var(--workspace-wallpaper-veil);
+  --desktop-sidebar-background: var(--workspace-wallpaper-veil);
+  --desktop-main-background: var(--workspace-wallpaper-veil);
+  --surface-sidebar: var(--workspace-wallpaper-veil);
+  --surface-topbar: var(--workspace-wallpaper-veil);
+  --surface-right-panel: var(--workspace-wallpaper-veil);
+  --surface-composer: var(--workspace-wallpaper-veil);
+  --surface-messages: var(--workspace-wallpaper-veil);
+}
+
+:root[data-workspace-wallpaper][data-theme="dark"],
+:root[data-workspace-wallpaper][data-theme="dark"] .app,
+:root[data-workspace-wallpaper][data-theme="dark"] .app.reduced-transparency,
+:root[data-workspace-wallpaper][data-theme="dim"],
+:root[data-workspace-wallpaper][data-theme="dim"] .app,
+:root[data-workspace-wallpaper][data-theme="dim"] .app.reduced-transparency {
+  --workspace-wallpaper-wash: #121212;
+  --workspace-wallpaper-wash-opacity: 10%;
+  --workspace-wallpaper-veil: color-mix(in srgb, #121212 16%, transparent);
+  --desktop-shell-background: var(--workspace-wallpaper-veil);
+  --desktop-sidebar-background: var(--workspace-wallpaper-veil);
+  --desktop-main-background: var(--workspace-wallpaper-veil);
+  --surface-sidebar: var(--workspace-wallpaper-veil);
+  --surface-topbar: var(--workspace-wallpaper-veil);
+  --surface-right-panel: var(--workspace-wallpaper-veil);
+  --surface-composer: var(--workspace-wallpaper-veil);
+  --surface-messages: var(--workspace-wallpaper-veil);
+}
+
+/*
+ * Punch through the outer shell only. The two chrome columns — sidebar
+ * and .main — each paint one veil. A previous reduced-transparency
+ * punch-through on .messages / .right-panel was more specific than the
+ * veil rule, so the conversation and file tree showed the raw image.
+ */
+:root[data-workspace-wallpaper] #root,
+:root[data-workspace-wallpaper] .app,
+:root[data-workspace-wallpaper] .app.layout-desktop,
+:root[data-workspace-wallpaper] .app.layout-desktop.sidebar-collapsed,
+:root[data-workspace-wallpaper] .app.layout-desktop.solo-mode,
+:root[data-workspace-wallpaper] .app.reduced-transparency {
+  background: transparent;
+}
+
+:root[data-workspace-wallpaper] .app.layout-desktop .sidebar,
+:root[data-workspace-wallpaper] .app.reduced-transparency .sidebar,
+:root[data-workspace-wallpaper] .sidebar,
+:root[data-workspace-wallpaper] .compact-panel,
+:root[data-workspace-wallpaper] .app.layout-desktop .main,
+:root[data-workspace-wallpaper] .app.reduced-transparency .main,
+:root[data-workspace-wallpaper] .main,
+:root[data-workspace-wallpaper] .right-panel,
+:root[data-workspace-wallpaper] .right-panel.is-solo,
+:root[data-workspace-wallpaper] .app.reduced-transparency .right-panel {
+  background: var(--workspace-wallpaper-veil);
+  backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px))
+    saturate(1.2);
+}
+
+/*
+ * Frost creates a stacking context on each chrome column, so the titlebar
+ * buttons' z-index can no longer climb above the full-width drag-strip.
+ * Match the Windows click-through strip and let the real chrome receive
+ * the click. Home has no MainTopbar, so DesktopLayout mounts a local
+ * drag lane that only becomes hittable while wallpaper is on.
+ */
+:root[data-workspace-wallpaper] .drag-strip {
+  pointer-events: none;
+}
+
+.home-titlebar-drag-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--titlebar-height, 44px);
+  z-index: 2;
+  pointer-events: none;
+  -webkit-app-region: drag;
+}
+
+:root[data-workspace-wallpaper] .home-titlebar-drag-strip {
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-workspace-wallpaper] {
+    --workspace-wallpaper-frost: 0px !important;
+  }
+}
+
+:root[data-workspace-wallpaper] .app.layout-desktop {
+  --desktop-main-radius: 0;
+  --desktop-main-shadow: none;
+}
+
+:root[data-workspace-wallpaper] .app.layout-desktop .main {
+  border-radius: 0;
+}
+
+:root[data-workspace-wallpaper] .app.layout-desktop .sidebar {
+  border-right: 1px solid var(--border-subtle);
+}
+
+:root[data-workspace-wallpaper] .app.layout-desktop.layout-swapped .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--border-subtle);
+}
+
+:root[data-workspace-wallpaper] .app.layout-desktop .sidebar-topbar-placeholder,
+:root[data-workspace-wallpaper] .sidebar-topbar-placeholder {
+  border-bottom-color: color-mix(in srgb, var(--border-subtle) 35%, transparent);
+}
+
+:root[data-workspace-wallpaper] .content,
+:root[data-workspace-wallpaper] .messages,
+:root[data-workspace-wallpaper] .composer,
+:root[data-workspace-wallpaper] .home-chat,
+:root[data-workspace-wallpaper] .main-topbar,
+:root[data-workspace-wallpaper] .tabbar,
+:root[data-workspace-wallpaper] .right-panel-bottom,
+:root[data-workspace-wallpaper] .right-panel-toolbar,
+:root[data-workspace-wallpaper] .file-tree-top-zone,
+:root[data-workspace-wallpaper] .fvp,
+:root[data-workspace-wallpaper] .fvp-tabs,
+:root[data-workspace-wallpaper] .content.is-note-cards-split .content-layer--note-cards-companion,
+:root[data-workspace-wallpaper] .content.is-editor-split-vertical .content-layer--editor-companion,
+:root[data-workspace-wallpaper] .content.is-editor-split-horizontal .content-layer--editor-companion,
+:root[data-workspace-wallpaper] .sidebar-topbar-placeholder,
+:root[data-workspace-wallpaper] .sidebar-section-header,
+:root[data-workspace-wallpaper] .app.reduced-transparency .content,
+:root[data-workspace-wallpaper] .app.reduced-transparency .messages,
+:root[data-workspace-wallpaper] .app.reduced-transparency .composer,
+:root[data-workspace-wallpaper] .app.reduced-transparency .file-tree-top-zone,
+:root[data-workspace-wallpaper][data-theme="light"] .home-chat,
+:root[data-workspace-wallpaper]:not([data-theme]) .home-chat,
+:root[data-workspace-wallpaper][data-theme="light"] .app.reduced-transparency .home-chat {
+  background: transparent;
+  backdrop-filter: none;
+}
+
+:root[data-workspace-wallpaper] .home-chat::before {
+  opacity: 0.16;
+}
+
+:root[data-workspace-wallpaper] .settings-content-wrap,
+:root[data-workspace-wallpaper] .settings-embedded {
+  background: color-mix(in srgb, #ffffff 72%, transparent);
+}
+
+:root[data-workspace-wallpaper][data-theme="dark"] .settings-content-wrap,
+:root[data-workspace-wallpaper][data-theme="dark"] .settings-embedded,
+:root[data-workspace-wallpaper][data-theme="dim"] .settings-content-wrap,
+:root[data-workspace-wallpaper][data-theme="dim"] .settings-embedded {
+  background: color-mix(in srgb, #0d0f14 72%, transparent);
+}
+
+:root[data-workspace-wallpaper] .composer-input,
+:root[data-workspace-wallpaper] .composer-input:focus-within {
+  background: #ffffff;
+}
+
+:root[data-workspace-wallpaper][data-theme="dark"] .composer-input,
+:root[data-workspace-wallpaper][data-theme="dark"] .composer-input:focus-within,
+:root[data-workspace-wallpaper][data-theme="dim"] .composer-input,
+:root[data-workspace-wallpaper][data-theme="dim"] .composer-input:focus-within {
+  background: #16181f;
+}
