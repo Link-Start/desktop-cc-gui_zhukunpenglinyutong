@@ -29,7 +29,10 @@ import {
 import { previewThreadName } from "../../../utils/threadItems";
 import { resolveThreadStabilityDiagnostic } from "../utils/stabilityDiagnostics";
 import type { TurnExecutionSnapshot } from "../../shared-session/target/types";
-import { hasCodexBackgroundHelperPreview } from "../utils/codexBackgroundHelpers";
+import {
+  hasCodexBackgroundHelperPreview,
+  hasCommitMessageHelperPreview,
+} from "../utils/codexBackgroundHelpers";
 import { isCodexPrewarmThreadStart } from "../utils/codexPendingPrewarm";
 import {
   clearLiveAssistantText,
@@ -106,18 +109,22 @@ function buildCodexCompactionCompletionFallbackId(threadId: string, turnId: stri
   return `context-compacted-codex-compact-${threadId}-completed-${turnId}`;
 }
 
-function isCodexBackgroundHelperThread(
+function isBackgroundHelperThread(
   threadId: string,
   thread: Record<string, unknown>,
 ): boolean {
-  if (inferEngineFromThreadId(threadId) !== "codex") {
-    return false;
-  }
   const previewCandidates = [
     asString(thread.preview).trim(),
     asString(thread.title).trim(),
+    asString(thread.name).trim(),
   ].filter(Boolean);
-  return hasCodexBackgroundHelperPreview(previewCandidates);
+  if (hasCommitMessageHelperPreview(previewCandidates)) {
+    return true;
+  }
+  return (
+    inferEngineFromThreadId(threadId) === "codex" &&
+    hasCodexBackgroundHelperPreview(previewCandidates)
+  );
 }
 
 function normalizeThreadProviderMetadataString(value: unknown) {
@@ -395,7 +402,7 @@ export function useThreadTurnEvents({
       if (!threadId) {
         return;
       }
-      if (isCodexBackgroundHelperThread(threadId, thread)) {
+      if (isBackgroundHelperThread(threadId, thread)) {
         dispatch({ type: "hideThread", workspaceId, threadId });
         return;
       }

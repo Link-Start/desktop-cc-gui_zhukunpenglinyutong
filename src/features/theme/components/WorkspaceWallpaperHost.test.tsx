@@ -5,6 +5,20 @@ import {
   resetWorkspaceWallpaperStoreForTests,
 } from "../utils/workspaceWallpaperStore";
 
+const platformMocks = vi.hoisted(() => ({
+  isWindowsPlatform: vi.fn(() => false),
+}));
+
+vi.mock("../../../utils/platform", async () => {
+  const actual = await vi.importActual<typeof import("../../../utils/platform")>(
+    "../../../utils/platform",
+  );
+  return {
+    ...actual,
+    isWindowsPlatform: platformMocks.isWindowsPlatform,
+  };
+});
+
 vi.mock("../../onboarding/components/FirstRunFluidBackdrop", () => ({
   FirstRunFluidBackdrop: ({
     profile,
@@ -52,6 +66,8 @@ describe("WorkspaceWallpaperHost", () => {
       workspaceWallpaper: { mode: "none", customImagePath: null },
     });
     delete document.documentElement.dataset.workspaceWallpaper;
+    platformMocks.isWindowsPlatform.mockReset();
+    platformMocks.isWindowsPlatform.mockReturnValue(false);
   });
 
   it("does not mount a wallpaper layer by default", async () => {
@@ -139,5 +155,19 @@ describe("WorkspaceWallpaperHost", () => {
     await waitFor(() => {
       expect(screen.getByTestId("first-run-fluid").dataset.profile).toBe("lite");
     });
+  });
+
+  it("does not mount a wallpaper layer on Windows even when fluid is persisted", async () => {
+    platformMocks.isWindowsPlatform.mockReturnValue(true);
+    getAppSettings.mockResolvedValueOnce({
+      workspaceWallpaper: { mode: "fluid", customImagePath: null },
+    });
+    render(<WorkspaceWallpaperHost />);
+    await waitFor(() => {
+      expect(getAppSettings).toHaveBeenCalled();
+    });
+    expect(screen.queryByTestId("workspace-wallpaper")).toBeNull();
+    expect(screen.queryByTestId("first-run-fluid")).toBeNull();
+    expect(document.documentElement.dataset.workspaceWallpaper).toBeUndefined();
   });
 });

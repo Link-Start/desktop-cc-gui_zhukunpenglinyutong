@@ -103,6 +103,31 @@ describe("useThreadActions.helpers", () => {
     expect(filtered.map((row) => row.id)).toEqual(["claude:user-visible"]);
   });
 
+  it("filters commit-message helper titles even without autoSession or hidden ids", () => {
+    const filtered = filterHiddenAutomaticThreadSummaries(
+      [
+        {
+          id: "grok:commit-en",
+          name: "Please generate a commit message. The commit message must follow",
+          autoSession: null,
+        },
+        {
+          id: "grok:commit-zh",
+          name: "请生成一次提交（commit）信息，提交信息需遵循 Conventional Commits 规范",
+          autoSession: null,
+        },
+        {
+          id: "grok:user-visible",
+          name: "审查当前收起逻辑",
+          autoSession: null,
+        },
+      ],
+      new Set(),
+    );
+
+    expect(filtered.map((row) => row.id)).toEqual(["grok:user-visible"]);
+  });
+
   it("projects provider continuation at the top level without parentThreadId", () => {
     const [continuation] = mergeCodexCatalogSessionSummaries(
       [],
@@ -1050,6 +1075,41 @@ describe("useThreadActions.helpers", () => {
         {
           sessionId: "keep-user",
           firstMessage: "请对工作区做变更代际分析",
+          updatedAt: 15,
+          fileSizeBytes: 10,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id).sort()).toEqual([
+      "grok:keep",
+      "grok:keep-user",
+    ]);
+  });
+
+  it("mergeGrokSessionSummaries drops commit-message helper firstMessage", () => {
+    const merged = mergeGrokSessionSummaries(
+      [
+        {
+          id: "grok:keep",
+          name: "用户 Grok 会话",
+          updatedAt: 1,
+          engineSource: "grok",
+        },
+      ],
+      [
+        {
+          sessionId: "commit-helper",
+          firstMessage:
+            "Please generate a commit message. The commit message must follow the Conventional Commits specification and be written entirely in English.",
+          updatedAt: 20,
+          fileSizeBytes: 10,
+        },
+        {
+          sessionId: "keep-user",
+          firstMessage: "当前收起逻辑与数据不一致",
           updatedAt: 15,
           fileSizeBytes: 10,
         },

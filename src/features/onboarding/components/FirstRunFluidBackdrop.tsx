@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isWindowsPlatform } from "../../../utils/platform";
 import {
   isThemeMutationAttribute,
   readDocumentThemeAppearance,
@@ -39,6 +40,7 @@ export function FirstRunFluidBackdrop({
 } = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const handleRef = useRef<FluidShaderHandle | null>(null);
+  const solidOnly = isWindowsPlatform();
   const [dark, setDark] = useState(
     () => readDocumentThemeAppearance() === "dark",
   );
@@ -48,7 +50,11 @@ export function FirstRunFluidBackdrop({
   );
 
   useEffect(() => {
-    if (typeof MutationObserver === "undefined" || typeof document === "undefined") {
+    if (
+      solidOnly ||
+      typeof MutationObserver === "undefined" ||
+      typeof document === "undefined"
+    ) {
       return undefined;
     }
     const root = document.documentElement;
@@ -64,7 +70,7 @@ export function FirstRunFluidBackdrop({
     observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
     sync();
     return () => observer.disconnect();
-  }, []);
+  }, [solidOnly]);
 
   // Params changes (preset / light-dark flip) are pushed through setParams so
   // the WebGL context survives; only a profile switch re-attaches.
@@ -72,6 +78,9 @@ export function FirstRunFluidBackdrop({
   paramsRef.current = params;
 
   useEffect(() => {
+    if (solidOnly) {
+      return undefined;
+    }
     const canvas = canvasRef.current;
     if (!canvas) {
       return undefined;
@@ -86,7 +95,7 @@ export function FirstRunFluidBackdrop({
       handle.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
+  }, [profile, solidOnly]);
 
   useEffect(() => {
     handleRef.current?.setParams(params);
@@ -110,8 +119,11 @@ export function FirstRunFluidBackdrop({
       aria-hidden
       data-testid="first-run-fluid"
       data-scheme={dark ? "dark" : "light"}
+      data-solid={solidOnly ? "true" : undefined}
     >
-      <canvas ref={canvasRef} className="first-run-fluid-canvas" />
+      {solidOnly ? null : (
+        <canvas ref={canvasRef} className="first-run-fluid-canvas" />
+      )}
     </div>
   );
 }

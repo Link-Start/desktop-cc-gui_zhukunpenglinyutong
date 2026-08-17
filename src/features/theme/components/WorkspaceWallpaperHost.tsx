@@ -4,6 +4,7 @@ import { getAppSettings } from "../../../services/tauri";
 import { FirstRunFluidBackdrop } from "../../onboarding/components/FirstRunFluidBackdrop";
 import { DEFAULT_WORKSPACE_FLUID_PRESET } from "../../onboarding/utils/fluidTones";
 import {
+  isWorkspaceFluidWallpaperSupported,
   resolveWorkspaceWallpaperMode,
   sanitizeWorkspaceWallpaperVeilOpacity,
 } from "../utils/workspaceWallpaper";
@@ -57,7 +58,11 @@ export function WorkspaceWallpaperHost() {
   }, []);
   const requestedMode = resolveWorkspaceWallpaperMode(wallpaper);
   const mode =
-    requestedMode === "custom" && customFailed ? "fluid" : requestedMode;
+    requestedMode === "custom" && customFailed
+      ? isWorkspaceFluidWallpaperSupported()
+        ? "fluid"
+        : "none"
+      : requestedMode;
   const customSrc =
     mode === "custom" && wallpaper.customImagePath
       ? toAssetUrl(wallpaper.customImagePath)
