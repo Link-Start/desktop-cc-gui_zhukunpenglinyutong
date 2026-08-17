@@ -81,7 +81,9 @@ export function WorkspaceCard({
     onToggleWorkspaceCollapse(workspace.id, !isCollapsed);
   };
   const handleSelectWorkspace = () => {
-    if (onOpenWorkspaceHome) {
+    // Only the already-active row is an explicit home / new-chat request.
+    // Switching to another workspace must restore last thread, not wipe it.
+    if (onOpenWorkspaceHome && isActive) {
       onOpenWorkspaceHome(workspace.id);
       return;
     }

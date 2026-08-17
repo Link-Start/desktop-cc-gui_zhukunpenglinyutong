@@ -82,6 +82,7 @@ import {
   makeCustomNameKey,
   saveCustomName,
 } from "../utils/threadStorage";
+import { publishWorkspaceLastThreadMap } from "../utils/workspaceLastThreadMap";
 import {
   isClientStoreReady,
   subscribeClientStoreHydrated,
@@ -616,7 +617,10 @@ export function useThreads({
   // chat-stream-render-isolation-2026-06 task 4: collapse the five
   // per-slice ref-sync effects into a single effect so dispatching
   // state only schedules one React commit's worth of ref work.
+  // Publish last-thread peek after commit. Render-phase publish can leak a
+  // discarded concurrent render into the module snapshot.
   useEffect(() => {
+    publishWorkspaceLastThreadMap(state.activeThreadIdByWorkspace);
     activeThreadIdByWorkspaceRef.current = state.activeThreadIdByWorkspace;
     threadStatusByIdRef.current = state.threadStatusById;
     itemsByThreadRef.current = state.itemsByThread;

@@ -67,3 +67,39 @@ AppShell 在 workspace navigation 热路径中，仅为计算 Sidebar / Recent /
 - **WHEN** 用户显式打开 Session Management 且 UI 需要 active/archive/folder counts 或 source statuses
 - **THEN** 该 surface MAY 调用 projection summary
 - **AND** 该能力 MUST NOT 被 AppShell workspace navigation 隐式挂载
+
+### Requirement: Runtime workspace navigation MUST restore the last selected thread
+
+侧栏点击或键盘 cycle 切到已访问过的 workspace 时，实现 MUST 恢复该 workspace 上次选中的 thread，MUST NOT 把 `activeThreadIdByWorkspace[target]` 写成 `null`。侧栏点击 MUST NOT 在点击帧调用 `ensureWorkspaceThreadListLoaded`；列表 hydrate 仍由 `activeWorkspaceId` 变化后的 quiet-gated first-paint / post-first-paint 路径负责。
+
+热路径是 `WorkspaceCard` 行点击，不是只改 `handleSelectWorkspace` 函数体。非当前 workspace 的行点击 MUST 走 `onSelectWorkspace`（恢复 last thread）；只有已经 active 的行点击才 MAY 走 workspace home（显式新对话，允许写 `null`）。Archive / 新建 workspace / Home 按钮等显式清空路径不受本条款约束。
+
+#### Scenario: sidebar click restores last thread without click-frame list hydrate
+
+- **WHEN** 用户已在 workspace A 打开过 thread T
+- **AND** 用户切到 workspace B 后再点回 A 的侧栏行（A 当时不是 active）
+- **THEN** 系统 MUST 恢复 A 的 last thread T（必要时再次 `setActiveThreadId(T)` 以触发 evicted resume）
+- **AND** MUST NOT `setActiveThreadId(null, A)`
+- **AND** MUST NOT 把这次点击路由到 `handleOpenWorkspaceHome`
+- **AND** 点击 handler MUST NOT 调用 `ensureWorkspaceThreadListLoaded(A)`
+
+#### Scenario: active workspace row may open workspace home
+
+- **WHEN** 用户点击当前已经 active 的 workspace 行
+- **THEN** 实现 MAY 打开 workspace home / 新对话表面
+- **AND** 该显式 home 路径 MAY `setActiveThreadId(null, activeWorkspaceId)`
+
+#### Scenario: cycle prefers last thread over first listed row
+
+- **WHEN** 用户用 cycle 切到 workspace B
+- **AND** B 已记录 last thread T
+- **THEN** 系统 MUST 恢复 T
+- **AND** MUST NOT 用 sidebar 第一行覆盖 T
+- **AND** MUST NOT `setActiveThreadId(null, B)`
+
+#### Scenario: never-visited workspace may stay empty
+
+- **WHEN** 目标 workspace 没有 last thread
+- **AND** 导航来源是侧栏点击非 active 行
+- **THEN** 系统 MUST 保持 thread map 不变（画布为空是正确态）
+- **AND** 键盘 cycle MAY 回落到当前列表第一行，但仍 MUST NOT 写入 `null`

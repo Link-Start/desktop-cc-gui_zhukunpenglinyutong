@@ -29,6 +29,7 @@
 3. **导航 topology 本地化**：main workspace 投影自身 + direct worktrees；worktree 只投影自身；workspace registry 尚未到达时保留 active id fallback。
 4. **运行时切 workspace 与冷启共用契约**：不新增全屏遮罩；靠移除同步热路径重扫与停掉 stale fan-out 降低 CPU 峰值。
 5. **可验证**：单测证明 AppShell navigation 不调用 projection summary，并证明 topology 与 backend `catalog_workspace_scope` 一致。
+6. **侧栏/cycle 恢复 last thread**：A→B→A 不得把 last thread 写成 `null`；侧栏点击不得在点击帧 `ensureWorkspaceThreadListLoaded`。
 
 ### 边界（本 change 内）
 
@@ -73,6 +74,8 @@
 | 自动验证 | ✅ scoped | focused Vitest、target ESLint、typecheck、runtime contracts、large-file、OpenSpec strict 均通过 |
 | 仓库全量 baseline | ⚠ 既有阻断 | full test / full lint / docs / doctor 分别被未改文件中的既有问题阻断；本次 scoped gates 通过 |
 | 人工验收 | 待用户 | 项目1 shared → 项目2 shared；解锁卡住会话 |
+| S6 侧栏/cycle 恢复 last thread | ⚠ 未打中热路径 | 只改了 `handleSelectWorkspace`；侧栏行实际走 workspace home |
+| S7 侧栏行路由纠正 | ✅ 代码 | 非 active 行 `onSelectWorkspace` 恢复 last thread；active 行才开 home |
 
 ---
 

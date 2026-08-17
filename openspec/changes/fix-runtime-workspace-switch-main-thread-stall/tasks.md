@@ -39,3 +39,22 @@
 - [ ] User manual test: repeatedly switch projects and open Shared/native sessions; confirm no 5–10s whole-window freeze
 
 > Automated result：focused Vitest、target ESLint、typecheck、runtime contracts、large-file 与 OpenSpec strict 通过。Repository-wide `pnpm test`、`pnpm lint`、`check:docs`、`doctor:strict` 命中未改文件中的既有 baseline 问题；已在交付说明列出，不冒充本 change 回归。
+
+## S6 — Sidebar / cycle must restore last thread (re-analysis)
+
+S0–S5 没有覆盖「侧栏点项目」这条真实热路径：`handleSelectWorkspace` 在点击帧 `setActiveThreadId(null)` + `ensureWorkspaceThreadListLoaded`。A→B→A 会丢掉 last thread，已 hydrate workspace 还会在点击帧走 full-catalog，表现为切回去画布空、整窗卡 5–10s。
+
+- [x] Extract `planWorkspaceNavigationThread` and keep last-thread peek off the AppShell bag
+- [x] Sidebar click: `selectWorkspace` + restore last thread; MUST NOT null the map; MUST NOT `ensureWorkspaceThreadListLoaded` on the click frame
+- [x] Workspace cycle: restore last thread, else first-listed fallback; MUST NOT `setActiveThreadId(null)`
+- [x] Publish `activeThreadIdByWorkspace` snapshot from `useThreads` after commit (not render phase)
+- [x] Focused tests: planner, last-thread map, cycle restore, sidebar click source policy
+
+## S7 — 真正的侧栏点击热路径（re-analysis）
+
+S6 改了 `handleSelectWorkspace`，但侧栏项目行走的是 `WorkspaceCard` → `onOpenWorkspaceHome` → `handleOpenWorkspaceHome` → `setActiveThreadId(null)`。A→B→A 仍然丢掉 last thread。
+
+- [x] Inactive workspace row calls `onSelectWorkspace`; only the already-active row may open workspace home
+- [x] Update WorkspaceCard / Sidebar tests so inactive click no longer expects home
+- [x] Spec: 非 active 行 MUST restore last thread；active 行 MAY 走显式 home
+- [x] Review lock: last-thread map snapshots committed state; WorkspaceCard source gates home behind `isActive`

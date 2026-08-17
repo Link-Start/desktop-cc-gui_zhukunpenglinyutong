@@ -6,6 +6,11 @@ import {
   getThreadSelectDiffCleanupAction,
   shouldPreserveEditorOnThreadSelect,
 } from "../../../app-shell-parts/threadEditorPreservation";
+import {
+  applyWorkspaceNavigationThreadPlan,
+  planWorkspaceNavigationThread,
+} from "../../workspaces/utils/planWorkspaceNavigationThread";
+import { peekWorkspaceLastThreadId } from "../../threads/utils/workspaceLastThreadMap";
 
 type ThreadRowsFn = (
   threads: ThreadSummary[],
@@ -186,13 +191,15 @@ export function useWorkspaceCycling({
       exitDiffView();
       resetPullRequestSelection();
       selectWorkspace(nextWorkspaceId);
-      const orderedThreadIds = getOrderedThreadIds(nextWorkspaceId);
-      const firstThreadId = orderedThreadIds[0] ?? null;
-      if (firstThreadId) {
-        setActiveThreadId(firstThreadId, nextWorkspaceId);
-      } else {
-        setActiveThreadId(null, nextWorkspaceId);
-      }
+      applyWorkspaceNavigationThreadPlan(
+        planWorkspaceNavigationThread({
+          lastThreadId: peekWorkspaceLastThreadId(nextWorkspaceId),
+          firstListedThreadId: getOrderedThreadIds(nextWorkspaceId)[0] ?? null,
+          allowFirstListedFallback: true,
+        }),
+        nextWorkspaceId,
+        setActiveThreadId,
+      );
     },
     [
       exitDiffView,
