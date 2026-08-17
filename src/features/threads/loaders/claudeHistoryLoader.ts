@@ -19,6 +19,7 @@ import {
 import { computeDiff } from "../../../utils/diff";
 import { findLiveAssistantShadowTranscriptForRestore } from "../utils/liveAssistantShadowTranscript";
 import { noteThreadRecoverySourceObserved } from "../utils/streamLatencyDiagnostics";
+import { isCliInjectedAgentTaskNotificationText } from "../../engine-task-output/contracts/agentTaskNotification";
 import { asString } from "./historyLoaderUtils";
 
 type ClaudeHistoryLoaderOptions = {
@@ -2013,11 +2014,48 @@ function extractPendingUserInputQueueFromClaudeItems(
   return queue;
 }
 
+function isShadowRecoveryTurnBoundaryUser(item: ConversationItem) {
+  return (
+    item.kind === "message" &&
+    item.role === "user" &&
+    !isCliInjectedAgentTaskNotificationText(item.text)
+  );
+}
+
+function isEquivalentShadowAssistantText(existingText: string, shadowText: string) {
+  const normalizedExisting = existingText.trim();
+  const normalizedShadow = shadowText.trim();
+  if (!normalizedExisting || !normalizedShadow) {
+    return false;
+  }
+  return (
+    normalizedShadow === normalizedExisting ||
+    normalizedShadow.startsWith(normalizedExisting) ||
+    normalizedExisting.startsWith(normalizedShadow)
+  );
+}
+
+function findExistingAssistantEquivalentToShadow(
+  items: ConversationItem[],
+  shadowText: string,
+) {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index];
+    if (item?.kind !== "message" || item.role !== "assistant") {
+      continue;
+    }
+    if (isEquivalentShadowAssistantText(item.text, shadowText)) {
+      return { index, item };
+    }
+  }
+  return null;
+}
+
 function findLastAssistantAfterLastUser(items: ConversationItem[]) {
   let lastUserIndex = -1;
   for (let index = 0; index < items.length; index += 1) {
     const item = items[index];
-    if (item?.kind === "message" && item.role === "user") {
+    if (item && isShadowRecoveryTurnBoundaryUser(item)) {
       lastUserIndex = index;
     }
   }
@@ -2044,6 +2082,79 @@ function isLikelySameTurnForRecovery(
   return item.turnId === expectedTurnId && item.turnId === shadowTurnId;
 }
 
+function buildRecoveredAssistantFromShadow(shadow: {
+  id: string;
+  text: string;
+  turnId: string | null;
+  itemId: string;
+}) {
+  return {
+    id: `claude-shadow-recovered-${shadow.itemId}`,
+    kind: "message" as const,
+    role: "assistant" as const,
+    text: shadow.text,
+    ...(shadow.turnId ? { turnId: shadow.turnId } : {}),
+    isFinal: false,
+    recoveredFromLiveShadow: true,
+    recoveryStatus: "interrupted" as const,
+    recoverySourceId: shadow.id,
+    engineSource: "claude" as const,
+  };
+}
+
+function appendRecoveredAssistantUnlessDuplicate({
+  items,
+  shadow,
+  expectedTurnId,
+  hasExplicitFinalAfterLastUser,
+}: {
+  items: ConversationItem[];
+  shadow: {
+    id: string;
+    text: string;
+    turnId: string | null;
+    itemId: string;
+  };
+  expectedTurnId: string | null;
+  hasExplicitFinalAfterLastUser: boolean;
+}) {
+  const equivalent = findExistingAssistantEquivalentToShadow(items, shadow.text);
+  if (!equivalent) {
+    return [...items, buildRecoveredAssistantFromShadow(shadow)];
+  }
+
+  const latest = equivalent.item as MessageItemWithTurn;
+  const normalizedLatestText = latest.text.trim();
+  if (latest.isFinal === true && hasExplicitFinalAfterLastUser) {
+    return items;
+  }
+  const sameTurn = isLikelySameTurnForRecovery(
+    latest,
+    expectedTurnId,
+    shadow.turnId,
+  );
+  const normalizedShadowText = shadow.text.trim();
+  if (
+    sameTurn &&
+    normalizedShadowText.startsWith(normalizedLatestText) &&
+    normalizedShadowText.length > normalizedLatestText.length
+  ) {
+    const merged = items.slice();
+    merged[equivalent.index] = {
+      ...latest,
+      text: shadow.text,
+      isFinal: false,
+      recoveredFromLiveShadow: true,
+      recoveryStatus: "interrupted" as const,
+      recoverySourceId: shadow.id,
+      engineSource: "claude" as const,
+      ...(shadow.turnId ? { turnId: shadow.turnId } : {}),
+    };
+    return merged;
+  }
+  return items;
+}
+
 function recoverClaudeAssistantFromShadowIfNeeded({
   items,
   shadow,
@@ -2067,39 +2178,23 @@ function recoverClaudeAssistantFromShadowIfNeeded({
 
   const trailingAssistant = findLastAssistantAfterLastUser(items);
   if (!trailingAssistant) {
-    return [
-      ...items,
-      {
-        id: `claude-shadow-recovered-${shadow.itemId}`,
-        kind: "message" as const,
-        role: "assistant" as const,
-        text: shadow.text,
-        ...(shadow.turnId ? { turnId: shadow.turnId } : {}),
-        isFinal: false,
-        recoveredFromLiveShadow: true,
-        recoveryStatus: "interrupted" as const,
-        recoverySourceId: shadow.id,
-        engineSource: "claude" as const,
-      },
-    ];
+    return appendRecoveredAssistantUnlessDuplicate({
+      items,
+      shadow,
+      expectedTurnId,
+      hasExplicitFinalAfterLastUser,
+    });
   }
 
   const latest = trailingAssistant.item as MessageItemWithTurn;
   const normalizedLatestText = latest.text.trim();
   if (!normalizedLatestText) {
-    const recovered = {
-      id: `claude-shadow-recovered-${shadow.itemId}`,
-      kind: "message" as const,
-      role: "assistant" as const,
-      text: shadow.text,
-      ...(shadow.turnId ? { turnId: shadow.turnId } : {}),
-      isFinal: false,
-      recoveredFromLiveShadow: true,
-      recoveryStatus: "interrupted" as const,
-      recoverySourceId: shadow.id,
-      engineSource: "claude" as const,
-    };
-    return [...items, recovered];
+    return appendRecoveredAssistantUnlessDuplicate({
+      items,
+      shadow,
+      expectedTurnId,
+      hasExplicitFinalAfterLastUser,
+    });
   }
 
   const sameTurn = isLikelySameTurnForRecovery(
@@ -2188,7 +2283,10 @@ function hasExplicitFinalAssistantAfterLastUser(messagesData: unknown) {
       continue;
     }
     const role = asString(message.role ?? "") === "user" ? "user" : "assistant";
-    if (role === "user") {
+    if (
+      role === "user" &&
+      !isCliInjectedAgentTaskNotificationText(asString(message.text ?? ""))
+    ) {
       lastUserIndex = index;
     }
   }

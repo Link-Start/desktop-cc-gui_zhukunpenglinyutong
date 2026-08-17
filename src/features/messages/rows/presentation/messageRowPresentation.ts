@@ -1,5 +1,6 @@
 import type { ConversationItem } from "../../../../types";
 import {
+  isBackgroundStyleAgentTaskNotification,
   isSubagentStyleAgentTaskNotification,
   parseAgentTaskNotification,
 } from "../../../engine-task-output/contracts/agentTaskNotification";
@@ -169,6 +170,10 @@ export function buildMessageRowPresentation(input: {
   const suppressSubagentAgentTaskCard = isSubagentStyleAgentTaskNotification(
     agentTaskNotification,
   );
+  /** Background wakeup：幕布折叠条，不进用户蓝气泡 / 旧卡 */
+  const foldBackgroundAgentTask = isBackgroundStyleAgentTaskNotification(
+    agentTaskNotification,
+  );
   const browserContextSummary = item.role === "user"
     ? getPresentationContext(presentationMetadata, "browser")
     : null;
@@ -194,7 +199,7 @@ export function buildMessageRowPresentation(input: {
       )
     );
   const displayText = agentTaskNotification
-    ? suppressSubagentAgentTaskCard
+    ? suppressSubagentAgentTaskCard || foldBackgroundAgentTask
       ? ""
       : agentTaskNotification.resultText
     : item.role === "user"
@@ -251,6 +256,7 @@ export function buildMessageRowPresentation(input: {
     memoryPayloadPacks: resolvedMemorySummary?.memoryPacks ?? [],
     agentTaskNotification,
     suppressSubagentAgentTaskCard,
+    foldBackgroundAgentTask,
     browserContextSummary,
     intentCanvasContextSummary,
     dshGoalContext,
@@ -261,11 +267,13 @@ export function buildMessageRowPresentation(input: {
       !resolvedMemorySummary &&
       !resolvedNoteCardSummary,
     messageRowSubtype:
-      agentTaskNotification && !suppressSubagentAgentTaskCard
-        ? ("agent-task" as const)
-        : item.role === "assistant"
-          ? ("assistant" as const)
-          : ("user" as const),
+      foldBackgroundAgentTask
+        ? ("agent-task-fold" as const)
+        : agentTaskNotification && !suppressSubagentAgentTaskCard
+          ? ("agent-task" as const)
+          : item.role === "assistant"
+            ? ("assistant" as const)
+            : ("user" as const),
     selectedAgentName,
     selectedAgentIcon,
     hasExternalAgentBadge,

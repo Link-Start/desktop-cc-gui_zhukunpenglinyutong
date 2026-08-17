@@ -1,4 +1,5 @@
 import type { ConversationItem, ThreadSummary } from "../../../types";
+import { isCliInjectedAgentTaskNotificationText } from "../../engine-task-output/contracts/agentTaskNotification";
 import { areEquivalentAssistantMessageTexts } from "../assembly/conversationNormalization";
 import { mergeAgentMessageText } from "./threadReducerTextMerge";
 
@@ -24,10 +25,14 @@ function isAssistantMessageItem(
 /**
  * Align with conversationAssembler.shouldStopAssistantEquivalenceSearch:
  * user / tool / reasoning / media / review boundaries block cross-id merge.
+ * CLI-injected task-notification users (wakeup / SubAgent) are not a turn boundary.
  */
 export function shouldStopEquivalentAssistantSearch(item: ConversationItem): boolean {
   if (item.kind === "message") {
-    return item.role === "user";
+    return (
+      item.role === "user" &&
+      !isCliInjectedAgentTaskNotificationText(item.text)
+    );
   }
   return (
     item.kind === "reasoning" ||

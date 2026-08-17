@@ -10,6 +10,9 @@
 @layer theme, base, components, app, utilities;
 
 @import "tailwindcss";
+/* 设计稿 HTML 里的 Windows 路径会被 Oxide 当成 unicode escape，打爆 Vite overlay */
+@source not "../../docs/designs";
+@source not "../../docs/prototypes";
 @import "tw-animate-css";
 
 /*

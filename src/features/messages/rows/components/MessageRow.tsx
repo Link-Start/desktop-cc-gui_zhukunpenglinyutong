@@ -29,12 +29,14 @@ import {
   noteThreadLiveRowRenderMeasured,
 } from "../../../threads/utils/streamLatencyDiagnostics";
 import { EngineTaskOutputInspector } from "../../../engine-task-output/components/EngineTaskOutputInspector";
+import { extractBackgroundCommandTitle } from "../../../engine-task-output/contracts/agentTaskNotification";
 import { useEngineTaskOutputSnapshot } from "../../../engine-task-output/hooks/useEngineTaskOutputSnapshot";
 import type { EngineTaskOutputSnapshot } from "../../../engine-task-output/types";
 import {
   buildEngineTaskOutputSnapshot,
   buildTaskOutputSourceFromNotification,
 } from "../../../engine-task-output/utils/engineTaskOutputProjection";
+import { BackgroundTaskNotificationFold } from "./BackgroundTaskNotificationFold";
 import {
   CollapsibleUserTextBlock,
   UserCodeAnnotationContextBlock,
@@ -290,6 +292,7 @@ export const MessageRow = memo(function MessageRow({
     memoryPayloadPacks,
     agentTaskNotification,
     suppressSubagentAgentTaskCard,
+    foldBackgroundAgentTask,
     browserContextSummary,
     intentCanvasContextSummary,
     dshGoalContext,
@@ -339,7 +342,7 @@ export const MessageRow = memo(function MessageRow({
     isStreaming,
   );
   const agentTaskDisplay = useMemo(() => {
-    if (!agentTaskNotification || suppressSubagentAgentTaskCard) {
+    if (!agentTaskNotification || suppressSubagentAgentTaskCard || foldBackgroundAgentTask) {
       return null;
     }
     return {
@@ -347,7 +350,7 @@ export const MessageRow = memo(function MessageRow({
       status: normalizeAgentTaskStatus(agentTaskNotification.status),
       outputFileName: basenameFromPath(agentTaskNotification.outputFile),
     };
-  }, [agentTaskNotification, suppressSubagentAgentTaskCard]);
+  }, [agentTaskNotification, foldBackgroundAgentTask, suppressSubagentAgentTaskCard]);
   const agentTaskOutputSnapshot = useMemo(() => {
     if (!agentTaskNotification || !agentTaskDisplay || suppressSubagentAgentTaskCard) {
       return null;
@@ -367,6 +370,28 @@ export const MessageRow = memo(function MessageRow({
     agentTaskNotification,
     item.id,
     suppressSubagentAgentTaskCard,
+  ]);
+  const backgroundTaskFoldSnapshot = useMemo(() => {
+    if (!foldBackgroundAgentTask || !agentTaskNotification?.outputFile) {
+      return null;
+    }
+    const commandTitle = extractBackgroundCommandTitle(agentTaskNotification.summary);
+    return buildEngineTaskOutputSnapshot(
+      buildTaskOutputSourceFromNotification({
+        itemId: item.id,
+        engine: activeEngine,
+        title:
+          commandTitle
+          ?? resolveAgentTaskDisplaySummary(agentTaskNotification.summary).title,
+        notification: agentTaskNotification,
+      }),
+      null,
+    );
+  }, [
+    activeEngine,
+    agentTaskNotification,
+    foldBackgroundAgentTask,
+    item.id,
   ]);
   useEffect(() => {
     setIsAgentBadgeExpanded(false);
@@ -824,8 +849,16 @@ export const MessageRow = memo(function MessageRow({
   const dshGoalSummaryNode = dshGoalContext ? (
     <DshGoalContextSummaryCard context={dshGoalContext} />
   ) : null;
+  const backgroundTaskFoldNode =
+    foldBackgroundAgentTask && agentTaskNotification ? (
+      <BackgroundTaskNotificationFold
+        notification={agentTaskNotification}
+        workspaceId={workspaceId}
+        outputSnapshot={backgroundTaskFoldSnapshot}
+      />
+    ) : null;
   const shouldRenderBubble =
-    (agentTaskNotification && !suppressSubagentAgentTaskCard)
+    (!foldBackgroundAgentTask && agentTaskNotification && !suppressSubagentAgentTaskCard)
     || imageItems.length > 0
     || deferredImageItems.length > 0
     || showActiveRuntimeReconnectCard
@@ -1355,9 +1388,15 @@ export const MessageRow = memo(function MessageRow({
       {memoryRecordDetailDialogNode}
     </>
   ) : null;
-  if (!memorySummaryNode && !noteCardSummaryNode && !browserContextSummaryNode && !intentCanvasContextSummaryNode && !dshGoalSummaryNode && !codeAnnotationContextNode && !shouldRenderBubble) {
+  if (!memorySummaryNode && !noteCardSummaryNode && !browserContextSummaryNode && !intentCanvasContextSummaryNode && !dshGoalSummaryNode && !codeAnnotationContextNode && !shouldRenderBubble && !backgroundTaskFoldNode) {
     return null;
   }
+  const primaryContent = (
+    <>
+      {backgroundTaskFoldNode}
+      {shouldRenderBubble ? bubbleNode : null}
+    </>
+  );
   // 用户行：气泡在上，注入摘要在下一行左侧（与实时时序一致）；助手行：摘要在正文前
   const stackedContent = memorySummaryNode || noteCardSummaryNode || browserContextSummaryNode || intentCanvasContextSummaryNode || dshGoalSummaryNode || codeAnnotationContextNode ? (
     <div
@@ -1369,7 +1408,7 @@ export const MessageRow = memo(function MessageRow({
     >
       {item.role === "user" ? (
         <>
-          {shouldRenderBubble ? bubbleNode : null}
+          {primaryContent}
           {memorySummaryNode}
           {codeAnnotationContextNode}
           {browserContextSummaryNode}
@@ -1385,11 +1424,11 @@ export const MessageRow = memo(function MessageRow({
           {intentCanvasContextSummaryNode}
           {noteCardSummaryNode}
           {dshGoalSummaryNode}
-          {shouldRenderBubble ? bubbleNode : null}
+          {primaryContent}
         </>
       )}
     </div>
-  ) : bubbleNode;
+  ) : primaryContent;
 
   const agentBadgeNode = hasExternalAgentBadge ? (
     <div className={`message-user-agent-rail${isAgentBadgeExpanded ? " is-open" : ""}`}>
@@ -1424,9 +1463,11 @@ export const MessageRow = memo(function MessageRow({
   const messageClassName = [
     "message",
     item.role,
-    agentTaskNotification && !suppressSubagentAgentTaskCard
-      ? "message-agent-task"
-      : "",
+    foldBackgroundAgentTask
+      ? "message-agent-task-fold"
+      : agentTaskNotification && !suppressSubagentAgentTaskCard
+        ? "message-agent-task"
+        : "",
     item.role === "assistant" && isStreaming ? "is-live-streaming" : "",
   ].filter(Boolean).join(" ");
 

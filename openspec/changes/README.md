@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fold-background-task-notification`](fold-background-task-notification/proposal.md) | implemented / await human check | Claude 后台 Bash wakeup `<task-notification>` 幕布折叠；无 result 可解析；Background / SubAgent / 真用户提问三分流；wakeup 不当 shadow/live turn 边界；focused vitest 绿；**已本地 commit，待幕布手测不 archive** | [proposal](fold-background-task-notification/proposal.md) · [design](fold-background-task-notification/design.md) · [tasks](fold-background-task-notification/tasks.md) · [specs](fold-background-task-notification/specs/) |
 | [`fix-session-switch-unlock-windows-jank`](fix-session-switch-unlock-windows-jank/proposal.md) | implemented / await Windows hand-test | identity 只留 workspace+thread；空 surface 不拉幕布；`sizeBytes===0` 活过 catalog merge；recovery 一帧 yield；**已本地 commit，Windows 未测不 archive** | [proposal](fix-session-switch-unlock-windows-jank/proposal.md) · [design](fix-session-switch-unlock-windows-jank/design.md) · [tasks](fix-session-switch-unlock-windows-jank/tasks.md) · [specs](fix-session-switch-unlock-windows-jank/specs/) |
 | [`redesign-dsh-vendor-connection-panel`](redesign-dsh-vendor-connection-panel/proposal.md) | implemented / committed | 方案 A 连接优先：状态卡 + 显式启动/关闭 + Windows Hermes/Scoop 扫描；transport 文案 i18n；待 archive | [proposal](redesign-dsh-vendor-connection-panel/proposal.md) · [design](redesign-dsh-vendor-connection-panel/design.md) · [tasks](redesign-dsh-vendor-connection-panel/tasks.md) · [specs](redesign-dsh-vendor-connection-panel/specs/) |
 | [`add-first-run-setup-wizard`](add-first-run-setup-wizard/proposal.md) | implemented / await human check | 首次设置向导 + skip banner + 设置重跑；不 commit，交用户验收 | [proposal](add-first-run-setup-wizard/proposal.md) · [design](add-first-run-setup-wizard/design.md) · [tasks](add-first-run-setup-wizard/tasks.md) · [specs](add-first-run-setup-wizard/specs/) |
@@ -47,6 +48,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **新增并落地** `fold-background-task-notification`（2026-08-17）：Claude 后台 Bash wakeup 无 `<result>` 时不再进用户蓝气泡；parse 放宽 + Background 折叠条 + SubAgent/真用户提问边界；wakeup 不当 shadow/live turn 边界，避免 fold 后再恢复一份「已丢到后台」；focused vitest 绿；**已本地 commit，待幕布手测不 archive**。
 - **新增并落地** `fix-session-switch-unlock-windows-jank`（2026-08-17）：Win 切未开聊 / 切单会话 / Shared 解锁卡顿；identity 瘦身 + never-started skip + `sizeBytes===0` 活过 catalog merge + select 不拉幕布 + recovery prefetch；focused vitest + app-shell governance 绿；**已本地 commit，Windows 未测不 archive**。
 - **新增并落地** `fix-native-parallel-provider-model-isolation`（2026-08-12）：并行 Native 不同供应商后历史会话 residual model（MiniMax-M3 打 DeepSeek）→ 扩展 `claudeManagedRuntimeModel` residual；vitest 24+73 绿；Shared 零改；待手测、不 commit。
 - **验收通过** `fix-askuserquestion-settlement-tombstone`（2026-08-12）：幽灵重弹/skip 卡死/双已提交卡 + 幕布扁平 UI；用户手测通过；能力矩阵见 `docs/reference/conversation/user-input-elicitation-capability-matrix.md`。

@@ -1717,6 +1717,71 @@ describe("createClaudeHistoryLoader shadow recovery", () => {
     expect(assistantMessages[0]?.recoveredFromLiveShadow).toBeUndefined();
   });
 
+  it("does not append shadow after a CLI wakeup fold when the assistant already exists", async () => {
+    writeClientStoreValue("threads", "liveAssistantShadowTranscripts", {});
+    const assistantText = "已丢到后台，任务 ID `b83ywvfpw`，跑完会通知。";
+    appendLiveAssistantShadowDelta({
+      engine: "claude",
+      workspaceId: "ws-shadow-wakeup",
+      threadId: "claude:session-shadow-wakeup",
+      turnId: "turn-wakeup",
+      itemId: "assistant-wakeup",
+      delta: assistantText,
+      timestamp: Date.now(),
+    });
+    const loader = createClaudeHistoryLoader({
+      workspaceId: "ws-shadow-wakeup",
+      workspacePath: "/tmp/ws-shadow-wakeup",
+      loadClaudeSession: vi.fn().mockResolvedValue({
+        messages: [
+          {
+            kind: "message",
+            id: "user-prompt",
+            role: "user",
+            text: "后台跑 8 秒再回时间戳",
+            turnId: "turn-wakeup",
+          },
+          {
+            kind: "message",
+            id: "assistant-wakeup",
+            role: "assistant",
+            text: assistantText,
+            turnId: "turn-wakeup",
+            isFinal: true,
+          },
+          {
+            kind: "message",
+            id: "user-wakeup-fold",
+            role: "user",
+            text: `<task-notification>
+<task-id>b83ywvfpw</task-id>
+<tool-use-id>tool_DKGIroC93JLmXOHPsnTRi0SU</tool-use-id>
+<output-file>/tmp/claude-501/tasks/b83ywvfpw.output</output-file>
+<status>completed</status>
+<summary>Background command "Sleep 8s then echo timestamp" completed</summary>
+</task-notification>`,
+            turnId: "turn-wakeup",
+          },
+        ],
+      }),
+    });
+
+    const snapshot = await loader.load("claude:session-shadow-wakeup");
+    const assistantMessages = snapshot.items.filter(
+      (item): item is AssistantMessageItem =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]).toMatchObject({
+      id: "assistant-wakeup",
+      text: assistantText,
+    });
+    expect(assistantMessages[0]?.recoveredFromLiveShadow).toBeUndefined();
+    expect(
+      snapshot.items.some((item) => item.id.startsWith("claude-shadow-recovered-")),
+    ).toBe(false);
+  });
+
   it("does not override explicit final assistant body with longer shadow payload", async () => {
     writeClientStoreValue("threads", "liveAssistantShadowTranscripts", {});
     appendLiveAssistantShadowDelta({
