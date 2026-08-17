@@ -2,6 +2,84 @@
 
 ---
 
+### **2026年8月17日（v0.9.0）**
+
+中文：
+
+这一版将产品线升到 **0.9.0**，主线是「DeepSeek Harness 与 PI 成为一等引擎、新用户能走完首次设置、工作台可换背景」（#1099 / #1100）：composer 可选 DSH / PI，DSH 会话进侧栏、可续聊并跟随 Goal hop；设置页用连接优先面板对接本机 `dsh web`；全新安装走欢迎 → IDE → CLI 装验；外观可关 / 流体 / 自定义封面。另把 Browser Dock 嵌进中心分屏，首页改时间分组卡片，并收口长对话按段折叠、后台任务通知、切会话卡顿与 Windows 拉起 DSH。
+
+✨ Features
+- **DeepSeek Harness 一等引擎（#1099）**：第 7 个 Native Engine；自动探测 / adopt / spawn 本机 `dsh web`；composer 选 `{ provider, model }`，侧栏可列 / 续 / fork，live mux 与审批桥接通；第一期不进 Shared
+- **DSH Goal 续跳与连接面板**：Goal `active` 时不提早 idle，跟随 host 下一 hop；`source.kind=goal` 显示「上下文注入」折叠卡；设置页区分未装 / 未运行 / 已连接，可显式启动或关闭本机 host，Windows 补扫 Hermes / Scoop / mise / fnm
+- **DSH 自定义路由附图 + 会话速度条**：可写 `llm-pi-ai` 路由附图时自动声明 `[text, image]`，不必手改 `settings.yaml`；composer 展示首 token 平均、tok/s、缓存命中%；弱标题用首条真实提问升级
+- **PI CLI 内置引擎**：探测 / 安装 / doctor / 认证（含 OAuth 终端）；`pi:` 历史与 realtime 独立；首页与 Shared 可选 PI；协作白名单含 PI；附图走 `@file`
+- **首次设置向导**：欢迎 → IDE（含 IntelliJ IDEA）→ CLI 装验；至少一引擎通过才算 ready，可 skip 后由首页 banner / 设置页重跑拉回；legacy 用户不强制重跑
+- **工作台页面背景**：设置外观三选一（关闭 / 流体 / 自定义图片），默认关闭；侧栏与主栏统一毛玻璃；Windows 跳过 WebGL 流体
+- **Browser Dock 中心分屏 + 首页时间卡片**：顶栏开关把 Dock 嵌进幕布旁；HTML 链可一键进内置浏览器；首页按本周 / 近月 / 更早分组
+- **Git 变更行「在访达 / 资源管理器中显示」**：单仓 / 多仓、扁平 / 树形均可跳到磁盘；已删文件打开父目录
+
+🔧 Improvements
+- 将应用版本号提升到 `0.9.0`（`package.json` / `package-lock.json` / `src-tauri/tauri.conf.json`），为 minor 发版对齐 SemVer 与打包元数据
+- **会话历史窗口加大**：DOM 默认窗口 150 → 800，首屏尾窗 16 → 300，长会话不再一打开就缩成「更早历史」chip
+- **Session Index 后台导入 + keyset 翻页**：90s 有界 sync 外部 CLI；首页 20 条 keyset，「加载更早」走 Index 游标；Claude 磁盘尾窗默认 80
+- **过程相位按段连续折叠**：每段正文只收紧挨着的思考 / 工具，长回合不再整轮并进终稿一堵墙；折叠 chip 去掉多余「已处理」前缀
+- **思考排版更紧**：思考块间距压到 0.4em，跨空行编号列表保持同一 `<ol>`；助手正文节奏不变
+- **提交信息 helper 会话从列表隐藏**：按已知 generate-commit 前缀过滤，普通讨论提交信息的对话仍可见
+- **live 尾部过程窗口**：无正文收尾的长工具 / 思考串超过 5 张卡时只留末尾 3 张
+- **分平台响应中 spinner**：Mac / Linux 用 SVG dash，Windows 用字符帧，避开 reduce-motion 空心环死圈
+- **工具输出字节预算**：`commandExecution` / `fileChange` 进 store 前 head+tail 截断
+- **AskUserQuestion 更稳**：CLI MCP 超时加 30s、过期可识别、墙上时钟倒计时、闸门结算前 drain live 尾
+
+🐛 Fixes
+- **Windows 拉起 `dsh web`**：走 `node.exe + lib/bin.js`，spawn 前修空的 sharp constructor；Mac 保持 shebang；设置页回传 spawn stderr
+- **DSH 无名 bash 不再当成 Agent**：缺 name 时按参数判 `commandExecution`；完成项不再用 `Call-|fc` 当标题；普通 shell 不进 subagent 计数
+- **后台任务通知折叠**：Claude wakeup `<task-notification>` 不再进用户蓝气泡；Background / SubAgent / 真用户三分流；wakeup 不当 shadow 边界，避免再追加一份已落盘正文
+- **切会话 identity 先亮**：同步只改 workspace+thread；未开聊跳过 resume，空 surface 不拉幕布；Shared 解锁先让出一帧
+- **侧栏删除真删干净**：右键删除与设置页走同一后端链路；session index tombstone 防复活；PI 按全局 session id 兜底
+- **壁纸叠层与终端透底**：毛玻璃只挂 wallpaper 层，侧栏菜单 portal 到 `document.body`；开背景时终端透明，不再盖住「+」与新建会话菜单
+- **Claude 后台 Agent 空闲上限**：子代理迟迟不回时预结果等待可放弃，不再永远卡在 generating
+- **批量终端卡完成后自动折**：直播收尾即收起组；历史回放默认折叠
+- **Windows 打开方式探测不再弹黑窗**：图标 / `where` 探测走 `CREATE_NO_WINDOW`
+
+English:
+
+This release moves the product line to **0.9.0**. The headline is DeepSeek Harness and PI as first-class engines, a first-run setup that actually finishes, and a workbench you can wallpaper (#1099 / #1100): pick DSH or PI in the composer; DSH sessions land in the sidebar, resume, and follow Goal hops; Settings uses a connection-first panel against local `dsh web`; a fresh install walks Welcome → IDE → CLI verify; Appearance can turn wallpaper off, use the fluid backdrop, or a custom image. Browser Dock embeds in the center split, Home becomes time-grouped cards, and the rest closes long-turn process walls, background-task leak bubbles, session-switch jank, and Windows DSH spawn.
+
+✨ Features
+- **DeepSeek Harness as a first-class engine (#1099)**: 7th Native Engine; detect / adopt / spawn one local `dsh web`; composer picks `{ provider, model }`; sidebar list / resume / fork with live mux and the approval bridge; not in Shared for this ship
+- **DSH Goal continuation + connection panel**: while Goal is `active`, do not idle early — stay bound for the next host hop; `source.kind=goal` renders a “Context injection” fold card; Settings distinguishes not-installed / not-running / connected, with explicit start/stop and Windows scans of Hermes / Scoop / mise / fnm
+- **DSH custom-route images + session speed line**: on writable `llm-pi-ai` routes, auto-declare `[text, image]` so users never hand-edit `settings.yaml`; composer shows TTFT average, tok/s, and cache-hit %; weak sidebar titles upgrade from the first real user prompt
+- **PI CLI as a built-in engine**: detect / install / doctor / auth (OAuth in the terminal); dedicated `pi:` history and realtime; Home and Shared can pick PI; collab whitelist includes PI; images go through `@file`
+- **First-run setup wizard**: Welcome → IDE (including IntelliJ IDEA) → CLI verify; ready requires one passing engine; skip leaves a Home banner and a Settings re-run; legacy users are not forced through it
+- **Workbench wallpaper**: Appearance is a three-way (off / fluid / custom image), off by default; sidebar and main share one frost veil; Windows skips the WebGL fluid shader
+- **Embedded Browser Dock + time-grouped Home**: titlebar toggle docks the browser beside the canvas; HTML links open in the built-in browser; Home groups This week / Recent month / Older
+- **Reveal in Finder / Explorer on git diff rows**: flat and tree, single-repo and multi-repo; deleted files open the parent folder
+
+🔧 Improvements
+- Bump the app version to `0.9.0` across frontend package metadata, the lockfile, and Tauri bundle configuration so this minor ship aligns SemVer and packaging metadata
+- **Larger in-session history window**: DOM default 150 → 800, first-paint tail 16 → 300, so long threads no longer collapse into an older-history chip on open
+- **Session Index background import + keyset paging**: 90s bounded sync of external CLIs; Home page is a 20-row keyset; “Load older” follows the Index cursor; Claude disk tail defaults to 80
+- **Contiguous process-phase collapse**: each assistant body only folds the process run immediately above it; long turns no longer become one end-of-turn wall; the chip drops the extra “Processed” prefix
+- **Tighter thinking typography**: 0.4em sibling gap inside thinking blocks; numbered lists stay one `<ol>` across blank lines; assistant body rhythm is unchanged
+- **Hide commit-message helper sessions**: filter known generate-commit prefixes; ordinary chats that merely discuss commit messages stay visible
+- **Live trailing process window**: a no-body tool/reasoning run longer than 5 cards keeps the last 3
+- **Per-platform in-response spinner**: SVG dash on Mac / Linux, glyph frames on Windows, so reduce-motion never freezes on a hollow ring
+- **Tool-output byte budget**: head+tail truncate `commandExecution` / `fileChange` before they enter the store
+- **AskUserQuestion hardening**: +30s CLI MCP margin, recognizable expired routing, wall-clock countdown, drain the live tail before the gate settles
+
+🐛 Fixes
+- **Windows `dsh web` spawn**: CreateProcess-safe `node.exe + lib/bin.js`, repair an empty sharp constructor before spawn; Mac keeps the shebang; Settings surfaces spawn stderr
+- **Nameless DSH bash is not an Agent**: infer `commandExecution` from args when name is missing; completed items no longer take `Call-|fc` as the title; ordinary shells stay out of the subagent tally
+- **Fold background task notifications**: Claude wakeup `<task-notification>` no longer becomes a user bubble; Background / SubAgent / real user split three ways; wakeup is not a shadow-recovery turn boundary, so a settled assistant is not appended twice
+- **Session-switch identity first**: sync only workspace+thread; skip resume on never-started; empty surfaces do not raise a history curtain; Shared unlock yields one paint frame
+- **Sidebar delete actually deletes**: context-menu delete shares the Settings backend path; session-index tombstones prevent resurrection; PI falls back to the global session id
+- **Wallpaper stacking and terminal frost**: frost lives only on the wallpaper layer; sidebar menus portal to `document.body`; the terminal goes transparent when wallpaper is on so “+” and New session stay clickable
+- **Claude background-agent idle cap**: if a child never sends a task notification, the pre-result wait can abandon instead of generating forever
+- **Auto-fold completed terminal groups**: live groups collapse when the last card finishes; history replay starts folded
+- **Windows Open With probe no longer flashes a console**: icon extract and `where` use `CREATE_NO_WINDOW`
+
+---
+
 ### **2026年8月15日（v0.8.9）**
 
 中文：
