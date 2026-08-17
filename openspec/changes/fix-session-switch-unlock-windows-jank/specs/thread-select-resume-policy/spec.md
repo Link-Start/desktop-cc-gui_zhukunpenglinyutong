@@ -60,12 +60,19 @@ The system MUST skip `resumeThreadForWorkspace` only when never-started can be k
 - **THEN** the system MUST still schedule a background resume
 - **AND** MUST NOT treat the missing summary as never-started
 
-### Requirement: Session select MUST NOT raise a history-loading curtain
+### Requirement: Unloaded Native / Shared select MUST raise a history-loading curtain
 
-Selecting a thread MUST NOT synchronously set `historyLoadingByThreadId` to `true`. Unloaded sessions that may have history resume in the background. True Claude blank curtains MUST continue to use `scheduleClaudeBlankCurtainRecovery`.
+Selecting an unloaded Native or Shared thread that may have history MUST synchronously set `historyLoadingByThreadId` to `true` so the canvas does not flash `emptyThread`. Known never-started (`*-pending-*` or explicit `sizeBytes===0` with no `physicalPath`), already-loaded, processing, and failed surfaces MUST stay curtain-free. Shared select MUST seed prepare progress (`8%` / `restoringSharedHistoryPrepare`). True Claude blank curtains after a loaded empty surface MUST continue to use `scheduleClaudeBlankCurtainRecovery`.
 
-#### Scenario: Empty surface select does not show history loading
+#### Scenario: Unloaded Native / Shared select shows history loading
 
-- **GIVEN** a Claude or Shared thread with zero items that is not loaded
+- **GIVEN** a Claude, Codex, or Shared thread that is not loaded and is not a known never-started session
 - **WHEN** the user selects that thread
-- **THEN** `historyLoadingByThreadId` for that thread MUST NOT become `true` in the select frame
+- **THEN** `historyLoadingByThreadId` for that thread MUST become `true` in the select frame
+- **AND** a Shared thread MUST also seed `historyLoadingProgressByThreadId` with prepare progress
+
+#### Scenario: Known never-started select stays curtain-free
+
+- **GIVEN** a pending thread id or a sidebar summary with `sizeBytes === 0` and no `physicalPath`
+- **WHEN** the user selects that thread
+- **THEN** `historyLoadingByThreadId` for that thread MUST NOT become `true`

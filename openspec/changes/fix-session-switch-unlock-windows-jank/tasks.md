@@ -47,3 +47,17 @@
 - [x] 补 extract / merge / Index / policy 单测
 - [x] focused vitest + `npm run check:app-shell:governance`
 - [x] Windows hand-test 未测；本轮按用户确认本地 commit，不 archive
+
+## S7 — 恢复 select 幕布（本轮）
+
+- [x] 用户确认下掉幕布无效：0.9 仍卡，且空态闪烁更差
+- [x] 恢复 `shouldShowHistoryLoadingForSelectionThread`；未加载 Native/Shared select 拉幕布
+- [x] Shared select 种子 prepare 进度；never-started / loaded / failed 仍不拉幕布
+- [x] 回写 sidebar-cache / continuity 单测与 OpenSpec
+- [x] focused vitest
+
+## S8 — 真正的切会话卡顿（对照 0.8.9）
+
+- [x] 对照 0.8.9：select 同样立刻换 `activeItems`，并不保留旧幕布
+- [x] 「上方还有 N 条 / 窗口 800」不是根因；群主已否定，数字已恢复 300/800
+- [ ] 已打开会话再切回去仍空约 10s：继续查 select 帧为何先画空，而不是改 chip
