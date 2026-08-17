@@ -113,4 +113,79 @@ describe("buildMessageRowPresentation", () => {
       body: "<goal_round>\nContinue the active goal.\n</goal_round>",
     });
   });
+
+  it("folds Background wakeup notifications and hides their payload from displayText", () => {
+    const result = buildMessageRowPresentation({
+      item: {
+        id: "bg-fold-1",
+        kind: "message",
+        role: "user",
+        text: `<task-notification>
+<task-id>b234djc13</task-id>
+<status>completed</status>
+<summary>Background command "Rebuild Windows bundles with latest code" completed</summary>
+</task-notification>`,
+      },
+      enableCollaborationBadge: false,
+      suppressMemorySummaryCard: false,
+      suppressNoteCardSummaryCard: false,
+    });
+
+    expect(result.foldBackgroundAgentTask).toBe(true);
+    expect(result.suppressSubagentAgentTaskCard).toBe(false);
+    expect(result.displayText).toBe("");
+    expect(result.messageRowSubtype).toBe("agent-task-fold");
+  });
+
+  it("does not fold SubAgent notifications or ordinary user questions", () => {
+    const subagent = buildMessageRowPresentation({
+      item: {
+        id: "subagent-1",
+        kind: "message",
+        role: "user",
+        text: `<task-notification>
+<summary>Agent "架构治理评估" completed</summary>
+<result>ok</result>
+</task-notification>`,
+      },
+      enableCollaborationBadge: false,
+      suppressMemorySummaryCard: false,
+      suppressNoteCardSummaryCard: false,
+    });
+    const ordinary = buildMessageRowPresentation({
+      item: {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "普通提问：帮我看打包失败",
+      },
+      enableCollaborationBadge: false,
+      suppressMemorySummaryCard: false,
+      suppressNoteCardSummaryCard: false,
+    });
+    const genericCard = buildMessageRowPresentation({
+      item: {
+        id: "generic-1",
+        kind: "message",
+        role: "assistant",
+        text: `<task-notification>
+<summary>Custom runner finished</summary>
+<result>runner finished ok</result>
+</task-notification>`,
+      },
+      enableCollaborationBadge: false,
+      suppressMemorySummaryCard: false,
+      suppressNoteCardSummaryCard: false,
+    });
+
+    expect(subagent.foldBackgroundAgentTask).toBe(false);
+    expect(subagent.suppressSubagentAgentTaskCard).toBe(true);
+    expect(subagent.messageRowSubtype).toBe("user");
+    expect(ordinary.foldBackgroundAgentTask).toBe(false);
+    expect(ordinary.messageRowSubtype).toBe("user");
+    expect(ordinary.displayText).toContain("普通提问");
+    expect(genericCard.foldBackgroundAgentTask).toBe(false);
+    expect(genericCard.messageRowSubtype).toBe("agent-task");
+    expect(genericCard.displayText).toBe("runner finished ok");
+  });
 });

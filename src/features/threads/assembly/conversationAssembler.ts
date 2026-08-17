@@ -5,6 +5,7 @@ import type {
 } from "../contracts/conversationCurtainContracts";
 import type { ConversationItem } from "../../../types";
 import { normalizeItem } from "../../../utils/threadItems";
+import { isCliInjectedAgentTaskNotificationText } from "../../engine-task-output/contracts/agentTaskNotification";
 import { boundToolOutput } from "../utils/boundToolOutput";
 import {
   areEquivalentAssistantMessageTexts,
@@ -114,7 +115,10 @@ function isToolItem(item: ConversationItem | undefined): item is ToolConversatio
 
 function shouldStopAssistantEquivalenceSearch(item: ConversationItem) {
   if (item.kind === "message") {
-    return item.role === "user";
+    return (
+      item.role === "user" &&
+      !isCliInjectedAgentTaskNotificationText(item.text)
+    );
   }
   return (
     item.kind === "reasoning" ||

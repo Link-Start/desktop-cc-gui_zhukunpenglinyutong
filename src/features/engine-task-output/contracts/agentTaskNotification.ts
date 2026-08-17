@@ -8,9 +8,14 @@ export type AgentTaskNotification = {
 };
 
 const TASK_NOTIFICATION_OPEN_TAG = /<\s*task-notification\s*>/i;
+const TASK_NOTIFICATION_CLOSE_TAG = /<\s*\/\s*task-notification\s*>/i;
 const RESULT_OPEN_TAG_REGEX = /<\s*result\s*>/i;
 const RESULT_CLOSE_SUFFIX_REGEX =
   /\s*<\s*\/\s*result\s*>\s*(?:<\s*\/\s*task-notification\s*>\s*)?$/i;
+const BACKGROUND_COMMAND_TITLE_REGEX =
+  /Background\s+command\s+["“]([^"”]+)["”]/i;
+const BACKGROUND_COMMAND_TITLE_ZH_REGEX =
+  /后台(?:命令|任务)\s*["“]([^"”]+)["”]/;
 
 function decodeNotificationEntities(text: string): string {
   let decoded = text;
@@ -73,6 +78,76 @@ export function isSubagentStyleAgentTaskNotification(
   return false;
 }
 
+/**
+ * Claude CLI 后台 Bash / shell wakeup 形态。与 SubAgent 完成通知互斥：
+ * SubAgent 继续退役；此类默认走幕布折叠条，不得进用户蓝气泡。
+ */
+export function isBackgroundStyleAgentTaskNotification(
+  notification: AgentTaskNotification | null | undefined,
+): boolean {
+  if (!notification || isSubagentStyleAgentTaskNotification(notification)) {
+    return false;
+  }
+  const summary = (notification.summary ?? "").trim();
+  if (!summary) {
+    return false;
+  }
+  if (BACKGROUND_COMMAND_TITLE_REGEX.test(summary)) {
+    return true;
+  }
+  if (BACKGROUND_COMMAND_TITLE_ZH_REGEX.test(summary)) {
+    return true;
+  }
+  if (/Background\s+shell\b/i.test(summary)) {
+    return true;
+  }
+  if (
+    /^Background\b/i.test(summary) &&
+    /(completed|finished|done|success|succeed|failed|error)/i.test(summary)
+  ) {
+    return true;
+  }
+  if (/后台(命令|任务|进程)/.test(summary)) {
+    return true;
+  }
+  return false;
+}
+
+export function extractBackgroundCommandTitle(
+  summary: string | null | undefined,
+): string | null {
+  const normalized = (summary ?? "").trim();
+  if (!normalized) {
+    return null;
+  }
+  const quoted =
+    BACKGROUND_COMMAND_TITLE_REGEX.exec(normalized)?.[1]?.trim()
+    ?? BACKGROUND_COMMAND_TITLE_ZH_REGEX.exec(normalized)?.[1]?.trim();
+  return quoted && quoted.length > 0 ? quoted : null;
+}
+
+function extractEnvelopeHeader(block: string) {
+  return {
+    taskId: extractTagValue(block, "task-id"),
+    toolUseId: extractTagValue(block, "tool-use-id"),
+    outputFile: extractTagValue(block, "output-file"),
+    status: extractTagValue(block, "status"),
+    summary: extractTagValue(block, "summary"),
+  };
+}
+
+function hasIdentifiableNotificationFields(
+  header: ReturnType<typeof extractEnvelopeHeader>,
+): boolean {
+  return Boolean(
+    header.taskId
+    || header.toolUseId
+    || header.outputFile
+    || header.status
+    || header.summary,
+  );
+}
+
 export function parseAgentTaskNotification(
   text: string,
 ): AgentTaskNotification | null {
@@ -93,24 +168,32 @@ export function parseAgentTaskNotification(
   }
   const normalizedText = trimmedText.slice(taskNotificationMatch.index);
   const resultOpenMatch = RESULT_OPEN_TAG_REGEX.exec(normalizedText);
-  if (!resultOpenMatch || typeof resultOpenMatch.index !== "number") {
+  if (resultOpenMatch && typeof resultOpenMatch.index === "number") {
+    const headerBlock = normalizedText.slice(0, resultOpenMatch.index);
+    const resultText = normalizeResultText(
+      normalizedText.slice(resultOpenMatch.index + resultOpenMatch[0].length),
+    );
+    const header = extractEnvelopeHeader(headerBlock);
+    return {
+      ...header,
+      resultText,
+    };
+  }
+  const closeMatch = TASK_NOTIFICATION_CLOSE_TAG.exec(normalizedText);
+  const headerBlock = closeMatch && typeof closeMatch.index === "number"
+    ? normalizedText.slice(0, closeMatch.index)
+    : normalizedText;
+  const header = extractEnvelopeHeader(headerBlock);
+  if (!hasIdentifiableNotificationFields(header)) {
     return null;
   }
-  const headerBlock = normalizedText.slice(0, resultOpenMatch.index);
-  const resultText = normalizeResultText(
-    normalizedText.slice(resultOpenMatch.index + resultOpenMatch[0].length),
-  );
-  const taskId = extractTagValue(headerBlock, "task-id");
-  const toolUseId = extractTagValue(headerBlock, "tool-use-id");
-  const outputFile = extractTagValue(headerBlock, "output-file");
-  const status = extractTagValue(headerBlock, "status");
-  const summary = extractTagValue(headerBlock, "summary");
   return {
-    taskId,
-    toolUseId,
-    outputFile,
-    status,
-    summary,
-    resultText,
+    ...header,
+    resultText: "",
   };
+}
+
+/** CLI 注入的 task-notification（后台 wakeup / SubAgent 退役）不是真实用户提问。 */
+export function isCliInjectedAgentTaskNotificationText(text: string): boolean {
+  return parseAgentTaskNotification(text) != null;
 }

@@ -403,6 +403,18 @@ const messages = {
     builtInAgentUnavailableTitle: "Built-in agent unavailable",
     builtInAgentUnavailableMessage:
       "This agent is disabled or unavailable, so its prompt will not be used for this message.",
+    backgroundTaskFoldCompleted: "Background task completed",
+    backgroundTaskFoldFailed: "Background task failed",
+    backgroundTaskFoldRunning: "Background task running",
+    backgroundTaskFoldNeutral: "Background task",
+    backgroundTaskFoldExpand: "Expand background task receipt",
+    backgroundTaskFoldCollapse: "Collapse background task receipt",
+    backgroundTaskFoldFieldTaskId: "task-id",
+    backgroundTaskFoldFieldToolUseId: "tool-use-id",
+    backgroundTaskFoldFieldOutputFile: "output-file",
+    backgroundTaskFoldFieldStatus: "status",
+    backgroundTaskFoldFieldSummary: "summary",
+    backgroundTaskFoldFieldResult: "result",
   },
 };
 
