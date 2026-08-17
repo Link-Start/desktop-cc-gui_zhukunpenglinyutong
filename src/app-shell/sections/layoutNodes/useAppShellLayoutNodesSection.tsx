@@ -55,6 +55,11 @@ import {
 import { shouldEnableMainFileExternalChangeMonitoring } from "../fileExternalMonitoring";
 import { shouldPreserveEditorOnThreadSelect } from "../threadEditorPreservation";
 import { commitThreadSelection } from "../threadSelect/commitThreadSelection";
+import {
+  applyWorkspaceNavigationThreadPlan,
+  planWorkspaceNavigationThread,
+} from "../../../features/workspaces/utils/planWorkspaceNavigationThread";
+import { peekWorkspaceLastThreadId } from "../../../features/threads/utils/workspaceLastThreadMap";
 import { EMPTY_STRING_ARRAY, formatWorkspaceAliasError } from "./helpers";
 import {
   mergeAppShellDomainBag,
@@ -546,7 +551,6 @@ export function useAppShellLayoutNodesSection(
     setActiveEngine,
     setActiveTab,
     setActiveThreadId,
-    setActiveWorkspaceId,
     setAppMode,
     setCenterMode,
     setComposerInsert,
@@ -1218,12 +1222,14 @@ export function useAppShellLayoutNodesSection(
     setHomeOpen(false);
     setWorkspaceHomeWorkspaceId(null);
     setCenterMode("chat");
-    setActiveWorkspaceId(workspaceId);
-    if (isCompact) {
-      setActiveTab("codex");
-    }
-    ensureWorkspaceThreadListLoaded(workspaceId);
-    setActiveThreadId(null, workspaceId);
+    selectWorkspace(workspaceId);
+    applyWorkspaceNavigationThreadPlan(
+      planWorkspaceNavigationThread({
+        lastThreadId: peekWorkspaceLastThreadId(workspaceId),
+      }),
+      workspaceId,
+      setActiveThreadId,
+    );
   });
   const handleConnectWorkspace = useEventCallback(
     async (workspace: WorkspaceInfo) => {

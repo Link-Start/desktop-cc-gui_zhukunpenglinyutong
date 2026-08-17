@@ -56,7 +56,10 @@ import { useThreadUserInput } from "./useThreadUserInput";
 import { useThreadCompletionEmail } from "./useThreadCompletionEmail";
 import { useMailDrivenSessionContinuation } from "./useMailDrivenSessionContinuation";
 import { useThreadRealtimeHistoryReconcile } from "./useThreadRealtimeHistoryReconcile";
-import { resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState } from "../utils/claudeThreadContinuity";
+import {
+  resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState,
+  shouldShowHistoryLoadingForSelectionThread,
+} from "../utils/claudeThreadContinuity";
 import {
   THREAD_SWITCH_LOADED_REFRESH_MS,
   decideThreadSelectResume,
@@ -82,6 +85,7 @@ import {
   makeCustomNameKey,
   saveCustomName,
 } from "../utils/threadStorage";
+import { publishWorkspaceLastThreadMap } from "../utils/workspaceLastThreadMap";
 import {
   isClientStoreReady,
   subscribeClientStoreHydrated,
@@ -616,7 +620,10 @@ export function useThreads({
   // chat-stream-render-isolation-2026-06 task 4: collapse the five
   // per-slice ref-sync effects into a single effect so dispatching
   // state only schedules one React commit's worth of ref work.
+  // Publish last-thread peek after commit. Render-phase publish can leak a
+  // discarded concurrent render into the module snapshot.
   useEffect(() => {
+    publishWorkspaceLastThreadMap(state.activeThreadIdByWorkspace);
     activeThreadIdByWorkspaceRef.current = state.activeThreadIdByWorkspace;
     threadStatusByIdRef.current = state.threadStatusById;
     itemsByThreadRef.current = state.itemsByThread;
@@ -1021,6 +1028,7 @@ export function useThreads({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
     historyLoadingProgressByThreadId,
   } = useThreadActions({
@@ -2218,9 +2226,28 @@ export function useThreads({
         lastEmptySurfaceResumeAtMs:
           emptySurfaceResumeAtByThreadRef.current[canonicalThreadId] ?? 0,
       });
-      // Select must not raise a history-loading curtain. Unloaded history
-      // resumes after the 24ms delay; blank Claude uses in-place recovery.
-      clearHistoryLoadingForThread(canonicalThreadId);
+      // Unloaded Native / Shared history still needs a select-frame curtain so
+      // the canvas does not flash emptyThread while resume is in flight.
+      // Known never-started / failed / already-loaded surfaces stay curtain-free.
+      const shouldShowHistoryLoading =
+        resumeDecision.action === "resume" &&
+        !isLoaded &&
+        shouldShowHistoryLoadingForSelectionThread(canonicalThreadId);
+      if (shouldShowHistoryLoading) {
+        setThreadHistoryLoading(canonicalThreadId, true);
+        historyLoadingThreadByWorkspaceRef.current[targetId] =
+          canonicalThreadId;
+        if (canonicalThreadId.startsWith("shared:")) {
+          setThreadHistoryLoadingProgress(canonicalThreadId, {
+            phase: "prepare",
+            percent: 8,
+            titleKey: "restoringSharedHistory",
+            detailKey: "restoringSharedHistoryPrepare",
+          });
+        }
+      } else {
+        clearHistoryLoadingForThread(canonicalThreadId);
+      }
       if (resumeDecision.action === "skip") {
         return;
       }
@@ -2278,6 +2305,7 @@ export function useThreads({
         );
         if (!loadedAtCallback) {
           loadedThreadLastRefreshAtRef.current[canonicalThreadId] = Date.now();
+          let resumeLoadingThreadId = canonicalThreadId;
           void resumeThreadForWorkspace(
             targetId,
             canonicalThreadId,
@@ -2286,9 +2314,39 @@ export function useThreads({
             {
               preferLocalCodexHistory: true,
             },
-          ).then((recoveredThreadId) => {
-            applyRecoveredCanonical(recoveredThreadId);
-          });
+          )
+            .then((recoveredThreadId) => {
+              if (!isCurrentHistorySelection()) {
+                return;
+              }
+              const recoveredCanonicalThreadId = recoveredThreadId
+                ? resolveCanonicalThreadId(recoveredThreadId)
+                : null;
+              if (
+                shouldShowHistoryLoading &&
+                recoveredCanonicalThreadId &&
+                recoveredCanonicalThreadId !== canonicalThreadId
+              ) {
+                clearHistoryLoadingForThread(canonicalThreadId);
+                setThreadHistoryLoading(recoveredCanonicalThreadId, true);
+                historyLoadingThreadByWorkspaceRef.current[targetId] =
+                  recoveredCanonicalThreadId;
+                resumeLoadingThreadId = recoveredCanonicalThreadId;
+              }
+              applyRecoveredCanonical(recoveredThreadId);
+            })
+            .finally(() => {
+              if (!isCurrentHistorySelection()) {
+                return;
+              }
+              const currentLoadingThreadId =
+                historyLoadingThreadByWorkspaceRef.current[targetId] ?? null;
+              if (currentLoadingThreadId === resumeLoadingThreadId) {
+                clearHistoryLoadingForThread(resumeLoadingThreadId);
+                return;
+              }
+              setThreadHistoryLoading(canonicalThreadId, false);
+            });
           return;
         }
         clearHistoryLoadingForThread(canonicalThreadId);
@@ -2327,6 +2385,7 @@ export function useThreads({
       resolveCanonicalThreadId,
       resumeThreadForWorkspace,
       setThreadHistoryLoading,
+      setThreadHistoryLoadingProgress,
     ],
   );
 

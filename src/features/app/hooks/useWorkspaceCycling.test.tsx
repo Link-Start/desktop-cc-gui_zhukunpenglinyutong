@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MutableRefObject } from "react";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import { useWorkspaceCycling } from "./useWorkspaceCycling";
+import {
+  publishWorkspaceLastThreadMap,
+  resetWorkspaceLastThreadMapForTests,
+} from "../../threads/utils/workspaceLastThreadMap";
 
 function makeWorkspace(id: string): WorkspaceInfo {
   return {
@@ -57,6 +61,10 @@ function makeProps(
 }
 
 describe("useWorkspaceCycling", () => {
+  afterEach(() => {
+    resetWorkspaceLastThreadMapForTests();
+  });
+
   it("does not exit the editor when cycling sessions in the same desktop workspace", () => {
     const props = makeProps({
       activeEditorFilePath: "src/App.tsx",
@@ -87,5 +95,80 @@ describe("useWorkspaceCycling", () => {
     expect(props.exitDiffView).toHaveBeenCalledTimes(1);
     expect(props.setSelectedDiffPath).not.toHaveBeenCalled();
     expect(props.setActiveThreadId).toHaveBeenCalledWith("thread-2", "ws-1");
+  });
+
+  it("restores the last thread when cycling to another workspace", () => {
+    const workspaceA = makeWorkspace("ws-1");
+    const workspaceB = makeWorkspace("ws-2");
+    publishWorkspaceLastThreadMap({
+      "ws-1": "thread-1",
+      "ws-2": "thread-last",
+    });
+    const props = makeProps({
+      workspaces: [workspaceA, workspaceB],
+      groupedWorkspaces: [{ workspaces: [workspaceA, workspaceB] }],
+      threadsByWorkspace: {
+        "ws-1": [makeThread("thread-1")],
+        "ws-2": [makeThread("thread-first"), makeThread("thread-last")],
+      },
+    });
+    const { result } = renderHook(() => useWorkspaceCycling(props));
+
+    act(() => {
+      result.current.handleCycleWorkspace("next");
+    });
+
+    expect(props.selectWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(props.setActiveThreadId).toHaveBeenCalledWith("thread-last", "ws-2");
+    expect(props.setActiveThreadId).not.toHaveBeenCalledWith(null, "ws-2");
+  });
+
+  it("falls back to the first listed thread when cycling to a never-visited workspace", () => {
+    const workspaceA = makeWorkspace("ws-1");
+    const workspaceB = makeWorkspace("ws-2");
+    publishWorkspaceLastThreadMap({
+      "ws-1": "thread-1",
+    });
+    const props = makeProps({
+      workspaces: [workspaceA, workspaceB],
+      groupedWorkspaces: [{ workspaces: [workspaceA, workspaceB] }],
+      threadsByWorkspace: {
+        "ws-1": [makeThread("thread-1")],
+        "ws-2": [makeThread("thread-first"), makeThread("thread-second")],
+      },
+    });
+    const { result } = renderHook(() => useWorkspaceCycling(props));
+
+    act(() => {
+      result.current.handleCycleWorkspace("next");
+    });
+
+    expect(props.selectWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(props.setActiveThreadId).toHaveBeenCalledWith("thread-first", "ws-2");
+    expect(props.setActiveThreadId).not.toHaveBeenCalledWith(null, "ws-2");
+  });
+
+  it("does not wipe a missing last thread when cycling to an empty workspace", () => {
+    const workspaceA = makeWorkspace("ws-1");
+    const workspaceB = makeWorkspace("ws-2");
+    publishWorkspaceLastThreadMap({
+      "ws-1": "thread-1",
+    });
+    const props = makeProps({
+      workspaces: [workspaceA, workspaceB],
+      groupedWorkspaces: [{ workspaces: [workspaceA, workspaceB] }],
+      threadsByWorkspace: {
+        "ws-1": [makeThread("thread-1")],
+        "ws-2": [],
+      },
+    });
+    const { result } = renderHook(() => useWorkspaceCycling(props));
+
+    act(() => {
+      result.current.handleCycleWorkspace("next");
+    });
+
+    expect(props.selectWorkspace).toHaveBeenCalledWith("ws-2");
+    expect(props.setActiveThreadId).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
@@ -23,7 +26,18 @@ afterEach(() => {
 });
 
 describe("WorkspaceCard", () => {
-  it("selects the workspace from the row without toggling collapse", () => {
+  it("gates workspace home behind isActive at the source", () => {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "WorkspaceCard.tsx"),
+      "utf8",
+    );
+    expect(source).toContain("if (onOpenWorkspaceHome && isActive)");
+    expect(source).not.toMatch(
+      /if \(onOpenWorkspaceHome\) \{\s*onOpenWorkspaceHome/,
+    );
+  });
+
+  it("selects an inactive workspace from the row without opening home", () => {
     const onSelectWorkspace = vi.fn();
     const onOpenWorkspaceHome = vi.fn();
     const onToggleWorkspaceCollapse = vi.fn();
@@ -34,6 +48,56 @@ describe("WorkspaceCard", () => {
         isActive={false}
         hasPrimaryActiveThread={false}
         isCollapsed
+        onShowWorkspaceMenu={vi.fn()}
+        onOpenWorkspaceHome={onOpenWorkspaceHome}
+        onSelectWorkspace={onSelectWorkspace}
+        onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Content Analysis"));
+
+    expect(onSelectWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(onOpenWorkspaceHome).not.toHaveBeenCalled();
+    expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();
+  });
+
+  it("selects an inactive workspace from keyboard activation without opening home", () => {
+    const onSelectWorkspace = vi.fn();
+    const onOpenWorkspaceHome = vi.fn();
+
+    render(
+      <WorkspaceCard
+        workspace={workspace}
+        isActive={false}
+        hasPrimaryActiveThread={false}
+        isCollapsed
+        onShowWorkspaceMenu={vi.fn()}
+        onOpenWorkspaceHome={onOpenWorkspaceHome}
+        onSelectWorkspace={onSelectWorkspace}
+        onToggleWorkspaceCollapse={vi.fn()}
+      />,
+    );
+
+    const workspaceRow = screen.getByText("Content Analysis").closest('[role="button"]');
+    expect(workspaceRow).toBeTruthy();
+    fireEvent.keyDown(workspaceRow as HTMLElement, { key: "Enter" });
+
+    expect(onSelectWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(onOpenWorkspaceHome).not.toHaveBeenCalled();
+  });
+
+  it("opens workspace home only from the already-active row", () => {
+    const onSelectWorkspace = vi.fn();
+    const onOpenWorkspaceHome = vi.fn();
+    const onToggleWorkspaceCollapse = vi.fn();
+
+    render(
+      <WorkspaceCard
+        workspace={workspace}
+        isActive
+        hasPrimaryActiveThread
+        isCollapsed={false}
         onShowWorkspaceMenu={vi.fn()}
         onOpenWorkspaceHome={onOpenWorkspaceHome}
         onSelectWorkspace={onSelectWorkspace}
