@@ -52,6 +52,8 @@ struct LiveHost {
 
 struct SupervisorState {
     live: Option<LiveHost>,
+    pending_child: Option<Child>,
+    spawn_generation: u64,
 }
 
 static SUPERVISOR: OnceLock<Mutex<SupervisorState>> = OnceLock::new();
@@ -75,7 +77,13 @@ pub fn remembered_endpoint() -> Option<(String, u16)> {
 }
 
 fn state() -> &'static Mutex<SupervisorState> {
-    SUPERVISOR.get_or_init(|| Mutex::new(SupervisorState { live: None }))
+    SUPERVISOR.get_or_init(|| {
+        Mutex::new(SupervisorState {
+            live: None,
+            pending_child: None,
+            spawn_generation: 0,
+        })
+    })
 }
 
 pub async fn current_snapshot() -> Option<DshHostSnapshot> {
@@ -85,48 +93,70 @@ pub async fn current_snapshot() -> Option<DshHostSnapshot> {
 
 pub async fn ensure_host(settings: &DshRuntimeSettings) -> Result<DshHostSnapshot, String> {
     remember_endpoint(&settings.host, settings.port);
-    let mut guard = state().lock().await;
     let wanted_origin = origin_from_host_port(&settings.host, settings.port);
-    if let Some(live) = guard.live.as_ref() {
-        let live_origin = live.snapshot.origin.clone();
-        let live_snapshot = live.snapshot.clone();
-        if live_origin == wanted_origin && probe_describe(&live_origin).await.is_ok() {
-            return Ok(live_snapshot);
+    let spawn_generation = {
+        let mut guard = state().lock().await;
+        if let Some(live) = guard.live.as_ref() {
+            let live_origin = live.snapshot.origin.clone();
+            let live_snapshot = live.snapshot.clone();
+            if live_origin == wanted_origin && probe_describe(&live_origin).await.is_ok() {
+                return Ok(live_snapshot);
+            }
+            // Host/port changed or the live process died. Kill only a spawned
+            // child that no longer matches the requested origin.
+            drop_unlocked(&mut guard, live_origin != wanted_origin).await;
         }
-        // Host/port changed or the live process died. Kill only a spawned
-        // child that no longer matches the requested origin.
-        drop_unlocked(&mut guard, live_origin != wanted_origin).await;
-    }
+
+        let origin = wanted_origin.clone();
+        if let Ok(describe) = probe_describe(&origin).await {
+            let snapshot = DshHostSnapshot {
+                origin,
+                host: settings.host.clone(),
+                port: settings.port,
+                ownership: DshHostOwnership::Adopted,
+                describe,
+            };
+            guard.live = Some(LiveHost {
+                snapshot: snapshot.clone(),
+                child: None,
+            });
+            log::info!(
+                "[dsh] adopted host {} (do not kill on mossx exit)",
+                snapshot.origin
+            );
+            return Ok(snapshot);
+        }
+
+        if !settings.auto_start {
+            return Err(format!(
+                "DSH host is not running at {origin}. Start `dsh web` or enable auto-start."
+            ));
+        }
+
+        let bin = resolve_dsh_bin(settings.bin_path.as_deref())?;
+        let child = spawn_dsh_web(&bin, &settings.host, settings.port)?;
+        if let Some(previous) = guard.pending_child.take() {
+            let _ = kill_child(previous).await;
+        }
+        guard.spawn_generation = guard.spawn_generation.wrapping_add(1);
+        let generation = guard.spawn_generation;
+        guard.pending_child = Some(child);
+        generation
+    };
 
     let origin = wanted_origin;
-    if let Ok(describe) = probe_describe(&origin).await {
-        let snapshot = DshHostSnapshot {
-            origin,
-            host: settings.host.clone(),
-            port: settings.port,
-            ownership: DshHostOwnership::Adopted,
-            describe,
-        };
-        guard.live = Some(LiveHost {
-            snapshot: snapshot.clone(),
-            child: None,
-        });
-        log::info!(
-            "[dsh] adopted host {} (do not kill on mossx exit)",
-            snapshot.origin
-        );
-        return Ok(snapshot);
+    let wait_result = wait_until_ready(&origin).await;
+    let mut guard = state().lock().await;
+    let cancelled = guard.spawn_generation != spawn_generation;
+    let pending = guard.pending_child.take();
+    if cancelled {
+        if let Some(child) = pending {
+            let _ = kill_child(child).await;
+        }
+        return Err("DSH host start was cancelled.".to_string());
     }
 
-    if !settings.auto_start {
-        return Err(format!(
-            "DSH host is not running at {origin}. Start `dsh web` or enable auto-start."
-        ));
-    }
-
-    let bin = resolve_dsh_bin(settings.bin_path.as_deref())?;
-    let child = spawn_dsh_web(&bin, &settings.host, settings.port)?;
-    match wait_until_ready(&origin).await {
+    match wait_result {
         Ok(describe) => {
             let snapshot = DshHostSnapshot {
                 origin,
@@ -137,7 +167,7 @@ pub async fn ensure_host(settings: &DshRuntimeSettings) -> Result<DshHostSnapsho
             };
             guard.live = Some(LiveHost {
                 snapshot: snapshot.clone(),
-                child: Some(child),
+                child: pending,
             });
             log::info!("[dsh] spawned host {}", snapshot.origin);
             Ok(snapshot)
@@ -145,7 +175,9 @@ pub async fn ensure_host(settings: &DshRuntimeSettings) -> Result<DshHostSnapsho
         Err(spawn_err) => {
             // Port may have been claimed by the user's own host while we spawned.
             if let Ok(describe) = probe_describe(&origin).await {
-                let _ = kill_child(child).await;
+                if let Some(child) = pending {
+                    let _ = kill_child(child).await;
+                }
                 let snapshot = DshHostSnapshot {
                     origin,
                     host: settings.host.clone(),
@@ -160,7 +192,9 @@ pub async fn ensure_host(settings: &DshRuntimeSettings) -> Result<DshHostSnapsho
                 log::info!("[dsh] adopt-after-spawn-race {}", snapshot.origin);
                 return Ok(snapshot);
             }
-            let _ = kill_child(child).await;
+            if let Some(child) = pending {
+                let _ = kill_child(child).await;
+            }
             Err(classify_spawn_error(&origin, &spawn_err))
         }
     }
@@ -188,7 +222,123 @@ pub async fn connect_existing(settings: &DshRuntimeSettings) -> Result<DshHostSn
 /// Drop the supervisor handle. Adopted hosts are never killed.
 pub async fn drop_host() {
     let mut guard = state().lock().await;
+    abort_pending_unlocked(&mut guard).await;
     drop_unlocked(&mut guard, true).await;
+}
+
+/// Cancel an in-flight spawn. Adopted hosts stay running.
+pub async fn cancel_start() -> Result<(), String> {
+    stop_host(&DshRuntimeSettings::default()).await
+}
+
+/// Stop a settings-page start or a live local host. Remote origins are never killed.
+pub async fn stop_host(settings: &DshRuntimeSettings) -> Result<(), String> {
+    let origin = origin_from_host_port(&settings.host, settings.port);
+    let live = {
+        let mut guard = state().lock().await;
+        abort_pending_unlocked(&mut guard).await;
+        guard.live.take()
+    };
+    if let Some(mut live) = live {
+        if let Some(child) = live.child.take() {
+            let _ = kill_child(child).await;
+            log::info!("[dsh] stopped spawned host {}", live.snapshot.origin);
+        }
+    }
+    if !is_local_host(&settings.host) {
+        return Err("只能停掉本机 DSH host。远程地址不会被 mossx 关闭。".to_string());
+    }
+    if probe_describe(&origin).await.is_ok() {
+        terminate_local_listener(settings.port)?;
+        log::info!("[dsh] stopped local listener at {origin}");
+    }
+    Ok(())
+}
+
+fn is_local_host(host: &str) -> bool {
+    matches!(
+        host.trim().to_ascii_lowercase().as_str(),
+        "127.0.0.1" | "localhost" | "::1" | "0.0.0.0" | "[::1]" | "[::]"
+    )
+}
+
+#[cfg(unix)]
+fn terminate_local_listener(port: u16) -> Result<(), String> {
+    let output = crate::utils::std_command("lsof")
+        .arg("-n")
+        .arg("-P")
+        .arg("-t")
+        .arg(format!("-iTCP:{port}"))
+        .arg("-sTCP:LISTEN")
+        .output()
+        .map_err(|error| format!("failed to inspect port {port}: {error}"))?;
+    let pids = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.trim().parse::<u32>().ok())
+        .collect::<Vec<_>>();
+    if pids.is_empty() {
+        return Ok(());
+    }
+    for pid in pids {
+        let status = crate::utils::std_command("kill")
+            .arg("-TERM")
+            .arg(pid.to_string())
+            .status()
+            .map_err(|error| format!("failed to stop pid {pid}: {error}"))?;
+        if !status.success() {
+            let _ = crate::utils::std_command("kill")
+                .arg("-KILL")
+                .arg(pid.to_string())
+                .status();
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn terminate_local_listener(port: u16) -> Result<(), String> {
+    let output = crate::utils::std_command("netstat")
+        .arg("-ano")
+        .arg("-p")
+        .arg("tcp")
+        .output()
+        .map_err(|error| format!("failed to inspect port {port}: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let needle = format!(":{port}");
+    let mut pids = Vec::new();
+    for line in stdout.lines() {
+        let cols: Vec<&str> = line.split_whitespace().collect();
+        if cols.len() < 5 || !cols[3].eq_ignore_ascii_case("LISTENING") {
+            continue;
+        }
+        if cols[1].ends_with(&needle) {
+            if let Ok(pid) = cols[4].parse::<u32>() {
+                pids.push(pid);
+            }
+        }
+    }
+    for pid in pids {
+        let _ = crate::utils::std_command("taskkill")
+            .arg("/PID")
+            .arg(pid.to_string())
+            .arg("/T")
+            .arg("/F")
+            .status();
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_local_listener(_port: u16) -> Result<(), String> {
+    Err("stopping a local DSH host is not supported on this platform".to_string())
+}
+
+async fn abort_pending_unlocked(guard: &mut SupervisorState) {
+    guard.spawn_generation = guard.spawn_generation.wrapping_add(1);
+    if let Some(child) = guard.pending_child.take() {
+        let _ = kill_child(child).await;
+        log::info!("[dsh] cancelled pending host spawn");
+    }
 }
 
 fn should_kill_host(ownership: DshHostOwnership, kill_spawned: bool) -> bool {
@@ -314,5 +464,12 @@ mod tests {
         assert!(!should_kill_host(DshHostOwnership::Adopted, true));
         assert!(!should_kill_host(DshHostOwnership::Spawned, false));
         assert!(!should_kill_host(DshHostOwnership::Adopted, false));
+    }
+
+    #[test]
+    fn stop_only_targets_loopback_hosts() {
+        assert!(is_local_host("127.0.0.1"));
+        assert!(is_local_host("localhost"));
+        assert!(!is_local_host("10.0.0.8"));
     }
 }

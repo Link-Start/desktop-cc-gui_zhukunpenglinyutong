@@ -127,4 +127,30 @@ describe("CliLifecycleHeaderActions", () => {
 
     expect(screen.getByText("settings.cliVersionNotInstalled")).toBeTruthy();
   });
+
+  it("does not paint another engine's version on the current header", () => {
+    useCliVersionStatusMock.mockReturnValue({
+      status: {
+        engine: "claude",
+        installed: true,
+        nodeOk: true,
+        details: null,
+        localVersion: "2.1.226 (Claude Code)",
+        latestVersion: "2.1.226",
+        updateAvailable: false,
+      },
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+
+    render(
+      <CliLifecycleProvider engine="dsh" active>
+        <CliLifecycleHeaderActions />
+      </CliLifecycleProvider>,
+    );
+
+    expect(screen.queryByText("2.1.226 (Claude Code)")).toBeNull();
+    expect(screen.getByText("settings.cliVersionChecking")).toBeTruthy();
+  });
 });

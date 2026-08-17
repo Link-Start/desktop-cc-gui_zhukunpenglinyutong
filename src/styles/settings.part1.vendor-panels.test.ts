@@ -230,4 +230,28 @@ describe("vendor settings panel compact layout", () => {
     expect(enableBtnRule).toContain("background: var(--vendor-button-primary);");
     expect(revokeBtnRule).toContain("border: 1px solid #f39c12;");
   });
+
+  it("keeps the DSH connection panel on vendor tokens instead of a new theme", () => {
+    const panelRule = getCssRuleBlock(vendorPanelsCss, ".dsh-connection-panel");
+    const titleRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-title");
+    const factsRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-facts");
+    const toggleRule = getCssRuleBlock(vendorPanelsCss, ".dsh-connection-toggle");
+
+    expect(panelRule).toContain("flex-direction: column;");
+    expect(titleRule).toContain("color: var(--text-primary);");
+    expect(factsRule).toContain("grid-template-columns: repeat(3, minmax(0, 1fr));");
+    expect(toggleRule).toContain("color: var(--text-secondary);");
+    expect(vendorPanelsCss).toContain(".dsh-status-dot-ok");
+    expect(vendorPanelsCss).toContain(".dsh-address-fields");
+    const mainRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-main");
+    const actionsRule = getCssRuleBlock(vendorPanelsCss, ".dsh-status-actions");
+    expect(mainRule).toContain("align-items: center;");
+    expect(mainRule).toContain("justify-content: space-between;");
+    expect(actionsRule).toContain("flex-wrap: nowrap;");
+    expect(actionsRule).toContain("justify-content: flex-end;");
+    expect(vendorPanelsCss).toContain(".dsh-status-card > * + *");
+    expect(getCssRuleBlock(vendorPanelsCss, ".dsh-status-card > * + *")).toContain(
+      "border-top: 0;",
+    );
+  });
 });

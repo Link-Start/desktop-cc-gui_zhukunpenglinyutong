@@ -22,11 +22,29 @@ export type CodexDoctorNetworkDiagnosis = {
   proxy?: CodexDoctorProxyDiagnosis | null;
 };
 
+export type DshHostDescribeSnapshot = {
+  version?: string | null;
+  cwd?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  attachedSessions?: number | null;
+  canOpenPath?: boolean | null;
+};
+
+export type DshHostDescribeResult = {
+  ok: boolean;
+  origin?: string | null;
+  describe?: DshHostDescribeSnapshot | null;
+  error?: string | null;
+  details?: string | null;
+};
+
 export type CodexDoctorResult = {
   ok: boolean;
   codexBin: string | null;
   version: string | null;
   appServerOk: boolean;
+  hostDescribe?: DshHostDescribeResult | null;
   appServerProbeStatus?: string | null;
   details: string | null;
   path: string | null;

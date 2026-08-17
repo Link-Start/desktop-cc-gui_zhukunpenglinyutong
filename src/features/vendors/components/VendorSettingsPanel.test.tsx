@@ -12,10 +12,12 @@ import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureDshHost,
   getCodexUnifiedExecExternalStatus,
   readGlobalCodexAuthJson,
   readGlobalCodexConfigToml,
   restoreCodexUnifiedExecOfficialDefault,
+  runDshDoctor,
   setCodexUnifiedExecOfficialOverride,
 } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
@@ -216,6 +218,8 @@ vi.mock("../../../services/tauri", async () => {
     getCodexUnifiedExecExternalStatus: vi.fn(),
     restoreCodexUnifiedExecOfficialDefault: vi.fn(),
     setCodexUnifiedExecOfficialOverride: vi.fn(),
+    runDshDoctor: vi.fn(),
+    ensureDshHost: vi.fn(),
   };
 });
 
@@ -240,6 +244,8 @@ const setCodexUnifiedExecOfficialOverrideMock = vi.mocked(
 );
 const pushErrorToastMock = vi.mocked(pushErrorToast);
 const openUrlMock = vi.mocked(openUrl);
+const runDshDoctorMock = vi.mocked(runDshDoctor);
+const ensureDshHostMock = vi.mocked(ensureDshHost);
 
 function renderPanel(
   options: {
@@ -322,6 +328,33 @@ beforeEach(() => {
     hasExplicitUnifiedExec: true,
     explicitUnifiedExecValue: true,
     officialDefaultEnabled: true,
+  });
+  runDshDoctorMock.mockResolvedValue({
+    ok: true,
+    codexBin: "dsh",
+    version: "0.1.0-rc.6",
+    appServerOk: true,
+    details: null,
+    path: null,
+    nodeOk: true,
+    nodeVersion: "v22.22.3",
+    nodeDetails: null,
+    hostDescribe: {
+      ok: true,
+      origin: "http://127.0.0.1:3080",
+      describe: {
+        provider: "grok",
+        model: "grok-4.6",
+        attachedSessions: 31,
+      },
+    },
+  });
+  ensureDshHostMock.mockResolvedValue({
+    origin: "http://127.0.0.1:3080",
+    host: "127.0.0.1",
+    port: 3080,
+    ownership: "adopted",
+    describe: { provider: "grok", model: "grok-4.6", attachedSessions: 31 },
   });
 });
 
@@ -1276,7 +1309,7 @@ describe("VendorSettingsPanel", () => {
     expect(screen.getByRole("button", { name: "未启用" })).toBeTruthy();
   });
 
-  it("renders the DeepSeek Harness tab with host settings and open-UI action", async () => {
+  it("renders the DeepSeek Harness tab with host status and connection settings", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     renderPanel({
       appSettings: {
@@ -1293,13 +1326,20 @@ describe("VendorSettingsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /DeepSeek Harness/ }));
 
     expect(screen.getByRole("heading", { name: "DeepSeek Harness" })).toBeTruthy();
-    expect(screen.getByLabelText("settings.vendor.dshHost")).toBeTruthy();
-    expect(screen.getByLabelText("settings.vendor.dshPort")).toBeTruthy();
+    await waitFor(() => {
+      expect(runDshDoctorMock).toHaveBeenCalled();
+      expect(screen.getByText("settings.vendor.dshHostConnected")).toBeTruthy();
+    });
+    expect(screen.getByText("grok")).toBeTruthy();
+    expect(screen.getByText("grok-4.6")).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", { name: "settings.vendor.dshOpenUi" }),
     );
     expect(openUrlMock).toHaveBeenCalledWith("http://127.0.0.1:3080");
 
+    fireEvent.click(
+      screen.getByRole("button", { name: /settings.vendor.dshConnectionSettings/ }),
+    );
     const hostInput = screen.getByLabelText("settings.vendor.dshHost");
     fireEvent.change(hostInput, { target: { value: "10.0.0.8" } });
     expect(onUpdateAppSettings).not.toHaveBeenCalled();
@@ -1307,5 +1347,42 @@ describe("VendorSettingsPanel", () => {
     expect(onUpdateAppSettings).toHaveBeenCalledWith(
       expect.objectContaining({ dshHost: "10.0.0.8" }),
     );
+  });
+
+  it("starts a down host from the DeepSeek Harness tab without treating it as missing", async () => {
+    runDshDoctorMock.mockResolvedValue({
+      ok: true,
+      codexBin: "dsh",
+      version: "0.1.0-rc.6",
+      appServerOk: false,
+      details: null,
+      path: null,
+      nodeOk: true,
+      nodeVersion: "v22.22.3",
+      nodeDetails: null,
+      hostDescribe: {
+        ok: false,
+        origin: "http://127.0.0.1:3080",
+        error: "connection refused",
+        details: "DSH host is not running",
+      },
+    });
+    renderPanel({
+      appSettings: {
+        dshHost: "127.0.0.1",
+        dshPort: 3080,
+        dshAutoStart: false,
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /DeepSeek Harness/ }));
+    await waitFor(() => {
+      expect(screen.getByText("settings.vendor.dshHostDown")).toBeTruthy();
+    });
+    expect(screen.queryByText("settings.vendor.dshNotInstalled")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "settings.vendor.dshStartNow" }));
+    await waitFor(() => {
+      expect(ensureDshHostMock).toHaveBeenCalled();
+    });
   });
 });

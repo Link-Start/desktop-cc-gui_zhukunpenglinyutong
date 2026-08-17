@@ -24,6 +24,29 @@ use supervisor::{DshHostSnapshot, DshRuntimeSettings};
 const DETECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn runtime_settings_from_app(settings: &crate::types::AppSettings) -> DshRuntimeSettings {
+    runtime_settings_from_app_with_auto_start(settings, settings.dsh_auto_start.unwrap_or(true))
+}
+
+/// Explicit settings-page start must be allowed to spawn even when auto-start is off.
+pub fn runtime_settings_for_explicit_start(
+    settings: &crate::types::AppSettings,
+) -> DshRuntimeSettings {
+    runtime_settings_from_app_with_auto_start(settings, true)
+}
+
+/// Stop an in-flight start or a live local host. Remote origins stay running.
+pub async fn cancel_start() -> Result<(), String> {
+    supervisor::cancel_start().await
+}
+
+pub async fn stop_host(settings: &DshRuntimeSettings) -> Result<(), String> {
+    supervisor::stop_host(settings).await
+}
+
+fn runtime_settings_from_app_with_auto_start(
+    settings: &crate::types::AppSettings,
+    auto_start: bool,
+) -> DshRuntimeSettings {
     let runtime = DshRuntimeSettings {
         bin_path: settings.dsh_bin.clone(),
         host: settings
@@ -34,7 +57,7 @@ pub fn runtime_settings_from_app(settings: &crate::types::AppSettings) -> DshRun
             .unwrap_or("127.0.0.1")
             .to_string(),
         port: settings.dsh_port.unwrap_or(3080),
-        auto_start: settings.dsh_auto_start.unwrap_or(true),
+        auto_start,
     };
     supervisor::remember_endpoint(&runtime.host, runtime.port);
     runtime
@@ -699,5 +722,21 @@ mod tests {
         assert_eq!(answers.len(), 1);
         assert_eq!(answers[0]["id"], "q1");
         assert_eq!(answers[0]["selected"][0], "yes");
+    }
+
+    #[test]
+    fn explicit_start_overrides_disabled_auto_start() {
+        let settings = crate::types::AppSettings {
+            dsh_host: Some("10.0.0.8".to_string()),
+            dsh_port: Some(4090),
+            dsh_auto_start: Some(false),
+            ..crate::types::AppSettings::default()
+        };
+        let send_path = runtime_settings_from_app(&settings);
+        let explicit = runtime_settings_for_explicit_start(&settings);
+        assert!(!send_path.auto_start);
+        assert!(explicit.auto_start);
+        assert_eq!(explicit.host, "10.0.0.8");
+        assert_eq!(explicit.port, 4090);
     }
 }

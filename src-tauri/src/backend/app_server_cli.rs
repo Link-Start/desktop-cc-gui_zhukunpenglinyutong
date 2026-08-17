@@ -237,10 +237,20 @@ fn build_windows_extra_search_paths(
         paths.push(user_profile.join("AppData\\Roaming\\npm"));
         // Common user-local launcher path used by CLI installers on Windows.
         paths.push(user_profile.join(".local\\bin"));
+        paths.push(user_profile.join(".local\\share\\mise\\shims"));
+        // Hermes ships dsh as a Node-global bin, same layout as macOS ~/.hermes/node/bin.
+        paths.push(user_profile.join(".hermes\\node"));
+        paths.push(user_profile.join(".hermes\\node\\bin"));
         // Cargo bin
         paths.push(user_profile.join(".cargo\\bin"));
         // Bun
         paths.push(user_profile.join(".bun\\bin"));
+        // Scoop shims + the active Node prefix (npm -g often lands here).
+        paths.push(user_profile.join("scoop\\shims"));
+        paths.push(user_profile.join("scoop\\apps\\nodejs\\current"));
+        paths.push(user_profile.join("scoop\\apps\\nodejs-lts\\current"));
+        paths.push(user_profile.join("scoop\\persist\\nodejs"));
+        paths.push(user_profile.join("scoop\\persist\\nodejs\\bin"));
         // fnm (Fast Node Manager)
         let fnm_root = user_profile.join("AppData\\Local\\fnm\\node-versions");
         if let Ok(entries) = std::fs::read_dir(&fnm_root) {
@@ -271,6 +281,19 @@ fn build_windows_extra_search_paths(
         paths.push(local_app_data.join("Volta\\bin"));
         // pnpm
         paths.push(local_app_data.join("pnpm"));
+        // Hermes / fnm current-shell prefixes (GUI process PATH often misses these).
+        paths.push(local_app_data.join("hermes\\node"));
+        paths.push(local_app_data.join("hermes\\node\\bin"));
+        paths.push(local_app_data.join("mise\\shims"));
+        let fnm_multishells = local_app_data.join("fnm_multishells");
+        if let Ok(entries) = std::fs::read_dir(&fnm_multishells) {
+            for entry in entries.flatten() {
+                let candidate = entry.path();
+                if candidate.is_dir() {
+                    paths.push(candidate);
+                }
+            }
+        }
         // User-scoped Node.js installs (common on Windows when not installed to Program Files)
         let programs_root = local_app_data.join("Programs");
         if programs_root.is_dir() {
@@ -2670,13 +2693,25 @@ mod tests {
             Some(Path::new("C:\\Program Files (x86)")),
         );
 
-        assert!(
-            paths
-                .iter()
-                .any(|path| path.to_string_lossy().replace('/', "\\")
-                    == "C:\\Users\\Administrator\\.local\\bin"),
-            "expected Windows CLI search paths to include ~/.local/bin"
-        );
+        let normalized: Vec<String> = paths
+            .iter()
+            .map(|path| path.to_string_lossy().replace('/', "\\"))
+            .collect();
+        for expected in [
+            "C:\\Users\\Administrator\\.local\\bin",
+            "C:\\Users\\Administrator\\.hermes\\node",
+            "C:\\Users\\Administrator\\.hermes\\node\\bin",
+            "C:\\Users\\Administrator\\.local\\share\\mise\\shims",
+            "C:\\Users\\Administrator\\scoop\\shims",
+            "C:\\Users\\Administrator\\scoop\\apps\\nodejs\\current",
+            "C:\\Users\\Administrator\\AppData\\Local\\hermes\\node",
+            "C:\\Users\\Administrator\\AppData\\Local\\mise\\shims",
+        ] {
+            assert!(
+                normalized.iter().any(|path| path == expected),
+                "expected Windows CLI search paths to include {expected}, got {normalized:?}"
+            );
+        }
     }
 
     #[test]

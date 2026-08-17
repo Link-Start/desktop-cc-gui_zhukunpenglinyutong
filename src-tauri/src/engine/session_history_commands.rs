@@ -699,6 +699,42 @@ pub async fn fork_dsh_session(
     }))
 }
 
+/// Explicitly adopt or spawn the local DSH host. Settings-page start, not probe.
+#[tauri::command]
+pub async fn ensure_dsh_host(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(&*state, app, "ensure_dsh_host", json!({})).await;
+    }
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_for_explicit_start(&settings);
+    let snapshot = crate::engine::dsh::ensure_ready(&runtime).await?.0;
+    Ok(json!({
+        "origin": snapshot.origin,
+        "host": snapshot.host,
+        "port": snapshot.port,
+        "ownership": snapshot.ownership,
+        "describe": snapshot.describe,
+    }))
+}
+
+/// Cancel an in-flight DSH host start. Settings-page action, not probe.
+#[tauri::command]
+pub async fn cancel_dsh_host(
+    state: State<'_, AppState>,
+    app: AppHandle,
+) -> Result<Value, String> {
+    if remote_backend::is_remote_mode(&*state).await {
+        return remote_backend::call_remote(&*state, app, "cancel_dsh_host", json!({})).await;
+    }
+    let settings = state.app_settings.lock().await.clone();
+    let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
+    crate::engine::dsh::stop_host(&runtime).await?;
+    Ok(json!({ "ok": true }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
