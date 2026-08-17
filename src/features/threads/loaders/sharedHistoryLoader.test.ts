@@ -520,7 +520,7 @@ describe("sharedHistoryLoader", () => {
     ).toBe(true);
   });
 
-  it("propagates projection failure when no legacy snapshot can preserve history", async () => {
+  it("returns empty V0 when projection fails and continues without throwing", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const projectionError = new Error("canonical projection unavailable");
     const loader = createSharedHistoryLoader({
@@ -532,28 +532,50 @@ describe("sharedHistoryLoader", () => {
       loadSharedProjection: vi.fn().mockRejectedValue(projectionError),
     });
 
-    await expect(loader.load("shared:session-without-legacy")).rejects.toBe(
-      projectionError,
-    );
+    const snapshot = await loader.load("shared:session-without-legacy");
+    expect(snapshot.items).toEqual([]);
     expect(warn).toHaveBeenCalled();
   });
 
-  it("fails closed when empty V0 and projection soft-times out", async () => {
+  it("returns empty V0 first-paint when projection soft-times out", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    let resolveProjection: (value: unknown[]) => void = () => undefined;
+    const projectionPromise = new Promise<unknown[]>((resolve) => {
+      resolveProjection = resolve;
+    });
+    const onProjectionMerged = vi.fn();
     const loader = createSharedHistoryLoader({
       workspaceId: "ws-1",
       loadSharedSession: vi.fn().mockResolvedValue({
         selectedEngine: "claude",
         items: [],
       }),
-      loadSharedProjection: vi.fn().mockReturnValue(new Promise(() => undefined)),
+      loadSharedProjection: vi.fn().mockReturnValue(projectionPromise),
       projectionTimeoutMs: 20,
+      onProjectionMerged,
     });
 
-    await expect(loader.load("shared:empty-timeout")).rejects.toThrow(
-      /timed out/,
-    );
+    const snapshot = await loader.load("shared:empty-timeout");
+    expect(snapshot.items).toEqual([]);
+    expect(onProjectionMerged).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
+
+    resolveProjection([]);
+    await vi.waitFor(() => {
+      expect(onProjectionMerged).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("fails closed when V0 load itself rejects", async () => {
+    const sessionError = new Error("shared session missing");
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockRejectedValue(sessionError),
+      loadSharedProjection: vi.fn(),
+    });
+
+    await expect(loader.load("shared:v0-missing")).rejects.toBe(sessionError);
+    expect(loader.load).toBeDefined();
   });
 
   it("keeps the stable Shared thread id after the display title changes", async () => {

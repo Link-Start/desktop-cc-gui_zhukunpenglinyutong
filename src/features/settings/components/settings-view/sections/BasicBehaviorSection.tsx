@@ -10,6 +10,8 @@ import {
   writeGitCommitComposerPlacement,
   type GitCommitComposerPlacement,
 } from "@/features/git/hooks/useGitCommitComposerPlacement";
+import { requestFirstRunSetupReopen } from "@/features/onboarding/utils/setupEvents";
+import { EditorHabitPreference } from "./EditorHabitPreference";
 
 type DiagnosticsBundleExportState = {
   status: "idle" | "exporting" | "exported" | "failed";
@@ -60,6 +62,7 @@ type BasicBehaviorSectionProps = {
   setNotificationSoundPathDraft: (value: string) => void;
   handleBrowseNotificationSoundPath: () => Promise<void>;
   handleSaveNotificationSoundPath: () => void;
+  onCloseSettings?: () => void;
 };
 
 export function BasicBehaviorSection({
@@ -92,6 +95,7 @@ export function BasicBehaviorSection({
   setNotificationSoundPathDraft,
   handleBrowseNotificationSoundPath,
   handleSaveNotificationSoundPath,
+  onCloseSettings,
 }: BasicBehaviorSectionProps) {
   const gitCommitComposerPlacement = useGitCommitComposerPlacement();
 
@@ -103,6 +107,31 @@ export function BasicBehaviorSection({
     <div className="settings-basic-behavior settings-basic-surface">
       {/* 对话与布局 */}
       <div className="settings-basic-group-card settings-basic-group-card--list settings-pref-card">
+        <div className="settings-pref-row">
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.rerunOnboardingTitle")}
+            </div>
+            <div className="settings-pref-desc">
+              {t("settings.rerunOnboardingDesc")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
+            <button
+              type="button"
+              className="ghost settings-button-compact settings-pref-action-btn"
+              onClick={() => {
+                onCloseSettings?.();
+                requestFirstRunSetupReopen();
+              }}
+            >
+              {t("settings.rerunOnboardingAction")}
+            </button>
+          </div>
+        </div>
+
+        <EditorHabitPreference />
+
         <div className="settings-pref-row">
           <div className="settings-pref-meta">
             <div className="settings-pref-title">

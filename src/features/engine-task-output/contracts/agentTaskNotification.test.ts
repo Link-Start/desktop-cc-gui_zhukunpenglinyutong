@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  extractBackgroundCommandTitle,
+  isBackgroundStyleAgentTaskNotification,
+  isCliInjectedAgentTaskNotificationText,
   isSubagentStyleAgentTaskNotification,
   parseAgentTaskNotification,
 } from "./agentTaskNotification";
@@ -29,6 +32,76 @@ describe("isSubagentStyleAgentTaskNotification", () => {
         resultText: "done",
       }),
     ).toBe(false);
+  });
+});
+
+describe("isBackgroundStyleAgentTaskNotification", () => {
+  it("recognizes Background command quoted summary", () => {
+    expect(
+      isBackgroundStyleAgentTaskNotification({
+        taskId: "b234djc13",
+        toolUseId: "call_00_URJyFRY1ub2SYctPuO899944",
+        outputFile: "C:\\\\Users\\\\demo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\b234djc13.output",
+        status: "completed",
+        summary: 'Background command "Rebuild Windows bundles with latest code" completed',
+        resultText: "",
+      }),
+    ).toBe(true);
+  });
+
+  it("recognizes Background shell summaries", () => {
+    expect(
+      isBackgroundStyleAgentTaskNotification({
+        taskId: "bg-1",
+        toolUseId: null,
+        outputFile: "/tmp/bg.output",
+        status: "completed",
+        summary: "Background shell task bg-1 completed",
+        resultText: "done",
+      }),
+    ).toBe(true);
+  });
+
+  it("does not steal SubAgent summaries", () => {
+    expect(
+      isBackgroundStyleAgentTaskNotification({
+        taskId: "t1",
+        toolUseId: "call-1",
+        outputFile: null,
+        status: "completed",
+        summary: 'Agent "项目结构与架构扫描" finished',
+        resultText: "ok",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects generic non-background summaries", () => {
+    expect(
+      isBackgroundStyleAgentTaskNotification({
+        taskId: "job-1",
+        toolUseId: null,
+        outputFile: null,
+        status: "completed",
+        summary: "Custom runner finished",
+        resultText: "ok",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("extractBackgroundCommandTitle", () => {
+  it("extracts the quoted Background command name", () => {
+    expect(
+      extractBackgroundCommandTitle(
+        'Background command "Rebuild Windows bundles with latest code" completed',
+      ),
+    ).toBe("Rebuild Windows bundles with latest code");
+  });
+
+  it("returns null when the summary has no quoted command", () => {
+    expect(
+      extractBackgroundCommandTitle("Background shell task bg-1 completed"),
+    ).toBeNull();
   });
 });
 
@@ -128,5 +201,62 @@ describe("parseAgentTaskNotification", () => {
       summary: null,
       resultText: "双重转义结果",
     });
+  });
+
+  it("parses background wakeup envelopes that omit result", () => {
+    const parsed = parseAgentTaskNotification(`<task-notification>
+<task-id>b234djc13</task-id>
+<tool-use-id>call_00_URJyFRY1ub2SYctPuO899944</tool-use-id>
+<output-file>C:\\\\Users\\\\demo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\b234djc13.output</output-file>
+<status>completed</status>
+<summary>Background command "Rebuild Windows bundles with latest code" completed</summary>
+</task-notification>`);
+
+    expect(parsed).toEqual({
+      taskId: "b234djc13",
+      toolUseId: "call_00_URJyFRY1ub2SYctPuO899944",
+      outputFile: "C:\\\\Users\\\\demo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\b234djc13.output",
+      status: "completed",
+      summary: 'Background command "Rebuild Windows bundles with latest code" completed',
+      resultText: "",
+    });
+  });
+
+  it("parses entity-escaped envelopes that omit result", () => {
+    const parsed = parseAgentTaskNotification(`
+&lt;task-notification&gt;
+  &lt;task-id&gt;task-no-result&lt;/task-id&gt;
+  &lt;status&gt;completed&lt;/status&gt;
+  &lt;summary&gt;Background command "bundle" completed&lt;/summary&gt;
+&lt;/task-notification&gt;`);
+
+    expect(parsed).toEqual({
+      taskId: "task-no-result",
+      toolUseId: null,
+      outputFile: null,
+      status: "completed",
+      summary: 'Background command "bundle" completed',
+      resultText: "",
+    });
+  });
+
+  it("returns null for an empty task-notification envelope", () => {
+    expect(parseAgentTaskNotification("<task-notification></task-notification>")).toBeNull();
+  });
+});
+
+describe("isCliInjectedAgentTaskNotificationText", () => {
+  it("treats a background wakeup envelope as CLI-injected", () => {
+    expect(
+      isCliInjectedAgentTaskNotificationText(`<task-notification>
+<task-id>b83ywvfpw</task-id>
+<status>completed</status>
+<summary>Background command "Sleep 8s then echo timestamp" completed</summary>
+</task-notification>`),
+    ).toBe(true);
+  });
+
+  it("does not treat ordinary user questions as CLI-injected", () => {
+    expect(isCliInjectedAgentTaskNotificationText("把这个命令丢到后台跑")).toBe(false);
   });
 });

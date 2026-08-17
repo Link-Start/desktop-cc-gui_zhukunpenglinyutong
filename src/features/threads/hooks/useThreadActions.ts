@@ -71,6 +71,7 @@ import {
   buildHiddenAutomaticSessionIdSet,
   extractThreadSizeBytes,
   filterHiddenAutomaticThreadSummaries,
+  isAutomaticHelperSessionTitle,
   filterRetainableContinuitySummaries,
   hasHealthyThreadSummaries,
   isLocalSessionScanUnavailable,
@@ -415,7 +416,9 @@ export function useThreadActions({
         summaries: ThreadSummary[],
       ) =>
         summaries.filter(
-          (summary) => summary.autoSession?.visibility !== "hidden",
+          (summary) =>
+            summary.autoSession?.visibility !== "hidden" &&
+            !isAutomaticHelperSessionTitle(summary.name),
         );
       const getLastGoodThreadSummariesWithoutDeleted = () =>
         filterRootVisibleAutomaticSummaries(
@@ -1360,6 +1363,12 @@ export function useThreadActions({
               ) {
                 return;
               }
+              if (
+                isAutomaticHelperSessionTitle(session.firstMessage) ||
+                isAutomaticHelperSessionTitle(session.nativeTitle)
+              ) {
+                return;
+              }
               const prev = mergedById.get(id);
               const updatedAt = session.updatedAt;
               const mappedTitle = mappedTitles[id];
@@ -1464,6 +1473,9 @@ export function useThreadActions({
               isSharedControlPlaneSpawnTitle(session.title) ||
               isSharedControlPlaneSpawnTitle(mappedTitles[id])
             ) {
+              return;
+            }
+            if (isAutomaticHelperSessionTitle(session.title)) {
               return;
             }
             const prev = mergedById.get(id);

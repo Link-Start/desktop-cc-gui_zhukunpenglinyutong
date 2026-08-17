@@ -135,6 +135,12 @@ vi.mock("react-i18next", () => ({
         "files.saving": "Saving...",
         "files.continueEditing": "Continue editing",
         "files.discardChangesAction": "Discard changes",
+        "files.revealInFinder": "Reveal in Finder",
+        "files.revealInExplorer": "Show in Explorer",
+        "files.revealInFileManager": "Reveal in File Manager",
+        "files.revealFailed": "Couldn’t show in file manager: {{message}}",
+        "files.openInBrowserNoWorkspace":
+          "Select a workspace before opening a file in the built-in browser",
       };
       const template = translations[key] ?? key;
       if (!options) {
@@ -165,6 +171,7 @@ import {
   resolveRepositoryWorkspaceFilePath,
 } from "./GitDiffPanelFileScope";
 import { saveLastCommitMessageConfig } from "../../../utils/commitMessage";
+import { getRevealInOsFileManagerLabelKey } from "../../../utils/rendererPlatform";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
@@ -510,7 +517,13 @@ describe("GitDiffPanel", () => {
       const actionLabels = Array.from(actionGroup?.querySelectorAll("button") ?? []).map((button) =>
         button.getAttribute("aria-label"),
       );
+      const revealLabels = {
+        "files.revealInFinder": "Reveal in Finder",
+        "files.revealInExplorer": "Show in Explorer",
+        "files.revealInFileManager": "Reveal in File Manager",
+      } as const;
       expect(actionLabels).toEqual([
+        revealLabels[getRevealInOsFileManagerLabelKey()],
         "Preview diff in center pane",
         "Open file content",
         "Stage file",
@@ -711,6 +724,89 @@ describe("GitDiffPanel", () => {
       expect(previewProps.files?.[0]).toMatchObject({
         filePath: "src/deleted.ts",
         status: "D",
+      });
+    });
+
+  it("reveals an existing change in the OS file manager from the row action", async () => {
+      render(
+        <GitDiffPanel
+          {...baseProps}
+          workspacePath="/workspace"
+          gitDiffListView="flat"
+          unstagedFiles={[
+            { path: "src/App.tsx", status: "M", additions: 1, deletions: 0 },
+          ]}
+        />,
+      );
+
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '.diff-row[data-path="src/App.tsx"] .diff-row-action--reveal',
+        ) as HTMLButtonElement,
+      );
+
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("reveal_in_file_manager", {
+          path: "/workspace/src/App.tsx",
+        });
+      });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "open_folder_in_file_manager",
+        expect.anything(),
+      );
+    });
+
+  it("opens the parent folder for a deleted change instead of selecting the missing file", async () => {
+      render(
+        <GitDiffPanel
+          {...baseProps}
+          workspacePath="/workspace"
+          gitDiffListView="flat"
+          unstagedFiles={[
+            { path: "src/deleted.ts", status: "D", additions: 0, deletions: 1 },
+          ]}
+        />,
+      );
+
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '.diff-row[data-path="src/deleted.ts"] .diff-row-action--reveal',
+        ) as HTMLButtonElement,
+      );
+
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("open_folder_in_file_manager", {
+          path: "/workspace/src/deleted.ts",
+        });
+      });
+      expect(invoke).not.toHaveBeenCalledWith(
+        "reveal_in_file_manager",
+        expect.anything(),
+      );
+    });
+
+  it("joins a Windows workspace path with backslashes when revealing a change", async () => {
+      render(
+        <GitDiffPanel
+          {...baseProps}
+          workspacePath="C:/Users/Chen/Project"
+          gitDiffListView="flat"
+          unstagedFiles={[
+            { path: "README.md", status: "M", additions: 1, deletions: 0 },
+          ]}
+        />,
+      );
+
+      fireEvent.click(
+        document.querySelector<HTMLButtonElement>(
+          '.diff-row[data-path="README.md"] .diff-row-action--reveal',
+        ) as HTMLButtonElement,
+      );
+
+      await waitFor(() => {
+        expect(invoke).toHaveBeenCalledWith("reveal_in_file_manager", {
+          path: "C:\\Users\\Chen\\Project\\README.md",
+        });
       });
     });
 });

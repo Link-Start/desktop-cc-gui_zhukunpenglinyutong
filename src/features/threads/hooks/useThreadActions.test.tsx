@@ -2219,15 +2219,6 @@ describe("useThreadActions", () => {
         provider: undefined,
         sourceLabel: "vscode",
       },
-      {
-        id: "thread-commit-message",
-        name: "Generate a concise git commit message for the following changes.",
-        updatedAt: 5700,
-        engineSource: "codex",
-        source: "cli",
-        provider: undefined,
-        sourceLabel: "cli",
-      },
     ]);
   });
 

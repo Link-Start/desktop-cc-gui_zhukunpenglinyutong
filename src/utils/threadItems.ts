@@ -23,6 +23,7 @@ import {
   normalizeFileChangeKind,
   shouldPreferExplicitFileChangeOutput,
 } from "./threadItemsFileChanges";
+import { isProviderToolCallId, parseToolArgs } from "./toolSemantics";
 import {
   compactMessageText,
   getNormalizedAssistantMessageText,
@@ -628,6 +629,64 @@ export function normalizeItem(
   return item;
 }
 
+function isGenericAgentToolLabel(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "agent" ||
+    normalized === "tool: agent" ||
+    normalized === "tool:agent"
+  );
+}
+
+function preferHumanToolTitle(existing: string, incoming: string): string {
+  const incomingTitle = incoming.trim();
+  const existingTitle = existing.trim();
+  if (!incomingTitle) {
+    return existing;
+  }
+  if (
+    isProviderToolCallId(incomingTitle) &&
+    existingTitle &&
+    !isProviderToolCallId(existingTitle)
+  ) {
+    return existing;
+  }
+  // DSH nameless completions land as mcpToolCall + server="agent" → "Tool: agent".
+  // Keep the earlier human name (bash / Command: …) instead of rewriting the row.
+  if (
+    isGenericAgentToolLabel(incomingTitle) &&
+    existingTitle &&
+    !isGenericAgentToolLabel(existingTitle)
+  ) {
+    return existing;
+  }
+  return incoming;
+}
+
+function preferConcreteToolType(
+  existing: string,
+  incoming: string,
+): string {
+  const incomingType = incoming.trim();
+  const existingType = existing.trim();
+  if (!incomingType) {
+    return existing;
+  }
+  const incomingLooksGeneric =
+    incomingType === "mcpToolCall" ||
+    incomingType === "toolCall" ||
+    incomingType === "tool" ||
+    incomingType === "agent";
+  const existingLooksConcrete =
+    existingType === "commandExecution" ||
+    existingType === "fileChange" ||
+    existingType === "webSearch";
+  if (incomingLooksGeneric && existingLooksConcrete) {
+    return existing;
+  }
+  return incoming;
+}
+
 function mergeToolItemPreservingSnapshot(
   existing: Extract<ConversationItem, { kind: "tool" }>,
   incoming: Extract<ConversationItem, { kind: "tool" }>,
@@ -640,7 +699,8 @@ function mergeToolItemPreservingSnapshot(
   return {
     ...existing,
     ...incoming,
-    title: hasTitle ? incoming.title : existing.title,
+    toolType: preferConcreteToolType(existing.toolType, incoming.toolType),
+    title: hasTitle ? preferHumanToolTitle(existing.title, incoming.title) : existing.title,
     detail: hasDetail ? incoming.detail : existing.detail,
     output: hasOutput ? incoming.output : existing.output,
     changes: hasChanges ? incoming.changes : existing.changes,
@@ -1219,8 +1279,36 @@ export function buildConversationItem(
   }
   if (type === "mcpToolCall") {
     const server = asString(item.server ?? "");
-    const tool = asString(item.tool ?? "");
+    const rawTool = asString(item.tool ?? item.title ?? item.name ?? "");
+    const tool = isProviderToolCallId(rawTool) ? "" : rawTool;
     const argsPayload = item.arguments ?? item.input ?? null;
+    const parsedArgs =
+      parseToolArgumentsRecord(argsPayload) ??
+      parseToolArgs(typeof argsPayload === "string" ? argsPayload : "");
+    const commandFromArgs = parsedArgs
+      ? asString(
+          parsedArgs.command ??
+            parsedArgs.cmd ??
+            parsedArgs.script ??
+            parsedArgs.shell_command ??
+            parsedArgs.bash ??
+            "",
+        ).trim()
+      : "";
+    const genericAgentLabel =
+      tool.trim().toLowerCase() === "agent" ||
+      server.trim().toLowerCase() === "agent";
+    // Nameless DSH completions become mcpToolCall + server="agent". If the
+    // payload is clearly a shell command, keep the terminal card instead of
+    // rendering "Agent · git …" and counting it as a 子代理.
+    if (commandFromArgs && (!tool.trim() || genericAgentLabel)) {
+      return buildConversationItem({
+        ...item,
+        type: "commandExecution",
+        title: commandFromArgs,
+        tool: "bash",
+      });
+    }
     const args = stringifyToolArguments(argsPayload);
     const output = asString(
       item.result ??

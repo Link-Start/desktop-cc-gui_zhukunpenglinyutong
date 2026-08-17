@@ -26,6 +26,7 @@ import {
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
+import { extractDshHistoryTokenUsage } from "../loaders/dshHistoryLoader";
 import { parseDshHistoryMessages } from "../loaders/dshHistoryParser";
 import { parsePiHistoryMessages } from "../loaders/piHistoryParser";
 import {
@@ -1512,6 +1513,14 @@ export function useThreadActionsResumeThreadForWorkspace(
             const items = parseDshHistoryMessages(messagesData);
             if (items.length > 0) {
               await applyHydratedItems(threadId, items);
+            }
+            const restoredTokenUsage = extractDshHistoryTokenUsage(result);
+            if (restoredTokenUsage) {
+              dispatch({
+                type: "setThreadTokenUsage",
+                threadId,
+                tokenUsage: restoredTokenUsage,
+              });
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",

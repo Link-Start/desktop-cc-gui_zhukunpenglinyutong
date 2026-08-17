@@ -244,30 +244,9 @@ export function createSharedHistoryLoader({
         return buildSnapshot(items);
       };
 
-      // Empty V0: wait for projection within soft timeout; fail closed if missing.
-      if (legacyItems.length === 0) {
-        try {
-          const hard = await raceWithSoftTimeout(
-            runProjectionMerge(),
-            projectionTimeoutMs,
-          );
-          if (hard.kind === "done") {
-            return hard.value;
-          }
-          void hard.pending.catch(() => undefined);
-          throw new Error(
-            `shared-projection timed out after ${projectionTimeoutMs}ms with empty V0 for ${threadId}`,
-          );
-        } catch (error) {
-          console.warn(
-            `[shared-projection] load failed; no V0 snapshot available for ${threadId}`,
-            error,
-          );
-          throw error;
-        }
-      }
-
-      // Non-empty V0: wait up to soft timeout; then unblock with V0 and merge later.
+      // Successful V0 (including items=[]) is Phase-A. Projection waits up to
+      // the soft timeout, then unblocks first-paint and merges in background.
+      // Fail-closed only if loadSharedSession itself rejects.
       try {
         const raced = await raceWithSoftTimeout(
           runProjectionMerge(),

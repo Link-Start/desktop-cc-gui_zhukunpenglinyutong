@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDshGoalPresentationMetadata,
+  isDshGoalInjection,
   isDshInjectedContextMessage,
   isDshRuntimeContextText,
   readDshMessageSourceKind,
@@ -75,6 +77,51 @@ describe("isDshInjectedContextMessage", () => {
   it("falls back to text when source is missing", () => {
     expect(isDshInjectedContextMessage({ text: AGENTS_REMINDER })).toBe(true);
     expect(isDshInjectedContextMessage({ text: "hello" })).toBe(false);
+  });
+
+  it("keeps Goal injections visible so they can render as a card", () => {
+    expect(
+      isDshInjectedContextMessage({
+        text: "<goal_round>\nContinue the active goal.\n</goal_round>",
+        sourceKind: "goal",
+      }),
+    ).toBe(false);
+  });
+
+  it("hides sourceless goal_round envelopes as runtime context", () => {
+    expect(
+      isDshInjectedContextMessage({
+        text: "<goal_round>\nContinue the active goal.\n</goal_round>",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("isDshGoalInjection", () => {
+  it("matches goal source kinds only", () => {
+    expect(isDshGoalInjection("goal")).toBe(true);
+    expect(isDshGoalInjection("Goal")).toBe(true);
+    expect(isDshGoalInjection("user")).toBe(false);
+    expect(isDshGoalInjection("plugin")).toBe(false);
+    expect(isDshGoalInjection(null)).toBe(false);
+  });
+});
+
+describe("buildDshGoalPresentationMetadata", () => {
+  it("builds an empty-bubble dsh-goal context", () => {
+    const metadata = buildDshGoalPresentationMetadata(
+      "<goal_round>\nContinue the active goal.\n</goal_round>",
+    );
+    expect(metadata.displayText).toBe("");
+    expect(metadata.stickyCandidateText).toBe("");
+    expect(metadata.contexts).toEqual([
+      {
+        kind: "dsh-goal",
+        title: "Context injection",
+        sourceLabel: "goal",
+        body: "<goal_round>\nContinue the active goal.\n</goal_round>",
+      },
+    ]);
   });
 });
 

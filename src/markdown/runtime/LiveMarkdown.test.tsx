@@ -36,6 +36,46 @@ describe("LightweightMarkdown", () => {
     expect(container.textContent).toContain("继续补充这一段的后续内容");
   });
 
+  it("keeps loose numbered list items in one ordered list", () => {
+    const { container } = render(
+      <LightweightMarkdown
+        value={[
+          "I'll update 3 places:",
+          "",
+          "1. filterHiddenAutomaticThreadSummaries – already scans every summary once.",
+          "",
+          "2. mergeNativeCliSessionSummaries – add the same prefix check.",
+          "",
+          "3. shouldIncludeThreadEntry – already has the helper check.",
+        ].join("\n")}
+      />,
+    );
+
+    expect(container.querySelectorAll("ol")).toHaveLength(1);
+    expect(container.querySelectorAll("li")).toHaveLength(3);
+    expect(container.querySelector("p")?.textContent).toContain("I'll update 3 places:");
+  });
+
+  it("does not merge a following paragraph into the previous loose list", () => {
+    const { container } = render(
+      <LightweightMarkdown
+        value={[
+          "1. first item",
+          "",
+          "2. second item",
+          "",
+          "Also update the tests that expect the old prompt to stay visible.",
+        ].join("\n")}
+      />,
+    );
+
+    expect(container.querySelectorAll("ol")).toHaveLength(1);
+    expect(container.querySelectorAll("li")).toHaveLength(2);
+    expect(container.querySelector("p")?.textContent).toContain(
+      "Also update the tests that expect the old prompt to stay visible.",
+    );
+  });
+
   it("widens the reveal chunk when a long stream falls behind in the tail", () => {
     const visibleValue = `${"段落内容\n".repeat(900)}`;
     const targetValue = `${visibleValue}${"### 小节\n- 条目\n".repeat(220)}`;

@@ -292,3 +292,42 @@ enabled 跟随真正的 onExecutionTargetChange；没有回调时不要把 wrapp
 - **Notes**: ComposerReadinessBar static-chip test green.
 
 ---
+
+## [ERR-20260321-001] onboarding_i18n_missing_comma_transform_failed
+
+**Logged**: 2026-03-21T12:00:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+
+Vite/esbuild 启动失败：`src/i18n/locales/zh/onboarding.ts` 对象字面量缺逗号，报 `Expected "}" but found "subtitle"`。英文文件同一处也缺逗号，会在切语言后同样挂掉。
+
+### Error
+
+```text
+[plugin:vite:esbuild] Transform failed with 1 error:
+src/i18n/locales/zh/onboarding.ts:5:6: ERROR: Expected "}" but found "subtitle"
+```
+
+### Context
+
+- 用户启动应用后 overlay 直接报 esbuild transform 失败。
+- `welcome.title` 与 `done.enter` 两处字符串后缺逗号；中英文件结构相同。
+
+### Suggested Fix
+
+给对象属性补逗号，并用语法扫描覆盖 `src/i18n/locales/**/*.ts`，避免只修当前报错行。
+
+### Metadata
+
+- Reproducible: yes
+- Related Files: src/i18n/locales/zh/onboarding.ts, src/i18n/locales/en/onboarding.ts
+
+### Resolution
+
+- **Resolved**: 2026-03-21T12:00:00+08:00
+- **Notes**: 中英 `welcome.title` / `done.enter` 已补逗号，`node --check` 与 locales 扫描通过。
+
+---

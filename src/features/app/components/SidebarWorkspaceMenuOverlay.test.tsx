@@ -408,4 +408,33 @@ describe("SidebarWorkspaceMenuOverlay", () => {
     expect(screen.getByRole("menu", { name: "Codex" })).toBeTruthy();
     expect(screen.getByRole("menuitemradio", { name: /OpenAI/ })).toBeTruthy();
   });
+
+  it("portals the overlay to document.body so wallpaper stacking cannot bury it", () => {
+    const { container } = render(
+      <div className="sidebar">
+        <SidebarWorkspaceMenuOverlay
+          menu={{
+            x: 32,
+            y: 28,
+            groups: [
+              {
+                id: "new-session",
+                label: "New session",
+                actions: [createSharedAction()],
+              },
+            ],
+          }}
+          t={t}
+          onClose={vi.fn()}
+          onAction={vi.fn()}
+          renderIcon={() => null}
+        />
+      </div>,
+    );
+
+    const menu = screen.getByRole("menu", { name: "New session" });
+    expect(menu.closest(".sidebar")).toBeNull();
+    expect(document.body.contains(menu)).toBe(true);
+    expect(container.querySelector(".sidebar-workspace-menu")).toBeNull();
+  });
 });

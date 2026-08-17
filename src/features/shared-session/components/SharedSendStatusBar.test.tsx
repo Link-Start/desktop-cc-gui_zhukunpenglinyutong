@@ -9,6 +9,7 @@ import {
   resetSharedSendStateStoreForTests,
 } from "../runtime/sharedSendStateStore";
 import { resetSharedSessionAttemptReattachmentsForTests } from "../runtime/reattachSharedSessionAttempt";
+import { resetRecoveryOwnerPrefetchForTests } from "../runtime/recoveryClickPath";
 import {
   resetSharedTargetStoreForTests,
 } from "../target/targetStore";
@@ -123,6 +124,14 @@ function renderBar() {
   );
 }
 
+async function renderRecoveryBar() {
+  const view = renderBar();
+  await waitFor(() => {
+    expect(mockServices.sharedSessionV2TurnState).toHaveBeenCalled();
+  });
+  return view;
+}
+
 function enterRecovery() {
   dispatchSharedSendEvent(WS, THREAD, { type: "send" });
   dispatchSharedSendEvent(WS, THREAD, { type: "packagePrepared" });
@@ -143,9 +152,15 @@ beforeEach(() => {
   mockServices.sharedSessionV2AwaitTurnTerminal.mockReset();
   mockServices.registerSharedSessionNativeBinding.mockReset();
   mockServices.registerSharedSessionNativeBinding.mockReturnValue(true);
+  mockServices.sharedSessionV2TurnState.mockResolvedValue({
+    status: "ok",
+    inFlightAttempts: [],
+    bindings: [],
+  });
 });
 
 afterEach(() => {
+  resetRecoveryOwnerPrefetchForTests();
   cleanup();
 });
 
@@ -199,18 +214,34 @@ describe("SharedSendStatusBar", () => {
     );
   });
 
-  it("recovery-required：默认露出自动处理与跳过，不平铺四按钮", () => {
+  it("recovery-required：挂载时预取 owner", async () => {
     enterRecovery();
+    mockServices.sharedSessionV2TurnState.mockResolvedValue({
+      status: "ok",
+      inFlightAttempts: [],
+      bindings: [],
+    });
     renderBar();
+    await waitFor(() => {
+      expect(mockServices.sharedSessionV2TurnState).toHaveBeenCalledWith(
+        WS,
+        THREAD,
+      );
+    });
+  });
+
+  it("recovery-required：默认露出自动处理与跳过，不平铺四按钮", async () => {
+    enterRecovery();
+    await renderRecoveryBar();
     expect(screen.getByTestId("shared-send-recovery-auto")).toBeTruthy();
     expect(screen.getByTestId("shared-send-recovery-skip")).toBeTruthy();
     expect(screen.queryByText("sharedSend.recoveryProbe")).toBeNull();
     expect(screen.queryByText("sharedSend.recoveryStop")).toBeNull();
   });
 
-  it("recovery-required：展开后显示高级动作", () => {
+  it("recovery-required：展开后显示高级动作", async () => {
     enterRecovery();
-    renderBar();
+    await renderRecoveryBar();
     fireEvent.click(screen.getByTestId("shared-send-recovery-expand"));
     expect(screen.getByTestId("shared-send-recovery-advanced")).toBeTruthy();
     expect(screen.getByText("sharedSend.recoveryProbe")).toBeTruthy();
@@ -218,9 +249,9 @@ describe("SharedSendStatusBar", () => {
     expect(screen.getByText("sharedSend.recoveryStopAndRebuild")).toBeTruthy();
   });
 
-  it("recovery-required：详情 icon 打开应用内弹窗", () => {
+  it("recovery-required：详情 icon 打开应用内弹窗", async () => {
     enterRecovery();
-    renderBar();
+    await renderRecoveryBar();
     fireEvent.click(screen.getByTestId("shared-send-recovery-info"));
     expect(screen.getByTestId("details-dialog").textContent).toContain(
       "sharedSend.recoveryDetailsTitle",
@@ -686,9 +717,9 @@ describe("SharedSendStatusBar", () => {
     );
   });
 
-  it("recovery-required：跳过取消不调用 abandon", () => {
+  it("recovery-required：跳过取消不调用 abandon", async () => {
     enterRecovery();
-    renderBar();
+    await renderRecoveryBar();
     fireEvent.click(screen.getByTestId("shared-send-recovery-skip"));
     expect(screen.getByTestId("skip-confirm-dialog")).toBeTruthy();
     fireEvent.click(screen.getByText("cancel-skip"));
@@ -766,10 +797,10 @@ describe("SharedSendStatusBar", () => {
     });
   });
 
-  it("recovery 路径不使用 window.confirm", () => {
+  it("recovery 路径不使用 window.confirm", async () => {
     const confirmSpy = vi.spyOn(window, "confirm");
     enterRecovery();
-    renderBar();
+    await renderRecoveryBar();
     fireEvent.click(screen.getByTestId("shared-send-recovery-skip"));
     expect(confirmSpy).not.toHaveBeenCalled();
     confirmSpy.mockRestore();

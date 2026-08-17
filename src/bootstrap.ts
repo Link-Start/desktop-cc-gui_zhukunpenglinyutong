@@ -6,6 +6,7 @@ import "./styles/sidebar.css";
 import "./styles/sidebar.footer.css";
 import "./styles/home.css";
 import "./styles/home-chat.css";
+import "./styles/first-run-setup.css";
 import "./styles/main.css";
 // extensions / tokentracker 仅 Extensions 视图需要，改为 feature loader 懒加载
 // （见 loadExtensionsStyles），避免进启动 CSS 与首屏 style 图。
@@ -34,3 +35,5 @@ import "./styles/panel-lock.css";
 import "./styles/subagent-ui.css";
 // 统一滚动条兜底清单（须最后加载，覆盖未登记的滚动容器）
 import "./styles/scrollbars.css";
+// Wallpaper translucency must win over later shell / messages / composer fills.
+import "./styles/workspace-wallpaper.css";

@@ -18,6 +18,7 @@ const refreshMock = vi.fn();
 const focusMock = vi.fn();
 const loadAddonMock = vi.fn();
 const onDataMock = vi.fn(() => ({ dispose: vi.fn() }));
+const constructedTerminals: Array<{ options: Record<string, unknown> }> = [];
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
@@ -37,7 +38,7 @@ vi.mock("@xterm/xterm", () => {
   class Terminal {
     cols = 80;
     rows = 24;
-    options: Record<string, unknown> = {};
+    options: Record<string, unknown>;
     open = openMock;
     dispose = disposeMock;
     write = writeMock;
@@ -48,6 +49,10 @@ vi.mock("@xterm/xterm", () => {
     onData = onDataMock;
     hasSelection = () => false;
     getSelection = () => "";
+    constructor(options: Record<string, unknown> = {}) {
+      this.options = { ...options };
+      constructedTerminals.push(this);
+    }
   }
   return { Terminal };
 });
@@ -98,6 +103,7 @@ describe("useTerminalSession remount after host unmount", () => {
     focusMock.mockClear();
     loadAddonMock.mockClear();
     onDataMock.mockClear();
+    constructedTerminals.length = 0;
   });
 
   afterEach(() => {
@@ -289,5 +295,55 @@ describe("useTerminalSession remount after host unmount", () => {
 
     expect(openMock).toHaveBeenCalledTimes(2);
     expect(focusMock).not.toHaveBeenCalled();
+  });
+
+  it("refreshes xterm to a transparent canvas when wallpaper turns on", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "ws",
+      path: "/tmp/ws",
+    } as const;
+
+    const { result } = renderHook(() =>
+      useTerminalSession({
+        activeWorkspace: workspace as never,
+        activeTerminalId: "term-1",
+        isVisible: true,
+      }),
+    );
+
+    render(
+      <Host
+        containerRef={result.current.containerRef as (node: HTMLDivElement | null) => void}
+        mounted
+      />,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(openMock).toHaveBeenCalledTimes(1);
+    expect(constructedTerminals).toHaveLength(1);
+    const constructed = constructedTerminals[0];
+    expect(constructed?.options.allowTransparency).toBe(true);
+    expect(
+      (constructed?.options.theme as { background?: string } | undefined)?.background,
+    ).not.toBe("transparent");
+
+    act(() => {
+      document.documentElement.dataset.workspaceWallpaper = "fluid";
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      (constructed?.options.theme as { background?: string } | undefined)?.background,
+    ).toBe("transparent");
+
+    delete document.documentElement.dataset.workspaceWallpaper;
   });
 });

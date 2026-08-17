@@ -45,6 +45,13 @@ export const DEFAULT_OPEN_APP_TARGETS: OpenAppTarget[] = [
     args: [],
   },
   {
+    id: "idea",
+    label: "IntelliJ IDEA",
+    kind: "app",
+    appName: "IntelliJ IDEA",
+    args: [],
+  },
+  {
     id: "ghostty",
     label: "Ghostty",
     kind: "app",

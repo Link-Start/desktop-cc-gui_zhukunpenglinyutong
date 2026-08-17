@@ -5,7 +5,7 @@ status: active
 
 # mossx 文档中心
 
-本目录承载架构解释、操作指南、实现参考、计划、研究与可复核 evidence。产品行为以当前代码和 OpenSpec 为准；`docs/**` 不承担 active backlog 或 code-level rule 的 single source of truth。
+本目录承载架构解释、操作指南、实现参考、计划、研究、可复核 evidence，以及可入库设计稿。产品行为以当前代码和 OpenSpec 为准；`docs/**` 不承担 active backlog 或 code-level rule 的 single source of truth。
 
 ## 从这里开始
 
@@ -29,6 +29,7 @@ status: active
 | **Plans** | [`plans/README.md`](plans/README.md) | 有时间边界的 implementation plan |
 | **Research** | [`research/README.md`](research/README.md) | 外部调研、spike 与设计输入，不代表 shipped behavior |
 | **Reports** | [`reports/README.md`](reports/README.md) | 带日期的治理、影响与验收报告 |
+| **Designs** | [`designs/README.md`](designs/README.md) | HTML 原型、选款页、视觉 mock；不是 shipped UI |
 
 ## 历史文档
 
@@ -83,6 +84,7 @@ status: active
 
 - [`guides/workflow/README.md`](guides/workflow/README.md)
 - [`guides/ui/README.md`](guides/ui/README.md)
+- [`designs/README.md`](designs/README.md) — 可入库设计稿（新原型进这里）
 
 ## 兼容入口
 

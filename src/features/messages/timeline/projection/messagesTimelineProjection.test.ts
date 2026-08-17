@@ -211,6 +211,77 @@ describe("messagesTimelineProjection", () => {
     });
   });
 
+  it("parks a collapsed chip above each assistant segment", () => {
+    const entries = groupToolItems([
+      {
+        id: "user-1",
+        kind: "message",
+        role: "user",
+        text: "分段",
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        role: "assistant",
+        text: "第一段",
+      },
+      {
+        id: "assistant-2",
+        kind: "message",
+        role: "assistant",
+        text: "第二段",
+      },
+    ]);
+    const rows = buildTimelineProjectionRows({
+      activeUserInputAnchorItemId: null,
+      approvalVisible: false,
+      claudeDockedReasoningItemIds: [],
+      processPhaseChips: [
+        {
+          phaseKey: "assistant-1",
+          count: 1,
+          expanded: false,
+          durationMs: null,
+          breakdown: { reasoningCount: 0, toolCount: 1, exploreCount: 0 },
+          insertBeforeItemId: "tool-1",
+          assistantItemId: "assistant-1",
+          hiddenItemIds: ["tool-1"],
+        },
+        {
+          phaseKey: "assistant-2",
+          count: 2,
+          expanded: false,
+          durationMs: null,
+          breakdown: { reasoningCount: 0, toolCount: 2, exploreCount: 0 },
+          insertBeforeItemId: "tool-2",
+          assistantItemId: "assistant-2",
+          hiddenItemIds: ["tool-2", "tool-3"],
+        },
+      ],
+      effectiveItemsCount: 3,
+      groupedEntries: entries,
+      hasVisibleUserInputRequest: false,
+      hiddenClaudeReasoningOnly: false,
+      historyRecoveryFailureVisible: false,
+      isHistoryLoading: false,
+      isThinking: false,
+      shouldRenderUserInputAtTail: false,
+    });
+
+    const kinds = rows
+      .filter((row) => row.kind === "liveMiddleCollapsed" || row.kind === "entry")
+      .map((row) =>
+        row.kind === "liveMiddleCollapsed" ? `chip:${row.phaseKey}` : row.itemIds[0],
+      );
+    expect(kinds).toEqual([
+      "user-1",
+      "chip:assistant-1",
+      "assistant-1",
+      "chip:assistant-2",
+      "assistant-2",
+    ]);
+  });
+
   it("resolves the projection row index for a message id", () => {
     const entries = groupToolItems(buildLongListFixture(12));
     const rows = buildTimelineProjectionRows({

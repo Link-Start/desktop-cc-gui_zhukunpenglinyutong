@@ -1042,6 +1042,55 @@ describe("conversationAssembler", () => {
     );
   });
 
+  it("does not append a second assistant after a CLI wakeup fold when texts are equivalent", () => {
+    let state = createState();
+    const assistantText = "已丢到后台，任务 ID `b83ywvfpw`，跑完会通知。";
+    state = {
+      ...state,
+      items: [
+        {
+          id: "assistant-wakeup",
+          kind: "message",
+          role: "assistant",
+          text: assistantText,
+          isFinal: true,
+        },
+        {
+          id: "user-wakeup-fold",
+          kind: "message",
+          role: "user",
+          text: `<task-notification>
+<task-id>b83ywvfpw</task-id>
+<status>completed</status>
+<summary>Background command "Sleep 8s then echo timestamp" completed</summary>
+</task-notification>`,
+        },
+      ],
+    };
+
+    state = appendEvent(
+      state,
+      createEvent({
+        eventId: "evt-wakeup-complete",
+        item: {
+          id: "assistant-wakeup-replay",
+          kind: "message",
+          role: "assistant",
+          text: assistantText,
+        },
+        operation: "itemCompleted",
+      }),
+    );
+
+    const assistantMessages = state.items.filter(
+      (item): item is Extract<ConversationItem, { kind: "message" }> =>
+        item.kind === "message" && item.role === "assistant",
+    );
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]?.text).toBe(assistantText);
+    expect(state.items.filter((item) => item.kind === "message")).toHaveLength(2);
+  });
+
   it("hydrates history by collapsing equivalent reasoning snapshots with different ids", () => {
     const snapshot: NormalizedHistorySnapshot = {
       engine: "codex" as const,

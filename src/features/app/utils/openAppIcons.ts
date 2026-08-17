@@ -2,6 +2,7 @@ import cursorIcon from "../../../assets/app-icons/cursor.png";
 import finderIcon from "../../../assets/app-icons/finder.png";
 import antigravityIcon from "../../../assets/app-icons/antigravity.png";
 import ghosttyIcon from "../../../assets/app-icons/ghostty.png";
+import ideaIcon from "../../../assets/app-icons/idea.png";
 import vscodeIcon from "../../../assets/app-icons/vscode.png";
 import zedIcon from "../../../assets/app-icons/zed.png";
 import type { OpenAppTarget } from "../../../types";
@@ -33,6 +34,7 @@ function svgDataUri(svg: string): string {
 }
 
 export const GENERIC_APP_ICON = svgDataUri(GENERIC_APP_SVG);
+export const IDEA_APP_ICON = ideaIcon;
 export const SUBLIME_APP_ICON = svgDataUri(SUBLIME_SVG);
 export const NOTEPAD_APP_ICON = svgDataUri(NOTEPAD_SVG);
 export const TERMINAL_APP_ICON = svgDataUri(TERMINAL_SVG);
@@ -47,6 +49,10 @@ export function getKnownOpenAppIcon(id: string): string | null {
       return cursorIcon;
     case "zed":
       return zedIcon;
+    case "idea":
+    case "intellij":
+    case "jetbrains":
+      return IDEA_APP_ICON;
     case "ghostty":
       return ghosttyIcon;
     case "antigravity":
@@ -94,6 +100,13 @@ export function getKnownOpenAppIconByRef(
   }
   if (/\bzed\b/.test(haystack) || haystack.includes("zed.app")) {
     return zedIcon;
+  }
+  if (
+    haystack.includes("intellij") ||
+    haystack.includes("idea") ||
+    haystack.includes("jetbrains")
+  ) {
+    return IDEA_APP_ICON;
   }
   if (haystack.includes("ghostty")) {
     return ghosttyIcon;

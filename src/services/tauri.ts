@@ -294,6 +294,8 @@ export type {
   BrowserTextNode,
 } from "../features/browser-agent/types";
 export { previewCodexLaunchProfile, runClaudeDoctor, runCodexDoctor, runDshDoctor, runGrokDoctor, runKimiDoctor, runOpenCodeDoctor, runPiDoctor } from "./tauri/doctor";
+export { cancelDshHost, ensureDshHost } from "./tauri/dshHost";
+export type { DshHostEnsureResult } from "./tauri/dshHost";
 export { getCliInstallPlan, getCliVersionStatus, runCliInstaller } from "./tauri/cliInstaller";
 export type {
   ComputerUseActivationFailureKind,

@@ -269,6 +269,28 @@ describe("GitMultiRepositoryChanges", () => {
     expect(onOpenInlinePreview).toHaveBeenCalledWith("services/api", "pom.xml");
   });
 
+  it("forwards reveal-in-file-manager clicks with repository identity", () => {
+    const onRevealInFileManager = vi.fn();
+    render(
+      <GitMultiRepositoryChanges
+        workspaceId="ws-1"
+        statuses={[repositoryStatus("services/api")]}
+        isLoading={false}
+        commitMessage=""
+        commitLoading={false}
+        onRevealInFileManager={onRevealInFileManager}
+      />,
+    );
+
+    const revealButton = document.querySelector<HTMLButtonElement>(
+      '.diff-row[data-path="pom.xml"] .diff-row-action--reveal',
+    );
+    expect(revealButton).toBeTruthy();
+    fireEvent.click(revealButton as HTMLButtonElement);
+
+    expect(onRevealInFileManager).toHaveBeenCalledWith("services/api", "pom.xml");
+  });
+
   it("forwards direct file-row opens with repository identity", () => {
     const onOpenFile = vi.fn();
     render(

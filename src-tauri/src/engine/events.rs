@@ -259,9 +259,46 @@ impl ToolItemKind {
     }
 }
 
-fn resolve_tool_item_kind(tool_name: Option<&str>) -> ToolItemKind {
+fn first_non_empty_object_string<'a>(map: &'a serde_json::Map<String, Value>, keys: &[&str]) -> Option<&'a str> {
+    keys.iter().find_map(|key| {
+        map.get(*key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    })
+}
+
+fn parse_tool_input_object(input: Option<&Value>) -> Option<serde_json::Map<String, Value>> {
+    let value = input?;
+    match value {
+        Value::Object(map) => Some(map.clone()),
+        Value::String(raw) => serde_json::from_str::<Value>(raw).ok().and_then(|parsed| {
+            parsed.as_object().cloned()
+        }),
+        _ => None,
+    }
+}
+
+fn input_looks_like_command(input: Option<&Value>) -> bool {
+    let Some(map) = parse_tool_input_object(input) else {
+        return false;
+    };
+    first_non_empty_object_string(
+        &map,
+        &["command", "cmd", "script", "shell_command", "bash"],
+    )
+    .is_some()
+}
+
+fn resolve_tool_item_kind(tool_name: Option<&str>, input: Option<&Value>) -> ToolItemKind {
     let lower = tool_name.unwrap_or_default().trim().to_ascii_lowercase();
+    // DSH `tool/result` / later `tool-call-delta` chunks often omit `name`.
+    // Classify from structured args so bash is not rewritten as mcpToolCall +
+    // server="agent" (which the canvas then renders as Agent / 子代理).
     if lower.is_empty() {
+        if input_looks_like_command(input) {
+            return ToolItemKind::CommandExecution;
+        }
         return ToolItemKind::MpcToolCall;
     }
     // Command-like tools can contain "write" in their name (for example write_stdin).
@@ -472,7 +509,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             input,
             ..
         } => {
-            let item_kind = resolve_tool_item_kind(Some(tool_name.as_str()));
+            let item_kind = resolve_tool_item_kind(Some(tool_name.as_str()), input.as_ref());
             let item = match item_kind {
                 ToolItemKind::CommandExecution => json!({
                     "id": tool_id,
@@ -529,17 +566,22 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 .cloned()
                 .or_else(|| output.clone());
             let normalized_output_text = normalized_output.as_ref().map(stringify_value);
-            let item_kind = resolve_tool_item_kind(tool_name.as_deref());
+            let item_kind = resolve_tool_item_kind(
+                tool_name.as_deref(),
+                embedded_args.as_ref().or(output.as_ref()),
+            );
+            // DSH `tool/result` often omits `name`. Never fall back to the provider
+            // call id (`Call-<uuid>|fc_...`) — that string is an identity, not a title.
+            // Omit title/tool so the frontend keeps the name from `tool/call`.
             let resolved_title = tool_name
-                .clone()
-                .filter(|name| !name.trim().is_empty())
-                .unwrap_or_else(|| tool_id.clone());
-            let item = match item_kind {
+                .as_ref()
+                .map(|name| name.trim())
+                .filter(|name| !name.is_empty())
+                .map(str::to_string);
+            let mut item = match item_kind {
                 ToolItemKind::CommandExecution => json!({
                     "id": tool_id,
                     "type": item_kind.item_type(),
-                    "title": resolved_title,
-                    "tool": resolved_title,
                     "input": embedded_args,
                     "arguments": embedded_args,
                     "aggregatedOutput": normalized_output_text.clone(),
@@ -550,8 +592,6 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 ToolItemKind::FileChange => json!({
                     "id": tool_id,
                     "type": item_kind.item_type(),
-                    "title": resolved_title,
-                    "tool": resolved_title,
                     "input": embedded_args,
                     "arguments": embedded_args,
                     "output": normalized_output_text.clone(),
@@ -563,8 +603,6 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                         "id": tool_id,
                         "type": item_kind.item_type(),
                         "server": "agent",
-                        "tool": resolved_title,
-                        "title": resolved_title,
                         "arguments": embedded_args,
                         "result": normalized_output_text.clone(),
                         "error": error.clone(),
@@ -572,6 +610,10 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                     })
                 }
             };
+            if let Some(title) = resolved_title {
+                item["title"] = Value::String(title.clone());
+                item["tool"] = Value::String(title);
+            }
             json!({
                 "method": "item/completed",
                 "params": {
@@ -588,7 +630,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             input,
             ..
         } => {
-            let item_kind = resolve_tool_item_kind(tool_name.as_deref());
+            let item_kind = resolve_tool_item_kind(tool_name.as_deref(), input.as_ref());
             let item = match item_kind {
                 ToolItemKind::CommandExecution | ToolItemKind::FileChange => json!({
                     "id": tool_id,
@@ -597,14 +639,24 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                     "arguments": input,
                     "status": "started",
                 }),
-                ToolItemKind::MpcToolCall => json!({
-                    "id": tool_id,
-                    "type": item_kind.item_type(),
-                    "server": "claude",
-                    "tool": tool_name.clone().unwrap_or_else(|| tool_id.clone()),
-                    "arguments": input,
-                    "status": "started",
-                }),
+                ToolItemKind::MpcToolCall => {
+                    let mut item = json!({
+                        "id": tool_id,
+                        "type": item_kind.item_type(),
+                        "server": "agent",
+                        "arguments": input,
+                        "status": "started",
+                    });
+                    if let Some(name) = tool_name
+                        .as_ref()
+                        .map(|value| value.trim())
+                        .filter(|value| !value.is_empty())
+                    {
+                        item["tool"] = Value::String(name.to_string());
+                        item["title"] = Value::String(name.to_string());
+                    }
+                    item
+                }
             };
             json!({
                 "method": "item/updated",
@@ -620,7 +672,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             delta,
             ..
         } => {
-            let method = match resolve_tool_item_kind(tool_name.as_deref()) {
+            let method = match resolve_tool_item_kind(tool_name.as_deref(), None) {
                 ToolItemKind::FileChange => "item/fileChange/outputDelta",
                 _ => "item/commandExecution/outputDelta",
             };
@@ -1528,6 +1580,59 @@ mod tests {
         assert_eq!(
             mapped.message["params"]["output"],
             Value::String("commit-a\ncommit-b".to_string())
+        );
+    }
+
+    #[test]
+    fn tool_completed_without_name_does_not_use_call_id_as_title() {
+        let event = EngineEvent::ToolCompleted {
+            workspace_id: "ws-dsh".to_string(),
+            tool_id: "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc_dea0cf7d-ffe2-918e-bd8d-1f467cee29d2_0"
+                .to_string(),
+            tool_name: None,
+            output: Some(Value::String("ok".to_string())),
+            error: None,
+        };
+
+        let mapped =
+            engine_event_to_app_server_event(&event, "thread-1", "item-1").expect("mapped event");
+        let item = &mapped.message["params"]["item"];
+        assert_eq!(
+            item["id"],
+            Value::String(
+                "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc_dea0cf7d-ffe2-918e-bd8d-1f467cee29d2_0"
+                    .to_string()
+            )
+        );
+        assert!(item.get("title").is_none());
+        assert!(item.get("tool").is_none());
+        assert_eq!(item["status"], Value::String("completed".to_string()));
+    }
+
+    #[test]
+    fn tool_completed_without_name_classifies_bash_from_command_args() {
+        let event = EngineEvent::ToolCompleted {
+            workspace_id: "ws-dsh".to_string(),
+            tool_id: "call-bash-1".to_string(),
+            tool_name: None,
+            output: Some(json!({
+                "_input": {
+                    "command": "git status --short",
+                    "description": "Show working tree status"
+                },
+                "_output": " M src/app.ts"
+            })),
+            error: None,
+        };
+
+        let mapped =
+            engine_event_to_app_server_event(&event, "thread-1", "item-1").expect("mapped event");
+        let item = &mapped.message["params"]["item"];
+        assert_eq!(item["type"], Value::String("commandExecution".to_string()));
+        assert!(item.get("server").is_none());
+        assert_eq!(
+            item["input"]["command"],
+            Value::String("git status --short".to_string())
         );
     }
 

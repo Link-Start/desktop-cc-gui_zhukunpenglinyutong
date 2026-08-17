@@ -44,10 +44,27 @@ pub struct DshSessionMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct DshSessionStats {
+    pub turns: i64,
+    pub steps: i64,
+    pub llm_ms: i64,
+    pub tool_ms: i64,
+    pub ttft_ms: i64,
+    pub ttft_steps: i64,
+    pub decode_ms: i64,
+    pub decode_tokens: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct DshSessionUsage {
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
     pub cache_read_input_tokens: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_write_input_tokens: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_stats: Option<DshSessionStats>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,9 +117,7 @@ pub async fn load_dsh_session(
     let session_id = session_id_from_thread(session_id);
     let (events, last_page) = load_history_pages(client, &session_id).await?;
     let messages = fold_history_events(&events);
-    let usage = last_page
-        .pointer("/projections/values/tokenUsage")
-        .and_then(usage_from_projection);
+    let usage = usage_from_history_page(&last_page);
     Ok(DshSessionLoadResult { messages, usage })
 }
 
@@ -154,6 +169,7 @@ async fn load_history_pages(
 pub async fn archive_dsh_session(client: &DshHostClient, session_id: &str) -> Result<(), String> {
     let session_id = session_id_from_thread(session_id);
     session::archive_session(client, &session_id).await?;
+    super::events::unbind_session(&session_id).await;
     Ok(())
 }
 
@@ -365,7 +381,7 @@ fn is_dsh_runtime_context_text(text: &str) -> bool {
     let mut rest = trimmed.to_string();
     for _ in 0..12 {
         let before = rest.clone();
-        for tag in ["system-reminder", "available_skills", "agent_skills"] {
+        for tag in ["system-reminder", "available_skills", "agent_skills", "goal_round"] {
             rest = strip_dsh_runtime_xml_block(&rest, tag);
         }
         if rest == before {
@@ -378,6 +394,7 @@ fn is_dsh_runtime_context_text(text: &str) -> bool {
 fn is_dsh_injected_user_message(data: &Value, text: &str) -> bool {
     match dsh_source_kind(data) {
         Some(kind) if kind.eq_ignore_ascii_case("user") => false,
+        Some(kind) if kind.eq_ignore_ascii_case("goal") => false,
         Some(_) => true,
         None => is_dsh_runtime_context_text(text),
     }
@@ -488,12 +505,72 @@ fn flush_assistant(
     }
 }
 
+fn usage_from_history_page(page: &Value) -> Option<DshSessionUsage> {
+    let values = page.pointer("/projections/values")?;
+    let token_usage = values.get("tokenUsage").and_then(usage_from_projection);
+    let session_stats = values.get("sessionStats").and_then(session_stats_from_projection);
+    match (token_usage, session_stats) {
+        (None, None) => None,
+        (Some(mut usage), stats) => {
+            usage.session_stats = stats;
+            Some(usage)
+        }
+        (None, Some(stats)) => Some(DshSessionUsage {
+            session_stats: Some(stats),
+            ..DshSessionUsage::default()
+        }),
+    }
+}
+
 fn usage_from_projection(value: &Value) -> Option<DshSessionUsage> {
-    Some(DshSessionUsage {
-        input_tokens: value.get("uncachedInputTokens").and_then(Value::as_i64),
+    let usage = DshSessionUsage {
+        input_tokens: value
+            .get("uncachedInputTokens")
+            .or_else(|| value.get("inputTokens"))
+            .and_then(Value::as_i64),
         output_tokens: value.get("outputTokens").and_then(Value::as_i64),
-        cache_read_input_tokens: value.get("cacheReadTokens").and_then(Value::as_i64),
-    })
+        cache_read_input_tokens: value
+            .get("cacheReadTokens")
+            .or_else(|| value.get("cachedTokens"))
+            .and_then(Value::as_i64),
+        cache_write_input_tokens: value.get("cacheWriteTokens").and_then(Value::as_i64),
+        session_stats: None,
+    };
+    if usage.input_tokens.is_none()
+        && usage.output_tokens.is_none()
+        && usage.cache_read_input_tokens.is_none()
+        && usage.cache_write_input_tokens.is_none()
+    {
+        None
+    } else {
+        Some(usage)
+    }
+}
+
+fn session_stats_from_projection(value: &Value) -> Option<DshSessionStats> {
+    let stats = DshSessionStats {
+        turns: value.get("turns").and_then(Value::as_i64).unwrap_or(0),
+        steps: value.get("steps").and_then(Value::as_i64).unwrap_or(0),
+        llm_ms: value.get("llmMs").and_then(Value::as_i64).unwrap_or(0),
+        tool_ms: value.get("toolMs").and_then(Value::as_i64).unwrap_or(0),
+        ttft_ms: value.get("ttftMs").and_then(Value::as_i64).unwrap_or(0),
+        ttft_steps: value.get("ttftSteps").and_then(Value::as_i64).unwrap_or(0),
+        decode_ms: value.get("decodeMs").and_then(Value::as_i64).unwrap_or(0),
+        decode_tokens: value.get("decodeTokens").and_then(Value::as_i64).unwrap_or(0),
+    };
+    if stats.turns == 0
+        && stats.steps == 0
+        && stats.llm_ms == 0
+        && stats.tool_ms == 0
+        && stats.ttft_ms == 0
+        && stats.ttft_steps == 0
+        && stats.decode_ms == 0
+        && stats.decode_tokens == 0
+    {
+        None
+    } else {
+        Some(stats)
+    }
 }
 
 fn normalize_path(path: &Path) -> String {
@@ -722,6 +799,58 @@ mod tests {
             ""
         );
         assert_eq!(sanitize_dsh_sidebar_title("你好"), "你好");
+        assert_eq!(
+            sanitize_dsh_sidebar_title("<goal_round>\nContinue the active goal.\n</goal_round>"),
+            ""
+        );
+    }
+
+    #[test]
+    fn keeps_goal_injection_and_still_skips_plugin() {
+        let entries = vec![
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "写一个 todo",
+                        "source": { "kind": "user" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "<goal_round>\nContinue the active goal.\n</goal_round>",
+                        "source": { "kind": "goal", "goalId": "g1", "round": 2 }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "user/message",
+                    "data": {
+                        "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.",
+                        "source": { "kind": "plugin", "plugin": "dsh-system-prompt" }
+                    }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "assistant/chunk",
+                    "data": { "chunk": { "type": "text-delta", "text": "好的" } }
+                }
+            }),
+            json!({ "event": { "type": "turn/end", "data": { "reason": { "kind": "completed" } } } }),
+        ];
+        let messages = fold_history_events(&entries);
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0].source_kind.as_deref(), Some("user"));
+        assert_eq!(messages[0].text, "写一个 todo");
+        assert_eq!(messages[1].source_kind.as_deref(), Some("goal"));
+        assert!(messages[1].text.contains("<goal_round>"));
+        assert_eq!(messages[2].role, "assistant");
+        assert_eq!(messages[2].text, "好的");
     }
 
     #[test]
@@ -772,5 +901,46 @@ mod tests {
                 .and_then(Value::as_str),
             Some("1\tok")
         );
+    }
+
+    #[test]
+    fn history_page_maps_token_usage_and_session_stats() {
+        let page = json!({
+            "projections": {
+                "values": {
+                    "tokenUsage": {
+                        "uncachedInputTokens": 744288,
+                        "outputTokens": 34735,
+                        "cacheReadTokens": 4017920,
+                        "cacheWriteTokens": 12
+                    },
+                    "sessionStats": {
+                        "turns": 3,
+                        "steps": 8,
+                        "llmMs": 12000,
+                        "toolMs": 400,
+                        "ttftMs": 25500,
+                        "ttftSteps": 3,
+                        "decodeMs": 3000,
+                        "decodeTokens": 216
+                    }
+                }
+            }
+        });
+        let usage = usage_from_history_page(&page).expect("usage");
+        assert_eq!(usage.input_tokens, Some(744288));
+        assert_eq!(usage.output_tokens, Some(34735));
+        assert_eq!(usage.cache_read_input_tokens, Some(4017920));
+        assert_eq!(usage.cache_write_input_tokens, Some(12));
+        let stats = usage.session_stats.expect("session stats");
+        assert_eq!(stats.ttft_ms, 25500);
+        assert_eq!(stats.ttft_steps, 3);
+        assert_eq!(stats.decode_ms, 3000);
+        assert_eq!(stats.decode_tokens, 216);
+    }
+
+    #[test]
+    fn history_page_without_projections_is_none() {
+        assert!(usage_from_history_page(&json!({ "events": [] })).is_none());
     }
 }

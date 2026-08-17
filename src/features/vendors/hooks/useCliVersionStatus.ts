@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CliInstallEngine, CliVersionStatus } from "@/types";
 import { getCliVersionStatus } from "@/services/tauri";
 
@@ -23,27 +23,38 @@ export function useCliVersionStatus({
   // Avoid first paint flashing "not installed" before the effect runs.
   const [loading, setLoading] = useState(() => enabled && cached === null);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!enabled) {
       return;
     }
+    const requestId = ++requestIdRef.current;
+    const requestedEngine = engine;
     setLoading(true);
     setError(null);
     try {
-      const next = await getCliVersionStatus(engine);
-      // Guard against out-of-order responses if engine/enabled flips mid-flight.
-      if (next.engine && next.engine !== engine) {
+      const next = await getCliVersionStatus(requestedEngine);
+      if (requestId !== requestIdRef.current) {
         return;
       }
-      cliVersionStatusCache.set(engine, next);
+      // Guard against out-of-order responses if engine/enabled flips mid-flight.
+      if (next.engine && next.engine !== requestedEngine) {
+        return;
+      }
+      cliVersionStatusCache.set(requestedEngine, next);
       setStatus(next);
     } catch (err) {
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
       setError(err instanceof Error ? err.message : String(err));
       // Keep cached status if any; only clear when we had nothing to show.
-      setStatus((previous) => previous ?? readCachedStatus(engine));
+      setStatus((previous) => previous ?? readCachedStatus(requestedEngine));
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [enabled, engine]);
 

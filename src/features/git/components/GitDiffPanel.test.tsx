@@ -135,6 +135,12 @@ vi.mock("react-i18next", () => ({
         "files.saving": "Saving...",
         "files.continueEditing": "Continue editing",
         "files.discardChangesAction": "Discard changes",
+        "files.revealInFinder": "Reveal in Finder",
+        "files.revealInExplorer": "Show in Explorer",
+        "files.revealInFileManager": "Reveal in File Manager",
+        "files.revealFailed": "Couldn’t show in file manager: {{message}}",
+        "files.openInBrowserNoWorkspace":
+          "Select a workspace before opening a file in the built-in browser",
       };
       const template = translations[key] ?? key;
       if (!options) {

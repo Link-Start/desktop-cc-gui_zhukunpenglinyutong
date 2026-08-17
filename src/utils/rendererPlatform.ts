@@ -6,6 +6,11 @@ type NavigatorLike = Pick<Navigator, "platform" | "userAgent"> & {
   };
 };
 
+export type RevealInOsFileManagerLabelKey =
+  | "files.revealInFinder"
+  | "files.revealInExplorer"
+  | "files.revealInFileManager";
+
 export function detectRendererPlatform(
   navigatorLike: NavigatorLike | undefined = globalThis.navigator,
 ): RendererPlatform {
@@ -26,6 +31,18 @@ export function detectRendererPlatform(
     return "linux";
   }
   return "unknown";
+}
+
+export function getRevealInOsFileManagerLabelKey(
+  platform: RendererPlatform = detectRendererPlatform(),
+): RevealInOsFileManagerLabelKey {
+  if (platform === "windows") {
+    return "files.revealInExplorer";
+  }
+  if (platform === "linux") {
+    return "files.revealInFileManager";
+  }
+  return "files.revealInFinder";
 }
 
 export function installRendererPlatformAttribute(

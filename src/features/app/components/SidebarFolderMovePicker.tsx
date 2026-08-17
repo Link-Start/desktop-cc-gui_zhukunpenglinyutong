@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import type { ThreadFolderMovePickerState } from "./sidebarInternals";
 
@@ -20,7 +21,7 @@ export function SidebarFolderMovePicker({
   onClose,
   onSelectTarget,
 }: SidebarFolderMovePickerProps) {
-  return (
+  const overlay = (
     <div
       className="sidebar-workspace-menu-backdrop"
       onClick={onClose}
@@ -78,4 +79,10 @@ export function SidebarFolderMovePicker({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return overlay;
+  }
+
+  return createPortal(overlay, document.body);
 }

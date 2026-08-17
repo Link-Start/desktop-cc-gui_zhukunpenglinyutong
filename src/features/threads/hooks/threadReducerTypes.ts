@@ -293,6 +293,7 @@ export type ThreadAction =
       threadId: string;
     }
   | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
+  | { type: "setThreadSessionStats"; threadId: string; sessionStats: ThreadTokenUsage["sessionStats"] }
   | {
       type: "setRateLimits";
       workspaceId: string;

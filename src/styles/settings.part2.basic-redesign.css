@@ -1706,6 +1706,54 @@
   color: var(--settings-basic-text-muted);
 }
 
+.settings-section-basic .settings-wallpaper-custom {
+  width: min(100%, 520px);
+}
+
+.settings-section-basic .settings-wallpaper-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: min(100%, 520px);
+}
+
+.settings-section-basic .settings-wallpaper-swatch {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--settings-basic-border) 70%, transparent);
+}
+
+.settings-section-basic .settings-wallpaper-swatch > span {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+}
+
+.settings-section-basic .settings-wallpaper-swatch.is-active {
+  box-shadow:
+    0 0 0 2px var(--settings-basic-surface),
+    0 0 0 3.5px color-mix(in srgb, var(--settings-basic-text) 55%, transparent);
+}
+
+.settings-section-basic .settings-wallpaper-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
 .settings-section-basic .settings-pref-font-control {
   width: min(100%, 320px);
 }

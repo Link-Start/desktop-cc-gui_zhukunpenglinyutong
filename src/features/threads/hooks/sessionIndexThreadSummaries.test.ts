@@ -65,6 +65,53 @@ describe("sessionIndexThreadSummaries", () => {
     expect(rows[0]?.name).toContain("First");
   });
 
+  it("drops commit-message helper rows from the first-paint index", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "grok",
+          sessionId: "commit-en",
+          title:
+            "Please generate a commit message. The commit message must follow the Conventional Commits specification",
+          updatedAt: 200,
+        },
+        {
+          engine: "claude",
+          sessionId: "user-1",
+          title: "当前收起逻辑与数据不一致",
+          updatedAt: 100,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows.map((row) => row.id)).toEqual(["claude:user-1"]);
+  });
+
+  it("preserves explicit empty disk size for never-started index rows", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "claude",
+          sessionId: "empty-1",
+          title: "",
+          updatedAt: 10,
+          sizeBytes: 0,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.sizeBytes).toBe(0);
+  });
+
   it("hides Shared-owned and protocol-hidden index rows before first paint", () => {
     const rows = sessionIndexRowsToThreadSummaries(
       [

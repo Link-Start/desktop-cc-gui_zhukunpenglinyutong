@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import FileText from "lucide-react/dist/esm/icons/file-text";
+import FolderOpen from "lucide-react/dist/esm/icons/folder-open";
 import Globe from "lucide-react/dist/esm/icons/globe";
 import Minus from "lucide-react/dist/esm/icons/minus";
 import PanelRightOpen from "lucide-react/dist/esm/icons/panel-right-open";
@@ -18,6 +19,7 @@ import { FloatingTooltipButton } from "@/components/ui/floating-tooltip-button";
 import type { GitFileStatus } from "../../../types";
 import { getFileTreeIconSvg } from "../../files/utils/fileTreeIcons";
 import { isHtmlFilePath } from "../../files/utils/openHtmlInBrowser";
+import { getRevealInOsFileManagerLabelKey } from "../../../utils/rendererPlatform";
 import { GitDiffPanelSectionActions } from "./GitDiffPanelSectionActions";
 import {
   type InclusionState,
@@ -194,6 +196,7 @@ type DiffFileRowProps = {
   onKeySelect: () => void;
   onOpenInlinePreview?: () => void;
   onOpenPreview?: () => void;
+  onRevealInFileManager?: () => void;
   onOpenInBrowser?: () => void;
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onStageFile?: (path: string) => Promise<void> | void;
@@ -222,6 +225,7 @@ export const DiffFileRow = memo(function DiffFileRow({
   onKeySelect,
   onOpenInlinePreview,
   onOpenPreview,
+  onRevealInFileManager,
   onOpenInBrowser,
   onContextMenu,
   onStageFile,
@@ -242,6 +246,7 @@ export const DiffFileRow = memo(function DiffFileRow({
     Boolean(onOpenInBrowser) &&
     isHtmlFilePath(file.path) &&
     !isDeletedDiffFile(file);
+  const revealInOsLabel = t(getRevealInOsFileManagerLabelKey());
   const inclusionLabel = t("git.commitSelectionToggleFile", { path: file.path });
   const treeIndentPx = indentLevel * TREE_INDENT_STEP;
   const treeRowStyle = treeItem
@@ -314,6 +319,23 @@ export const DiffFileRow = memo(function DiffFileRow({
           </span>
         ) : null}
         <div className="diff-row-actions" role="group" aria-label={t("git.fileActions")}>
+          {onRevealInFileManager ? (
+            <FloatingTooltipButton
+              type="button"
+              className="diff-row-action diff-row-action--reveal"
+              tooltipLabel={revealInOsLabel}
+              tooltipSide="bottom"
+              tooltipAlign="end"
+              tooltipDelay={180}
+              aria-label={revealInOsLabel}
+              onClick={(event) => {
+                event.stopPropagation();
+                onRevealInFileManager();
+              }}
+            >
+              <FolderOpen size={12} aria-hidden />
+            </FloatingTooltipButton>
+          ) : null}
           {showOpenInBrowser ? (
             <FloatingTooltipButton
               type="button"
@@ -472,6 +494,7 @@ export type DiffSectionProps = {
     file: DiffFile,
     section: "staged" | "unstaged",
   ) => void;
+  onRevealInFileManager?: (path: string) => void;
   onOpenInBrowser?: (path: string) => void;
   onShowFileMenu: (
     event: ReactMouseEvent<HTMLDivElement>,
@@ -577,6 +600,7 @@ export function DiffSection({
   onFileClick,
   onOpenInlinePreview,
   onOpenFilePreview,
+  onRevealInFileManager,
   onOpenInBrowser,
   onShowFileMenu,
 }: DiffSectionProps) {
@@ -733,6 +757,11 @@ export function DiffSection({
                 onOpenPreview={
                   onOpenFilePreview
                     ? () => onOpenFilePreview(file, section)
+                    : undefined
+                }
+                onRevealInFileManager={
+                  onRevealInFileManager
+                    ? () => onRevealInFileManager(file.path)
                     : undefined
                 }
                 onOpenInBrowser={

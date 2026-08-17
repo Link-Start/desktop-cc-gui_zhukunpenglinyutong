@@ -1,5 +1,6 @@
 import type { ThreadSummary } from "../../../types";
 import type { WorkspaceSessionFolder } from "../../../services/tauri";
+import { isCommitMessageHelperPreview } from "../../threads/utils/codexBackgroundHelpers";
 
 export const WORKSPACE_SESSION_SYSTEM_AUTO_FOLDER_ID = "__system_auto__";
 
@@ -154,7 +155,10 @@ export function buildWorkspaceSessionFolderProjection(params: {
   const inheritedFolderByDepth: Array<string | null> = [];
   let visibleSessionCount = 0;
   params.rows.forEach((row) => {
-    if (row.thread.autoSession?.visibility === "hidden") {
+    if (
+      row.thread.autoSession?.visibility === "hidden" ||
+      isCommitMessageHelperPreview(row.thread.name)
+    ) {
       return;
     }
     visibleSessionCount += 1;
@@ -242,7 +246,10 @@ export function buildWorkspaceSessionFolderWorkspaceProjection(params: {
 }): WorkspaceSessionFolderWorkspaceProjection {
   const folderIdBySessionId = new Map<string, string | null>();
   params.rows.forEach((row) => {
-    if (row.thread.autoSession?.visibility === "hidden") {
+    if (
+      row.thread.autoSession?.visibility === "hidden" ||
+      isCommitMessageHelperPreview(row.thread.name)
+    ) {
       return;
     }
     if (row.thread.autoSession?.visibility === "system-auto") {

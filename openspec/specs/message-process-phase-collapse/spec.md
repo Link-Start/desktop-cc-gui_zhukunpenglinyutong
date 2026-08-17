@@ -2,48 +2,43 @@
 
 ## Purpose
 
-定义对话幕布（Native + Shared 共用 Messages 核）过程相位折叠契约：以 user turn
-终稿 assistant 为 ownership 边界，吸收 mid-turn 计划文之前的孤儿 process，hard-unmount
-折叠体，对齐 Shared process-before-prose 干净呈现。
+定义对话幕布（Native + Shared 共用 Messages 核）过程相位折叠契约：每个有可见正文的
+assistant 只折叠紧挨在它正上方的连续 process run，hard-unmount 折叠体，按时间线分段
+穿插呈现。
 
 ## Requirements
 
-### Requirement: Process Phase Collapse MUST Use Turn-Final Ownership
+### Requirement: Process Phase Collapse MUST Use Contiguous Segmentation
 
-对话幕布过程相位折叠 MUST 将同一个 user turn 内、介于上一条 user message 与该 turn
-**最后一条有可见正文的 assistant message** 之间的全部 collapsible process items
-（`reasoning` / `tool` / `explore`）归属到该终稿 assistant 的单一 phase。
-mid-turn assistant 计划/问候正文 MUST 保留在时间线，MUST NOT 被并入 phase body。
-折叠态 MUST hard-unmount process rows，仅保留 `已处理 · …` chip；展开 MUST 能 remount
-被吸收的 process rows（含原先位于 mid-assistant 之前的「孤儿」reasoning）。
+对话幕布过程相位折叠 MUST 将每个有可见正文的 assistant message 只归属**紧挨在它正上方**的连续 collapsible process run（`reasoning` / `tool` / `explore`）。walk-back 遇到 user message、另一段 assistant 正文或其它非 process item 时 MUST 停止，MUST NOT 把同 turn 内更早、已被中间正文隔开的 process 并进终稿。
+折叠态 MUST hard-unmount 该段 process rows，仅在对应 assistant 上方保留 `已处理 · …` chip；展开 MUST 只 remount 该段 process。
+mid-turn assistant 正文 MUST 保留在时间线，作为分段边界。
 
-#### Scenario: Native stream with orphan reasoning before mid-turn plan text
+#### Scenario: Multi-segment assistants each own the process above them
+
+- **WHEN** 同一 user turn 内存在
+  `tools1 → assistant(A1) → tools2 → assistant(A2)` 且各段可渲染 process 步数 `>= 1`
+- **THEN** MUST 分别在 `A1`、`A2` 上方各挂一个 process phase chip
+- **AND** `tools1` MUST 只归属 `A1`，`tools2` MUST 只归属 `A2`
+- **AND** 折叠后时间线 MUST 仍按 `A1` 然后 `A2` 分段，不得把两段正文中间的过程抽空后贴成一堵墙
+
+#### Scenario: Leading reasoning folds onto the adjacent plan text
 
 - **WHEN** timeline 为
   `user → reasoning → assistant(plan) → tools/reasoning… → assistant(final)`
-  且可渲染 process 步数 `> 1`
-- **THEN** 折叠后 MUST NOT 在 plan 文之上单独保留被隔开的孤儿 `思考过程` 行
-- **AND** 终稿上方 MUST 出现单一 process phase chip，其 breakdown 计入被吸收的
-  reasoning 与可见 tools
-- **AND** plan 正文 MUST 仍可见
-
-#### Scenario: Multi-segment assistants share one turn-final chip
-
-- **WHEN** 同一 user turn 内存在
-  `tools1 → assistant(A1) → tools2 → assistant(A2)` 且 process 总步数 `> 1`
-- **THEN** process phase MUST 仅挂在 `A2`
-- **AND** `tools1` 与 `tools2` MUST 一并归属 `A2` 的 phase（折叠时 unmount）
-- **AND** `A1` 正文 MUST 保留
+- **THEN** plan 上方 MUST 出现思考 chip，final 上方 MUST 出现后续工具/思考 chip
+- **AND** 折叠后 MUST NOT 在 plan 文之上单独保留展开的孤儿 `思考过程` 行
+- **AND** plan 与 final 正文 MUST 仍可见
 
 #### Scenario: Single-step process including lone reasoning folds into the chip
 
-- **WHEN** turn-final 之前仅有 1 个可渲染 process 步（含仅 1 条 reasoning / 思考过程）
+- **WHEN** 某段 assistant 正上方仅有 1 个可渲染 process 步（含仅 1 条 reasoning / 思考过程）
 - **THEN** MUST 创建 process phase chip（例如 `已处理 · 思考 1 次`）
-- **AND** 该 process 行在折叠态 MUST hard-unmount，不得作为顶部孤儿 `思考过程` 单独挂载
+- **AND** 该 process 行在折叠态 MUST hard-unmount
 - **AND** Native 与 Shared 共用同一门槛，行为一致
 
 #### Scenario: Trailing in-progress process stays live
 
 - **WHEN** 最后一条 assistant 终稿之后仍有 running tool/explore
-- **THEN** 这些 trailing process items MUST NOT 被并入已完成终稿的 phase
-- **AND** MUST 保持展开可见直到后续终稿落地或回合结束
+- **THEN** 这些 trailing process items MUST NOT 被并入已完成正文的 phase
+- **AND** MUST 保持展开可见，直到触发既有 trailing 滚动窗口或后续终稿落地

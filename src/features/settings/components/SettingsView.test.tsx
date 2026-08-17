@@ -58,6 +58,20 @@ vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
 
+const platformMocks = vi.hoisted(() => ({
+  isWindowsPlatform: vi.fn(() => false),
+}));
+
+vi.mock("../../../utils/platform", async () => {
+  const actual = await vi.importActual<typeof import("../../../utils/platform")>(
+    "../../../utils/platform",
+  );
+  return {
+    ...actual,
+    isWindowsPlatform: platformMocks.isWindowsPlatform,
+  };
+});
+
 vi.mock("@/features/computer-use/components/ComputerUseStatusCard", () => ({
   ComputerUseStatusCard: () => <div data-testid="computer-use-status-card" />,
 }));
@@ -174,6 +188,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  platformMocks.isWindowsPlatform.mockReset();
+  platformMocks.isWindowsPlatform.mockReturnValue(false);
   delete (window as any).queryLocalFonts;
 });
 
@@ -270,6 +286,12 @@ const baseSettings: AppSettings = {
   customSkillDirectories: [],
   canvasWidthMode: "narrow",
   layoutMode: "default",
+  workspaceWallpaper: {
+    mode: "none",
+    customImagePath: null,
+    fluidPreset: "mist",
+    veilOpacity: 12,
+  },
   userMsgColor: "",
   usageShowRemaining: false,
   showMessageAnchors: true,
@@ -1543,6 +1565,123 @@ describe("SettingsView Display", () => {
 
     expect(onUpdateAppSettings).toHaveBeenCalledTimes(callCountBeforeInvalid);
     appRoot.remove();
+  });
+
+  it("updates the workspace wallpaper mode from appearance settings", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({ onUpdateAppSettings });
+    await flushSettingsViewEffects();
+
+    const wallpaperGroup = screen.getByRole("radiogroup", {
+      name: "Page background",
+    });
+    fireEvent.click(within(wallpaperGroup).getByRole("radio", { name: "None" }));
+
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceWallpaper: {
+          mode: "none",
+          customImagePath: null,
+          fluidPreset: "mist",
+          veilOpacity: 12,
+        },
+      }),
+    );
+
+    cleanup();
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "custom",
+          customImagePath: null,
+          fluidPreset: "mist",
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    expect(screen.getByRole("button", { name: "Choose image" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        "No image selected yet. The default backdrop is used for now.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("updates the fluid wallpaper palette from appearance settings", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "mist",
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Orchid" }));
+
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "orchid",
+          veilOpacity: 12,
+        },
+      }),
+    );
+  });
+
+  it("updates the wallpaper veil opacity from appearance settings", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "mist",
+          veilOpacity: 12,
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    const slider = screen.getByLabelText("Frosted glass");
+    fireEvent.change(slider, {
+      target: { value: "18" },
+    });
+
+    // Dragging only moves the local draft; the settings write happens on release.
+    expect(onUpdateAppSettings).not.toHaveBeenCalled();
+
+    fireEvent.pointerUp(slider);
+
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "mist",
+          veilOpacity: 18,
+        },
+      }),
+    );
+  });
+
+  it("hides the workspace wallpaper controls on Windows", async () => {
+    platformMocks.isWindowsPlatform.mockReturnValue(true);
+    renderDisplaySection();
+    await flushSettingsViewEffects();
+
+    expect(screen.queryByTestId("settings-workspace-wallpaper")).toBeNull();
+    expect(screen.queryByText("Page background")).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Fluid" })).toBeNull();
   });
 
   it("hides remaining limits and message anchors while showing window transparency controls", async () => {

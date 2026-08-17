@@ -2104,6 +2104,7 @@ export function SettingsView({
                 handleSaveNotificationSoundPath={
                   handleSaveNotificationSoundPath
                 }
+                onCloseSettings={onClose}
               />
               {basicSubTab === "appearance" && (
                 <BasicAppearanceSection
@@ -2325,6 +2326,7 @@ export function SettingsView({
               title={null}
               description={null}
               appSettings={appSettings}
+              onCloseSettings={onClose}
               onUpdateAppSettings={onUpdateAppSettings}
               sessionRadarRecentCompletedSessions={
                 sessionRadarRecentCompletedSessions

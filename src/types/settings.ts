@@ -60,6 +60,24 @@ export type CanvasWidthMode = "narrow" | "wide";
 
 export type LayoutMode = "default" | "swapped";
 
+export type WorkspaceWallpaperMode = "none" | "fluid" | "custom";
+
+export type WorkspaceWallpaperFluidPreset =
+  | "mist"
+  | "aurora"
+  | "dusk"
+  | "orchid"
+  | "ember"
+  | "ink";
+
+export type WorkspaceWallpaperSettings = {
+  mode: WorkspaceWallpaperMode;
+  customImagePath: string | null;
+  fluidPreset?: WorkspaceWallpaperFluidPreset;
+  /** Frost blur in px, 0–20. Default 12. Reuses the old veil slider field. */
+  veilOpacity?: number;
+};
+
 export type ComposerEditorSettings = {
   preset: ComposerEditorPreset;
   expandFenceOnSpace: boolean;
@@ -169,6 +187,8 @@ export type AppSettings = {
   customSkillDirectories?: string[];
   canvasWidthMode: CanvasWidthMode;
   layoutMode?: LayoutMode;
+  /** Main-window wallpaper. Off until the user turns it on. */
+  workspaceWallpaper?: WorkspaceWallpaperSettings;
   userMsgColor: string;
   usageShowRemaining: boolean;
   showMessageAnchors: boolean;

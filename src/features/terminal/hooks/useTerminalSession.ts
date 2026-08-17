@@ -14,6 +14,10 @@ import {
   writeTerminalSession,
 } from "../../../services/tauri";
 import { isThemeMutationAttribute } from "../../theme/utils/themeAppearance";
+import {
+  getTerminalAppearance,
+  isTerminalAppearanceMutationAttribute,
+} from "../utils/terminalAppearance";
 
 const MAX_BUFFER_CHARS = 200_000;
 /** Maximum number of terminal session buffers to keep in memory.
@@ -62,16 +66,6 @@ type UseTerminalSessionOptions = {
   onDebug?: (entry: DebugEntry) => void;
 };
 
-type TerminalAppearance = {
-  theme: {
-    background: string;
-    foreground: string;
-    cursor: string;
-    selectionBackground?: string;
-  };
-  fontFamily: string;
-};
-
 export type TerminalSessionState = {
   status: TerminalStatus;
   message: string;
@@ -109,48 +103,6 @@ function appendBuffer(existing: string | undefined, data: string): string {
 function shouldIgnoreTerminalError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes("Terminal session not found");
-}
-
-function getTerminalAppearance(container: HTMLElement | null): TerminalAppearance {
-  if (typeof window === "undefined") {
-    return {
-      theme: {
-        background: "transparent",
-        foreground: "#d9dee7",
-        cursor: "#d9dee7",
-      },
-      fontFamily: "Menlo, Monaco, \"Courier New\", monospace",
-    };
-  }
-
-  const target = container ?? document.documentElement;
-  const styles = getComputedStyle(target);
-  const background =
-    styles.getPropertyValue("--terminal-background").trim() ||
-    styles.getPropertyValue("--surface-debug").trim() ||
-    styles.getPropertyValue("--surface-panel").trim() ||
-    "#11151b";
-  const foreground =
-    styles.getPropertyValue("--terminal-foreground").trim() ||
-    styles.getPropertyValue("--text-stronger").trim() ||
-    "#d9dee7";
-  const cursor =
-    styles.getPropertyValue("--terminal-cursor").trim() || foreground;
-  const selection = styles.getPropertyValue("--terminal-selection").trim();
-  const fontFamily =
-    styles.getPropertyValue("--terminal-font-family").trim() ||
-    styles.getPropertyValue("--code-font-family").trim() ||
-    "Menlo, Monaco, \"Courier New\", monospace";
-
-  return {
-    theme: {
-      background,
-      foreground,
-      cursor,
-      selectionBackground: selection || undefined,
-    },
-    fontFamily,
-  };
 }
 
 function disposeFrontendTerminalInstance(refs: {
@@ -298,6 +250,7 @@ export function useTerminalSession({
     }
     const appearance = getTerminalAppearance(containerNodeRef.current);
     terminal.options.fontFamily = appearance.fontFamily;
+    terminal.options.allowTransparency = appearance.allowTransparency;
     terminal.options.theme = appearance.theme;
     refreshTerminal();
   }, [refreshTerminal]);
@@ -408,6 +361,7 @@ export function useTerminalSession({
           cursorBlink: true,
           fontSize: 12,
           fontFamily: appearance.fontFamily,
+          allowTransparency: appearance.allowTransparency,
           theme: appearance.theme,
           scrollback: 5000,
         });
@@ -566,7 +520,10 @@ export function useTerminalSession({
     }
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
-        if (isThemeMutationAttribute(mutation.attributeName)) {
+        if (
+          isThemeMutationAttribute(mutation.attributeName) ||
+          isTerminalAppearanceMutationAttribute(mutation.attributeName)
+        ) {
           applyTerminalAppearance();
           return;
         }

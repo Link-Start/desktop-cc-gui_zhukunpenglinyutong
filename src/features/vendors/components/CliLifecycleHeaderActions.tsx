@@ -85,15 +85,16 @@ export function CliLifecycleProvider({
     },
   });
 
-  const installed = status?.installed ?? false;
-  const localVersion = normalizeLocalVersion(status?.localVersion);
-  const latestVersion = normalizeLocalVersion(status?.latestVersion);
-  const updateAvailable = status?.updateAvailable === true;
-  const nodeOk = status?.nodeOk !== false;
-  const visibility = status
+  const statusForEngine = status?.engine && status.engine !== engine ? null : status;
+  const installed = statusForEngine?.installed ?? false;
+  const localVersion = normalizeLocalVersion(statusForEngine?.localVersion);
+  const latestVersion = normalizeLocalVersion(statusForEngine?.latestVersion);
+  const updateAvailable = statusForEngine?.updateAvailable === true;
+  const nodeOk = statusForEngine?.nodeOk !== false;
+  const visibility = statusForEngine
     ? resolveCliLifecycleButtons({
-        installed: status.installed,
-        updateAvailable: status.updateAvailable,
+        installed: statusForEngine.installed,
+        updateAvailable: statusForEngine.updateAvailable,
       })
     : {
         showInstall: false,
@@ -103,16 +104,16 @@ export function CliLifecycleProvider({
 
   const value: CliLifecycleContextValue = {
     engine,
-    hasStatus: status != null,
+    hasStatus: statusForEngine != null,
     installed,
     localVersion,
     latestVersion,
     updateAvailable,
     loading,
     error,
-    details: status?.details ?? null,
+    details: statusForEngine?.details ?? null,
     // Keep install/update actions disabled until we have a definitive status.
-    disableActions: isBusy || loading || !status || !nodeOk,
+    disableActions: isBusy || loading || !statusForEngine || !nodeOk,
     isBusy,
     showInstall: visibility.showInstall,
     showUpgrade: visibility.showUpgrade,

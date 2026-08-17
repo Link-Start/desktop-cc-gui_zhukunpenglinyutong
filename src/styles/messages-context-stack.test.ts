@@ -64,6 +64,7 @@ describe("messages context stack layout", () => {
         ".message-context-stack.is-user > .browser-context-summary-card,",
         ".message-context-stack.is-user > .intent-canvas-context-summary-card,",
         ".message-context-stack.is-user > .note-card-context-summary-card,",
+        ".message-context-stack.is-user > .dsh-goal-context-summary-card,",
         ".message-context-stack.is-user > .message-code-annotation-context,",
         ".message-context-stack.is-user > .memory-inject-summary,",
         ".message-context-stack.is-user > .memory-pick-empty-status",

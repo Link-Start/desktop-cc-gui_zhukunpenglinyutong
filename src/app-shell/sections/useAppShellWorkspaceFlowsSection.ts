@@ -1,5 +1,4 @@
 import {
-  startTransition,
   useCallback,
   useEffect,
   useRef,
@@ -29,12 +28,9 @@ import type {
   WorkspaceInfo,
   WorkspaceSettings,
 } from "../../types";
+import { shouldPreserveEditorOnThreadSelect } from "./threadEditorPreservation";
+import { commitThreadSelection } from "./threadSelect/commitThreadSelection";
 import {
-  shouldCollapseRightPanelOnThreadSelect,
-  shouldPreserveEditorOnThreadSelect,
-} from "./threadEditorPreservation";
-import {
-  isEngineType,
   type NotificationActionExtra,
   type PendingClaudeTuiOpen,
   type PendingTerminalCommand,
@@ -522,29 +518,31 @@ export function useAppShellWorkspaceFlowsSection(
         targetWorkspaceId: workspaceId,
         activeEditorFilePath,
       });
-      selectWorkspace(workspaceId);
-      setActiveThreadId(threadId, workspaceId);
       const threads = threadsByWorkspace[workspaceId] ?? [];
       const targetThread = threads.find((entry: any) => entry.id === threadId);
-      if (isEngineType(targetThread?.engineSource)) {
-        setActiveEngine(targetThread.engineSource);
-      }
-      startTransition(() => {
-        if (!preserveEditor) {
-          exitDiffView();
-        }
-        setAppMode("chat");
-        setActiveTab("codex");
-        setHomeOpen(false);
-        if (
-          shouldCollapseRightPanelOnThreadSelect({
-            preserveEditor,
-            requestedCollapse: shouldCollapseRightPanel,
-          })
-        ) {
-          collapseRightPanel();
-        }
-      });
+      commitThreadSelection(
+        {
+          workspaceId,
+          threadId,
+        },
+        {
+          selectWorkspace,
+          setActiveThreadId,
+        },
+        {
+          preserveEditor,
+          requestedCollapseRightPanel: shouldCollapseRightPanel,
+          engineSource: targetThread?.engineSource,
+        },
+        {
+          exitDiffView,
+          setAppMode,
+          setActiveTab,
+          setHomeOpen,
+          collapseRightPanel,
+          setActiveEngine,
+        },
+      );
     },
     [
       activeEditorFilePath,

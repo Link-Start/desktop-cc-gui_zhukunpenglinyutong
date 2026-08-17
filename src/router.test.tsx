@@ -19,6 +19,16 @@ vi.mock("./features/app/components/StartupGateOverlay", () => ({
   ),
 }));
 
+vi.mock("./features/onboarding/components/FirstRunSetupHost", () => ({
+  FirstRunSetupHost: () => null,
+}));
+
+vi.mock("./features/theme/components/WorkspaceWallpaperHost", () => ({
+  WorkspaceWallpaperHost: () => (
+    <div data-testid="workspace-wallpaper-sentinel" />
+  ),
+}));
+
 vi.mock(
   "./features/startup-orchestration/utils/startupGateOverlayTestFlag",
   () => ({
@@ -74,6 +84,7 @@ describe("AppRouter", () => {
   it("renders the main shell for the main window", async () => {
     await renderAppRouter();
     expect(screen.getByText("main-shell")).not.toBeNull();
+    expect(screen.getByTestId("workspace-wallpaper-sentinel")).not.toBeNull();
     expect(
       screen.queryByTestId("startup-gate-overlay-sentinel"),
     ).toBeNull();
@@ -109,6 +120,7 @@ describe("AppRouter", () => {
     expect(
       screen.queryByTestId("startup-gate-overlay-sentinel"),
     ).toBeNull();
+    expect(screen.queryByTestId("workspace-wallpaper-sentinel")).toBeNull();
   });
 
   it("renders the about view for the about window", async () => {

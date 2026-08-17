@@ -24,6 +24,7 @@ const tools = {
     subtask: "Subtask",
     todoList: "Todo list",
     userInputRequest: "Ask User Question",
+    genericCall: "Tool call",
     diffCompare: "Diff",
     result: "Result",
     claudeControlResumeFailed: "Resume failed",

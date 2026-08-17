@@ -63,6 +63,7 @@ type GitMultiRepositoryChangesProps = {
   /** Row action that opens workspace file content (not the DIFF modal). */
   onOpenFileContent?: (repositoryRoot: string, path: string) => void;
   onOpenInlinePreview?: (repositoryRoot: string, path: string) => void;
+  onRevealInFileManager?: (repositoryRoot: string, path: string) => void;
   onOpenInBrowser?: (repositoryRoot: string, path: string) => void;
   onShowFileMenu?: (
     event: ReactMouseEvent<HTMLDivElement>,
@@ -116,6 +117,7 @@ export function GitMultiRepositoryChanges({
   onOpenFilePreview,
   onOpenFileContent,
   onOpenInlinePreview,
+  onRevealInFileManager,
   onOpenInBrowser,
   onShowFileMenu,
   onRefresh,
@@ -374,6 +376,11 @@ export function GitMultiRepositoryChanges({
                   : undefined
               }
               onOpenInlinePreview={onOpenInlinePreview ? (path) => onOpenInlinePreview(status.repositoryRoot, path) : undefined}
+              onRevealInFileManager={
+                onRevealInFileManager
+                  ? (path) => onRevealInFileManager(status.repositoryRoot, path)
+                  : undefined
+              }
               onOpenInBrowser={
                 onOpenInBrowser
                   ? (path) => onOpenInBrowser(status.repositoryRoot, path)
@@ -427,6 +434,11 @@ export function GitMultiRepositoryChanges({
                   : undefined
               }
               onOpenInlinePreview={onOpenInlinePreview ? (path) => onOpenInlinePreview(status.repositoryRoot, path) : undefined}
+              onRevealInFileManager={
+                onRevealInFileManager
+                  ? (path) => onRevealInFileManager(status.repositoryRoot, path)
+                  : undefined
+              }
               onOpenInBrowser={
                 onOpenInBrowser
                   ? (path) => onOpenInBrowser(status.repositoryRoot, path)

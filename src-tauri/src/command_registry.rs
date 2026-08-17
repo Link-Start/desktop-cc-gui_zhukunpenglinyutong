@@ -159,6 +159,8 @@ pub(crate) fn invoke_handler(
         crate::engine::load_dsh_session,
         crate::engine::fork_dsh_session,
         crate::engine::delete_dsh_session,
+        crate::engine::ensure_dsh_host,
+        crate::engine::cancel_dsh_host,
         crate::local_usage::list_codex_session_summaries,
         crate::local_usage::load_codex_session,
         // Codex

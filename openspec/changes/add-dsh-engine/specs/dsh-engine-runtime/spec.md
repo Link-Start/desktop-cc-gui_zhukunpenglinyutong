@@ -38,6 +38,30 @@ Probe authority is `host.describe`. Ownership is `spawned` or `adopted`.
 - **AND** wait for `host.describe` before treating the engine as ready
 - **AND** mossx exit SHALL only kill that spawned process
 
+#### Scenario: Windows spawn does not execute the POSIX shim
+
+- **WHEN** mossx resolves `dsh` on Windows from an npm / Hermes prefix
+- **THEN** spawn SHALL use a CreateProcess-safe launch (`node.exe` + `lib/bin.js`, or `dsh.cmd` via `cmd /D /S /C`)
+- **AND** SHALL NOT execute the extensionless POSIX shim
+- **AND** if the child exits before `host.describe` succeeds, the error SHALL include the child output
+
+#### Scenario: Windows repairs empty sharp constructor.mjs before spawn
+
+- **WHEN** mossx is about to spawn `dsh web` on Windows
+- **AND** the resolved DSH tree has `sharp/dist/constructor.cjs` but `constructor.mjs` is missing or 0 bytes
+- **THEN** mossx SHALL write a small ESM re-export shim (`createRequire` → `constructor.cjs`) in place
+- **AND** SHALL NOT overwrite a non-empty `constructor.mjs`
+- **AND** if the child still exits with `plugin tree` / `constructor.mjs` default-export, the error SHALL name this Windows npm 损坏并提示重装 `@deepseek-ai/dsh`
+
+#### Scenario: macOS spawn keeps the shebang binary
+
+- **WHEN** mossx resolves `dsh` on macOS / Linux
+- **THEN** spawn SHALL invoke that shebang path as `dsh web --host --port`
+- **AND** SHALL NOT rewrite the launch to `node lib/bin.js`
+- **AND** SHALL NOT change the child cwd to `$HOME`
+- **AND** SHALL NOT repair or rewrite `sharp/dist/constructor.mjs`
+- **AND** the ready timeout SHALL stay 20s
+
 #### Scenario: Port is occupied by a non-DSH process
 
 - **WHEN** TCP is open but `host.describe` fails

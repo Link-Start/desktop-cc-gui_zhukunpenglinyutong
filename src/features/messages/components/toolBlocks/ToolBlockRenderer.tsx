@@ -5,7 +5,7 @@
 import { memo, useMemo } from 'react';
 import type { ConversationItem } from '../../../../types';
 import {
-  extractToolName,
+  resolveCanonicalToolName,
   isMcpTool,
   isReadTool,
   isEditTool,
@@ -99,7 +99,11 @@ export const ToolBlockRenderer = memo(function ToolBlockRenderer({
         : item,
     [item, liveOutputOverride],
   );
-  const toolName = extractToolName(displayItem.title);
+  const toolName = resolveCanonicalToolName(
+    displayItem.title,
+    displayItem.toolType,
+    displayItem.detail,
+  );
   const lower = toolName.toLowerCase();
   const normalizedToolName = toolName.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
   const normalizedTitle = displayItem.title.trim().toLowerCase().replace(/[^a-z0-9]/g, "");

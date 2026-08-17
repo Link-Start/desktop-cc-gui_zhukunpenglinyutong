@@ -56,10 +56,12 @@ import { useThreadUserInput } from "./useThreadUserInput";
 import { useThreadCompletionEmail } from "./useThreadCompletionEmail";
 import { useMailDrivenSessionContinuation } from "./useMailDrivenSessionContinuation";
 import { useThreadRealtimeHistoryReconcile } from "./useThreadRealtimeHistoryReconcile";
+import { resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState } from "../utils/claudeThreadContinuity";
 import {
-  resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState,
-  shouldShowHistoryLoadingForSelectionThread,
-} from "../utils/claudeThreadContinuity";
+  THREAD_SWITCH_LOADED_REFRESH_MS,
+  decideThreadSelectResume,
+  isKnownNeverStartedThread,
+} from "../policies/threadSelectResumePolicy";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import { clearLiveItemDelta } from "../utils/liveItemDeltaChannel";
 import {
@@ -131,7 +133,6 @@ const AUTO_TITLE_MAX_ATTEMPTS = 2;
 const AUTO_TITLE_PENDING_STALE_MS = 20_000;
 const THREAD_ERROR_DUPLICATE_WINDOW_MS = 8_000;
 const THREAD_SWITCH_RESUME_DELAY_MS = 24;
-const THREAD_SWITCH_LOADED_REFRESH_MS = 20_000;
 
 function normalizeMemoryTurnId(turnId: string | null | undefined) {
   return turnId?.trim() || "__unknown_turn__";
@@ -284,6 +285,7 @@ export function useThreads({
   const activeWorkspaceRef = useRef(activeWorkspace);
   const activeThreadIdRef = useRef<string | null>(null);
   const loadedThreadLastRefreshAtRef = useRef<Record<string, number>>({});
+  const emptySurfaceResumeAtByThreadRef = useRef<Record<string, number>>({});
   const lazyResumeTimerByWorkspaceRef = useRef<
     Record<string, ReturnType<typeof setTimeout> | null>
   >({});
@@ -1019,7 +1021,6 @@ export function useThreads({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
-    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
     historyLoadingProgressByThreadId,
   } = useThreadActions({
@@ -2166,227 +2167,158 @@ export function useThreads({
       if (!canonicalThreadId) {
         return;
       }
-      if (canonicalThreadId) {
-        const historySelectionScopeKey = `${targetId}\u0000${canonicalThreadId}`;
-        const historySelectionGeneration =
-          (historySelectionGenerationByScopeRef.current[
-            historySelectionScopeKey
-          ] ?? 0) + 1;
-        historySelectionGenerationByScopeRef.current[historySelectionScopeKey] =
-          historySelectionGeneration;
-        const isCurrentHistorySelection = () =>
-          historySelectionGenerationByScopeRef.current[
-            historySelectionScopeKey
-          ] === historySelectionGeneration;
-        const now = Date.now();
-        const isLoaded = Boolean(loadedThreadsRef.current[canonicalThreadId]);
-        const automaticRecoveryBlocked =
-          historyLoadingStateByThreadRef.current[canonicalThreadId] ===
-          "failed";
-        const isProcessing = Boolean(
-          threadStatusByIdRef.current[canonicalThreadId]?.isProcessing,
-        );
-        const activeSurfaceItemCount =
-          itemsByThreadRef.current[canonicalThreadId]?.length ?? 0;
-        const isClaudeEmptySurface =
-          canonicalThreadId.startsWith("claude:") &&
-          activeSurfaceItemCount === 0;
-        // Empty Claude surfaces must force rehydrate even after a prior
-        // history-hydrate-empty failure, otherwise the user is stuck until a
-        // full remount and sees only messages.emptyThread.
-        const shouldForceEmptyClaudeReload =
-          isClaudeEmptySurface && !isProcessing;
-        let lastRefreshAt =
-          loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
-        if (isLoaded && lastRefreshAt <= 0) {
-          lastRefreshAt = now;
-          loadedThreadLastRefreshAtRef.current[canonicalThreadId] = now;
+      const historySelectionScopeKey = `${targetId}\u0000${canonicalThreadId}`;
+      const historySelectionGeneration =
+        (historySelectionGenerationByScopeRef.current[
+          historySelectionScopeKey
+        ] ?? 0) + 1;
+      historySelectionGenerationByScopeRef.current[historySelectionScopeKey] =
+        historySelectionGeneration;
+      const isCurrentHistorySelection = () =>
+        historySelectionGenerationByScopeRef.current[
+          historySelectionScopeKey
+        ] === historySelectionGeneration;
+      const now = Date.now();
+      const isLoaded = Boolean(loadedThreadsRef.current[canonicalThreadId]);
+      const historyLoadingFailed =
+        historyLoadingStateByThreadRef.current[canonicalThreadId] === "failed";
+      const isProcessing = Boolean(
+        threadStatusByIdRef.current[canonicalThreadId]?.isProcessing,
+      );
+      const itemCount = itemsByThreadRef.current[canonicalThreadId]?.length ?? 0;
+      const isEmptySurface = itemCount === 0;
+      const threadSummary = (threadsByWorkspaceRef.current[targetId] ?? []).find(
+        (entry) => entry.id === canonicalThreadId,
+      );
+      const isNeverStarted = isKnownNeverStartedThread({
+        threadId: canonicalThreadId,
+        isLoaded,
+        itemCount,
+        summary: threadSummary
+          ? {
+              sizeBytes: threadSummary.sizeBytes,
+              physicalPath: threadSummary.physicalPath,
+            }
+          : null,
+      });
+      let lastRefreshAt =
+        loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
+      if (isLoaded && lastRefreshAt <= 0) {
+        lastRefreshAt = now;
+        loadedThreadLastRefreshAtRef.current[canonicalThreadId] = now;
+      }
+      const resumeDecision = decideThreadSelectResume({
+        isLoaded,
+        isProcessing,
+        historyLoadingFailed,
+        isEmptySurface,
+        isNeverStarted,
+        nowMs: now,
+        lastRefreshAtMs: lastRefreshAt,
+        lastEmptySurfaceResumeAtMs:
+          emptySurfaceResumeAtByThreadRef.current[canonicalThreadId] ?? 0,
+      });
+      // Select must not raise a history-loading curtain. Unloaded history
+      // resumes after the 24ms delay; blank Claude uses in-place recovery.
+      clearHistoryLoadingForThread(canonicalThreadId);
+      if (resumeDecision.action === "skip") {
+        return;
+      }
+      if (resumeDecision.reason === "empty-first") {
+        emptySurfaceResumeAtByThreadRef.current[canonicalThreadId] = now;
+      }
+      const applyRecoveredCanonical = (
+        recoveredThreadId: string | null,
+        trigger?: string,
+      ) => {
+        if (!isCurrentHistorySelection()) {
+          return;
         }
-        const shouldRefreshLoaded =
-          isLoaded &&
-          !isProcessing &&
-          now - lastRefreshAt >= THREAD_SWITCH_LOADED_REFRESH_MS;
-        const shouldScheduleResume =
-          (!isLoaded && !isProcessing && !automaticRecoveryBlocked) ||
-          shouldRefreshLoaded ||
-          shouldForceEmptyClaudeReload;
-        if (!shouldScheduleResume) {
+        const recoveredCanonicalThreadId = recoveredThreadId
+          ? resolveCanonicalThreadId(recoveredThreadId)
+          : null;
+        if (
+          !recoveredCanonicalThreadId ||
+          recoveredCanonicalThreadId === canonicalThreadId ||
+          activeThreadIdByWorkspaceRef.current[targetId] !== canonicalThreadId
+        ) {
+          return;
+        }
+        onDebug?.({
+          id: `${Date.now()}-thread-selection-recovered-canonical`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "thread/selection recovered canonical",
+          payload: {
+            workspaceId: targetId,
+            staleThreadId: canonicalThreadId,
+            recoveredThreadId: recoveredCanonicalThreadId,
+            ...(trigger ? { trigger } : {}),
+          },
+        });
+        dispatch({
+          type: "setActiveThreadId",
+          workspaceId: targetId,
+          threadId: recoveredCanonicalThreadId,
+        });
+      };
+      lazyResumeTimerByWorkspaceRef.current[targetId] = setTimeout(() => {
+        lazyResumeTimerByWorkspaceRef.current[targetId] = null;
+        if (!isCurrentHistorySelection()) {
+          return;
+        }
+        const activeThreadIdForWorkspace =
+          activeThreadIdByWorkspaceRef.current[targetId] ?? null;
+        if (activeThreadIdForWorkspace !== canonicalThreadId) {
           clearHistoryLoadingForThread(canonicalThreadId);
           return;
         }
-        const shouldShowHistoryLoading =
-          !isLoaded &&
-          shouldShowHistoryLoadingForSelectionThread(canonicalThreadId);
-        if (shouldShowHistoryLoading) {
-          setThreadHistoryLoading(canonicalThreadId, true);
-          historyLoadingThreadByWorkspaceRef.current[targetId] =
-            canonicalThreadId;
-          if (canonicalThreadId.startsWith("shared:")) {
-            setThreadHistoryLoadingProgress(canonicalThreadId, {
-              phase: "prepare",
-              percent: 8,
-              titleKey: "restoringSharedHistory",
-              detailKey: "restoringSharedHistoryPrepare",
-            });
-          }
-        } else {
-          clearHistoryLoadingForThread(canonicalThreadId);
-        }
-        lazyResumeTimerByWorkspaceRef.current[targetId] = setTimeout(() => {
-          lazyResumeTimerByWorkspaceRef.current[targetId] = null;
-          if (!isCurrentHistorySelection()) {
-            return;
-          }
-          const activeThreadIdForWorkspace =
-            activeThreadIdByWorkspaceRef.current[targetId] ?? null;
-          if (activeThreadIdForWorkspace !== canonicalThreadId) {
-            clearHistoryLoadingForThread(canonicalThreadId);
-            return;
-          }
-          const loadedAtCallback = Boolean(
-            loadedThreadsRef.current[canonicalThreadId],
-          );
-          if (!loadedAtCallback) {
-            loadedThreadLastRefreshAtRef.current[canonicalThreadId] =
-              Date.now();
-            let resumeLoadingThreadId = canonicalThreadId;
-            // Force when prior automatic recovery failed or Claude surface is
-            // empty so resume is not skipped by automaticRecoveryFailedByScope.
-            const forceEmptyClaudeResume =
-              historyLoadingStateByThreadRef.current[canonicalThreadId] ===
-                "failed" ||
-              (canonicalThreadId.startsWith("claude:") &&
-                (itemsByThreadRef.current[canonicalThreadId]?.length ?? 0) ===
-                  0);
-            void resumeThreadForWorkspace(
-              targetId,
-              canonicalThreadId,
-              forceEmptyClaudeResume,
-              forceEmptyClaudeResume,
-              {
-                preferLocalCodexHistory: true,
-              },
-            )
-              .then((recoveredThreadId) => {
-                if (!isCurrentHistorySelection()) {
-                  return;
-                }
-                const recoveredCanonicalThreadId = recoveredThreadId
-                  ? resolveCanonicalThreadId(recoveredThreadId)
-                  : null;
-                if (
-                  shouldShowHistoryLoading &&
-                  recoveredCanonicalThreadId &&
-                  recoveredCanonicalThreadId !== canonicalThreadId
-                ) {
-                  clearHistoryLoadingForThread(canonicalThreadId);
-                  setThreadHistoryLoading(recoveredCanonicalThreadId, true);
-                  historyLoadingThreadByWorkspaceRef.current[targetId] =
-                    recoveredCanonicalThreadId;
-                  resumeLoadingThreadId = recoveredCanonicalThreadId;
-                }
-                if (
-                  recoveredCanonicalThreadId &&
-                  recoveredCanonicalThreadId !== canonicalThreadId &&
-                  activeThreadIdByWorkspaceRef.current[targetId] ===
-                    canonicalThreadId
-                ) {
-                  onDebug?.({
-                    id: `${Date.now()}-thread-selection-recovered-canonical`,
-                    timestamp: Date.now(),
-                    source: "client",
-                    label: "thread/selection recovered canonical",
-                    payload: {
-                      workspaceId: targetId,
-                      staleThreadId: canonicalThreadId,
-                      recoveredThreadId: recoveredCanonicalThreadId,
-                    },
-                  });
-                  dispatch({
-                    type: "setActiveThreadId",
-                    workspaceId: targetId,
-                    threadId: recoveredCanonicalThreadId,
-                  });
-                }
-              })
-              .finally(() => {
-                if (!isCurrentHistorySelection()) {
-                  return;
-                }
-                const currentLoadingThreadId =
-                  historyLoadingThreadByWorkspaceRef.current[targetId] ?? null;
-                if (currentLoadingThreadId === resumeLoadingThreadId) {
-                  clearHistoryLoadingForThread(resumeLoadingThreadId);
-                  return;
-                }
-                setThreadHistoryLoading(canonicalThreadId, false);
-              });
-            return;
-          }
-          clearHistoryLoadingForThread(canonicalThreadId);
-          const processingAtCallback = Boolean(
-            threadStatusByIdRef.current[canonicalThreadId]?.isProcessing,
-          );
-          if (processingAtCallback) {
-            return;
-          }
-          const callbackLastRefreshAt =
-            loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
-          const claudeEmptyAtCallback =
-            canonicalThreadId.startsWith("claude:") &&
-            (itemsByThreadRef.current[canonicalThreadId]?.length ?? 0) === 0;
-          // Claude empty surfaces skip the 20s cooldown so reselect immediately
-          // rehydrates transcript instead of showing messages.emptyThread.
-          if (
-            !claudeEmptyAtCallback &&
-            Date.now() - callbackLastRefreshAt <
-              THREAD_SWITCH_LOADED_REFRESH_MS
-          ) {
-            return;
-          }
+        const loadedAtCallback = Boolean(
+          loadedThreadsRef.current[canonicalThreadId],
+        );
+        if (!loadedAtCallback) {
           loadedThreadLastRefreshAtRef.current[canonicalThreadId] = Date.now();
           void resumeThreadForWorkspace(
             targetId,
             canonicalThreadId,
-            true,
-            claudeEmptyAtCallback,
+            resumeDecision.force,
+            false,
             {
               preferLocalCodexHistory: true,
             },
           ).then((recoveredThreadId) => {
-            if (!isCurrentHistorySelection()) {
-              return;
-            }
-            const recoveredCanonicalThreadId = recoveredThreadId
-              ? resolveCanonicalThreadId(recoveredThreadId)
-              : null;
-            if (
-              recoveredCanonicalThreadId &&
-              recoveredCanonicalThreadId !== canonicalThreadId &&
-              activeThreadIdByWorkspaceRef.current[targetId] ===
-                canonicalThreadId
-            ) {
-              onDebug?.({
-                id: `${Date.now()}-thread-selection-recovered-canonical-refresh`,
-                timestamp: Date.now(),
-                source: "client",
-                label: "thread/selection recovered canonical",
-                payload: {
-                  workspaceId: targetId,
-                  staleThreadId: canonicalThreadId,
-                  recoveredThreadId: recoveredCanonicalThreadId,
-                  trigger: "refresh",
-                },
-              });
-              dispatch({
-                type: "setActiveThreadId",
-                workspaceId: targetId,
-                threadId: recoveredCanonicalThreadId,
-              });
-            }
+            applyRecoveredCanonical(recoveredThreadId);
           });
-        }, THREAD_SWITCH_RESUME_DELAY_MS);
-      }
+          return;
+        }
+        clearHistoryLoadingForThread(canonicalThreadId);
+        const processingAtCallback = Boolean(
+          threadStatusByIdRef.current[canonicalThreadId]?.isProcessing,
+        );
+        if (processingAtCallback) {
+          return;
+        }
+        const callbackLastRefreshAt =
+          loadedThreadLastRefreshAtRef.current[canonicalThreadId] ?? 0;
+        if (
+          Date.now() - callbackLastRefreshAt <
+          THREAD_SWITCH_LOADED_REFRESH_MS
+        ) {
+          return;
+        }
+        loadedThreadLastRefreshAtRef.current[canonicalThreadId] = Date.now();
+        void resumeThreadForWorkspace(
+          targetId,
+          canonicalThreadId,
+          resumeDecision.force,
+          false,
+          {
+            preferLocalCodexHistory: true,
+          },
+        ).then((recoveredThreadId) => {
+          applyRecoveredCanonical(recoveredThreadId, "refresh");
+        });
+      }, THREAD_SWITCH_RESUME_DELAY_MS);
     },
     [
       activeWorkspaceId,
@@ -2395,7 +2327,6 @@ export function useThreads({
       resolveCanonicalThreadId,
       resumeThreadForWorkspace,
       setThreadHistoryLoading,
-      setThreadHistoryLoadingProgress,
     ],
   );
 

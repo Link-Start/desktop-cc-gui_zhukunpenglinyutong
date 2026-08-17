@@ -13,6 +13,8 @@ describe("sessionDisplayProjection", () => {
     expect(isWeakSessionDisplayTitle("Claude Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("Grok Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("Kimi Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("DSH Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("DeepSeek Harness Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("分析左侧栏消失问题")).toBe(false);
   });
 
@@ -294,6 +296,26 @@ describe("sessionDisplayProjection", () => {
       name: "子任务",
       parentThreadId: "claude:parent",
     });
+  });
+
+  it("keeps explicit empty disk metadata when a later merge omits size", () => {
+    const previous: ThreadSummary = {
+      id: "claude:new-empty",
+      name: "New chat",
+      updatedAt: 100,
+      engineSource: "claude",
+      threadKind: "native",
+      sizeBytes: 0,
+    };
+    const next: ThreadSummary = {
+      id: "claude:new-empty",
+      name: "New chat",
+      updatedAt: 120,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+
+    expect(mergeSessionDisplaySummary(previous, next).sizeBytes).toBe(0);
   });
 
   it("projects degraded continuity candidates without resurrecting excluded rows", () => {

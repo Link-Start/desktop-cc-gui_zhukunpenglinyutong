@@ -1,5 +1,7 @@
 import type { ConversationItem } from "../../../types";
 import {
+  buildDshGoalPresentationMetadata,
+  isDshGoalInjection,
   isDshInjectedContextMessage,
   readDshMessageSourceKind,
 } from "../../../utils/dshRuntimeContext";
@@ -181,14 +183,21 @@ export function parseDshHistoryMessages(messagesData: unknown): ConversationItem
       if (!text.trim()) {
         continue;
       }
-      if (
-        role === "user" &&
-        isDshInjectedContextMessage({
-          text,
-          sourceKind: readDshMessageSourceKind(message),
-        })
-      ) {
-        continue;
+      if (role === "user") {
+        const sourceKind = readDshMessageSourceKind(message);
+        if (isDshGoalInjection(sourceKind)) {
+          items.push({
+            id: itemId,
+            kind: "message",
+            role,
+            text,
+            presentationMetadata: buildDshGoalPresentationMetadata(text),
+          });
+          continue;
+        }
+        if (isDshInjectedContextMessage({ text, sourceKind })) {
+          continue;
+        }
       }
       items.push({
         id: itemId,

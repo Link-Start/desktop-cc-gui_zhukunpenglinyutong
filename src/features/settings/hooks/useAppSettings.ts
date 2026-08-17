@@ -46,6 +46,11 @@ import {
   DEFAULT_DOCK_ICON_ID,
   sanitizeDockIconId,
 } from "../../theme/utils/dockIcon";
+import {
+  DEFAULT_WORKSPACE_WALLPAPER,
+  sanitizeWorkspaceWallpaper,
+} from "../../theme/utils/workspaceWallpaper";
+import { publishWorkspaceWallpaper } from "../../theme/utils/workspaceWallpaperStore";
 import { traceStartupCommand } from "../../startup-orchestration/utils/startupTrace";
 
 const allowedThemes = new Set(["system", "light", "dark", "dim", "custom"]);
@@ -311,6 +316,7 @@ const defaultSettings: AppSettings = {
   enabledBuiltInAgentIds: [],
   canvasWidthMode: "narrow",
   layoutMode: "default",
+  workspaceWallpaper: DEFAULT_WORKSPACE_WALLPAPER,
   userMsgColor: "",
   usageShowRemaining: false,
   showMessageAnchors: true,
@@ -475,6 +481,7 @@ function normalizeAppSettings(
     layoutMode: allowedLayoutModes.has(settings.layoutMode ?? "default")
       ? (settings.layoutMode ?? "default")
       : "default",
+    workspaceWallpaper: sanitizeWorkspaceWallpaper(settings.workspaceWallpaper),
     userMsgColor: fallbackUserMsgColor,
     performanceCompatibilityModeEnabled:
       settings.performanceCompatibilityModeEnabled === true,
@@ -639,6 +646,7 @@ export function useAppSettings() {
           },
         );
         setSettings(normalized);
+        publishWorkspaceWallpaper(normalized.workspaceWallpaper);
         // The bundled default icon is already installed by native window creation.
         // Only a persisted custom choice needs a cold-start replay.
         if (sanitizeDockIconId(normalized.dockIconId) !== DEFAULT_DOCK_ICON_ID) {
@@ -738,6 +746,7 @@ export function useAppSettings() {
     setSettings((current) =>
       areAppSettingsEqual(current, nextSettings) ? current : nextSettings,
     );
+    publishWorkspaceWallpaper(nextSettings.workspaceWallpaper);
     if (sanitizeDockIconId(nextSettings.dockIconId) !== previousDockIconId) {
       void applyDockIconPreference(nextSettings.dockIconId).catch((error) => {
         console.error("[useAppSettings] failed to apply dock icon", error);

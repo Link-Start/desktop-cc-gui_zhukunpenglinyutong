@@ -38,6 +38,7 @@ const ROOT_FILE_ALLOWLIST = new Set([
 const CURRENT_SECTION_DIRS = [
   "docs/analysis",
   "docs/architecture",
+  "docs/designs",
   "docs/guides",
   "docs/guides/ui",
   "docs/guides/workflow",

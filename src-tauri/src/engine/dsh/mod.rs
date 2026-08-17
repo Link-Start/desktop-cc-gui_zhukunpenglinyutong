@@ -1,11 +1,13 @@
 //! DeepSeek Harness (DSH) native engine adapter.
 //!
 //! mossx is a second Host RPC client of a single persistent `dsh web`.
-//! Config / keys stay in `$DSH_HOME`; this module only talks Host RPC.
+//! Keys and provider profiles stay in `$DSH_HOME`. The only settings write
+//! is the narrow image-admission claim in `image_admission`.
 
 pub mod events;
 pub mod history;
 pub mod host;
+pub mod image_admission;
 pub mod session;
 pub mod supervisor;
 
@@ -24,6 +26,29 @@ use supervisor::{DshHostSnapshot, DshRuntimeSettings};
 const DETECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub fn runtime_settings_from_app(settings: &crate::types::AppSettings) -> DshRuntimeSettings {
+    runtime_settings_from_app_with_auto_start(settings, settings.dsh_auto_start.unwrap_or(true))
+}
+
+/// Explicit settings-page start must be allowed to spawn even when auto-start is off.
+pub fn runtime_settings_for_explicit_start(
+    settings: &crate::types::AppSettings,
+) -> DshRuntimeSettings {
+    runtime_settings_from_app_with_auto_start(settings, true)
+}
+
+/// Stop an in-flight start or a live local host. Remote origins stay running.
+pub async fn cancel_start() -> Result<(), String> {
+    supervisor::cancel_start().await
+}
+
+pub async fn stop_host(settings: &DshRuntimeSettings) -> Result<(), String> {
+    supervisor::stop_host(settings).await
+}
+
+fn runtime_settings_from_app_with_auto_start(
+    settings: &crate::types::AppSettings,
+    auto_start: bool,
+) -> DshRuntimeSettings {
     let runtime = DshRuntimeSettings {
         bin_path: settings.dsh_bin.clone(),
         host: settings
@@ -34,7 +59,7 @@ pub fn runtime_settings_from_app(settings: &crate::types::AppSettings) -> DshRun
             .unwrap_or("127.0.0.1")
             .to_string(),
         port: settings.dsh_port.unwrap_or(3080),
-        auto_start: settings.dsh_auto_start.unwrap_or(true),
+        auto_start,
     };
     supervisor::remember_endpoint(&runtime.host, runtime.port);
     runtime
@@ -99,7 +124,7 @@ pub async fn detect_dsh_status(settings: &DshRuntimeSettings) -> EngineStatus {
     let bin = bin_path
         .as_ref()
         .map(|path| path.to_string_lossy().to_string())
-        .unwrap_or_else(|| "dsh".to_string());
+        .unwrap_or_else(|| crate::backend::app_server::resolve_launchable_cli_binary("dsh"));
     let path_env = build_codex_path_env(custom_bin);
     let (installed, version, error) = probe_cli_version_local(&bin, path_env.as_ref()).await;
     if !installed {
@@ -182,7 +207,7 @@ pub async fn send_user_turn(
     if let Some(handle) = app.as_ref() {
         events::set_app_handle(handle.clone()).await;
     }
-    let (_snapshot, client) = ensure_ready(settings).await?;
+    let (snapshot, client) = ensure_ready(settings).await?;
     let workspace = session::create_workspace(&client, workspace_path).await?;
     let dsh_workspace_id = session::workspace_id_from_create(&workspace)?;
 
@@ -234,20 +259,33 @@ pub async fn send_user_turn(
     )
     .await;
 
-    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+    let selected = if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
         let Some((provider, model_id)) = session::split_model_selection(model, None) else {
             return Err(format!(
                 "DSH model must be a provider/model catalog id, got `{model}`"
             ));
         };
         session::select_model(&client, &native_session_id, &provider, &model_id, effort).await?;
+        Some((provider, model_id))
+    } else {
+        image_admission::selection_from_describe(&snapshot.describe)
+    };
+
+    let prompt_images = session::load_prompt_images(images, workspace_path)?;
+    if !prompt_images.is_empty() {
+        let Some((provider, model_id)) = selected else {
+            return Err(
+                "DSH image input needs a selected provider/model before mossx can declare vision"
+                    .to_string(),
+            );
+        };
+        image_admission::ensure_image_admission(&client, &provider, &model_id).await?;
     }
 
     // Subscribe immediately before prompt so this turn's `turn/end` cannot
     // race past the waiter. Do not inspect history first: a resumed
     // session already has a previous `turn/end`.
     let turn_waiter = events::subscribe_turn_end(&native_session_id).await;
-    let prompt_images = session::load_prompt_images(images, workspace_path)?;
     session::prompt(&client, &native_session_id, text, &prompt_images).await?;
     Ok(DshSendOutcome {
         native_session_id,
@@ -550,7 +588,8 @@ fn dsh_home_dir() -> Option<PathBuf> {
 
 fn resolve_bin_path(custom_bin: Option<&str>) -> Option<PathBuf> {
     if let Some(custom) = custom_bin.filter(|value| !value.trim().is_empty()) {
-        let path = PathBuf::from(custom);
+        let resolved = crate::backend::app_server::resolve_launchable_cli_binary(custom);
+        let path = PathBuf::from(&resolved);
         if path.exists() {
             return Some(path);
         }
@@ -699,5 +738,21 @@ mod tests {
         assert_eq!(answers.len(), 1);
         assert_eq!(answers[0]["id"], "q1");
         assert_eq!(answers[0]["selected"][0], "yes");
+    }
+
+    #[test]
+    fn explicit_start_overrides_disabled_auto_start() {
+        let settings = crate::types::AppSettings {
+            dsh_host: Some("10.0.0.8".to_string()),
+            dsh_port: Some(4090),
+            dsh_auto_start: Some(false),
+            ..crate::types::AppSettings::default()
+        };
+        let send_path = runtime_settings_from_app(&settings);
+        let explicit = runtime_settings_for_explicit_start(&settings);
+        assert!(!send_path.auto_start);
+        assert!(explicit.auto_start);
+        assert_eq!(explicit.host, "10.0.0.8");
+        assert_eq!(explicit.port, 4090);
     }
 }

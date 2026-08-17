@@ -388,6 +388,85 @@
   min-height: 0;
 }
 
+.message-agent-task-fold-drawer {
+  display: block;
+  width: 100%;
+  margin: 4px 0 12px;
+}
+
+.message-agent-task-fold .messages-process-phase-toggle-copy {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.message-agent-task-fold-status {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.message-agent-task-fold-status.is-completed {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: color-mix(in srgb, var(--success) 82%, var(--text-stronger));
+}
+
+.message-agent-task-fold-status.is-error {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: color-mix(in srgb, var(--destructive) 82%, var(--text-stronger));
+}
+
+.message-agent-task-fold-status.is-running {
+  background: color-mix(in srgb, var(--info) 12%, transparent);
+  color: color-mix(in srgb, var(--info) 82%, var(--text-stronger));
+}
+
+.message-agent-task-fold-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-agent-task-fold-detail {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: min(720px, 100%);
+  padding: 2px 0 6px;
+}
+
+.message-agent-task-fold-kv {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.message-agent-task-fold-kv-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 4px 10px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.message-agent-task-fold-kv-row dt {
+  color: var(--text-faint);
+}
+
+.message-agent-task-fold-kv-row dd {
+  margin: 0;
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .messages-process-phase-toggle,
   .messages-process-phase-toggle-chevron,
@@ -591,9 +670,46 @@
   white-space: nowrap;
 }
 
+/* Mac / Linux: 03 SVG dash。走 stroke-dashoffset，不 rotate 整个元素。 */
+.working-spinner-dash {
+  display: block;
+  border: none;
+  border-radius: 0;
+  animation: none;
+  will-change: auto;
+}
+
+.working-spinner-dash circle {
+  fill: none;
+  stroke: var(--text-stronger);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 18 22;
+  animation: working-dash 0.9s linear infinite;
+}
+
+/* Windows: 10 glyph frames. JS mutates textContent; no CSS animation. */
+.working-spinner-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  animation: none;
+  will-change: auto;
+  color: var(--text-stronger);
+  font: 12px/1 "SF Mono", Menlo, Monaco, "Microsoft YaHei Mono", ui-monospace, monospace;
+}
+
 @keyframes working-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes working-dash {
+  to {
+    stroke-dashoffset: -40;
   }
 }
 

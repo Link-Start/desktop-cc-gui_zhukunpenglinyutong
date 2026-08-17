@@ -270,6 +270,61 @@ describe("parseDshHistoryMessages", () => {
     expect(items.map((item) => item.id)).toEqual(["dsh-user-1"]);
   });
 
+  it("keeps Goal injections as empty-bubble presentation cards", () => {
+    const items = parseDshHistoryMessages([
+      {
+        id: "dsh-user-1",
+        kind: "message",
+        role: "user",
+        text: "写一个待办",
+        sourceKind: "user",
+      },
+      {
+        id: "dsh-goal-1",
+        kind: "message",
+        role: "user",
+        text: "<goal_round>\nContinue the active goal.\n</goal_round>",
+        sourceKind: "goal",
+      },
+      {
+        id: "dsh-plugin",
+        kind: "message",
+        role: "user",
+        text: "skill catalog leftover",
+        sourceKind: "plugin",
+      },
+    ]);
+
+    expect(items).toHaveLength(2);
+    expect(items[0]).toEqual(
+      expect.objectContaining({
+        id: "dsh-user-1",
+        role: "user",
+        text: "写一个待办",
+      }),
+    );
+    expect(items[1]).toEqual(
+      expect.objectContaining({
+        id: "dsh-goal-1",
+        kind: "message",
+        role: "user",
+        text: "<goal_round>\nContinue the active goal.\n</goal_round>",
+        presentationMetadata: {
+          displayText: "",
+          stickyCandidateText: "",
+          contexts: [
+            {
+              kind: "dsh-goal",
+              title: "Context injection",
+              sourceLabel: "goal",
+              body: "<goal_round>\nContinue the active goal.\n</goal_round>",
+            },
+          ],
+        },
+      }),
+    );
+  });
+
   it("keeps a real user prompt that mentions system-reminder", () => {
     const items = parseDshHistoryMessages([
       {

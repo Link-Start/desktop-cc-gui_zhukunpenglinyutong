@@ -114,6 +114,18 @@ export function resolveToolStatus(
   return hasOutput ? "completed" : "processing";
 }
 
+/**
+ * Grok / OpenAI Responses / DSH call identities look like
+ * `Call-<uuid>-n|fc_<id>_n`. They are pairing keys, not tool names.
+ */
+export function isProviderToolCallId(value: unknown): boolean {
+  const normalized = normalizeRuntimeString(value).replace(/\s+/g, "");
+  if (!normalized) {
+    return false;
+  }
+  return /^(?:call)-[0-9a-f-]+(?:-\d+)?\|fc[_-]?[0-9a-f-]+/i.test(normalized);
+}
+
 export function extractToolName(title: unknown): string {
   const normalizedTitle = normalizeRuntimeString(title);
   if (!normalizedTitle) {
@@ -124,6 +136,16 @@ export function extractToolName(title: unknown): string {
   const cleanTitle = prefixMatch
     ? (prefixMatch[1] ?? normalizedTitle).trim()
     : normalizedTitle.trim();
+
+  if (isProviderToolCallId(cleanTitle)) {
+    return "";
+  }
+
+  // Engine-neutral server label used when DSH/other hosts omit a tool name.
+  // It is not a real tool identity — infer from args instead of showing "Agent".
+  if (/^agent$/i.test(cleanTitle)) {
+    return "";
+  }
 
   // mcp__server__ToolName → ToolName
   if (cleanTitle.includes("__")) {
@@ -144,6 +166,49 @@ export function extractToolName(title: unknown): string {
   }
 
   return cleanTitle.toLowerCase();
+}
+
+/**
+ * Prefer a human tool name over a provider call id. When the title is only a
+ * call identity, infer read/search/bash/edit from structured arguments so the
+ * canvas can still classify and label the row.
+ */
+export function resolveCanonicalToolName(
+  title: unknown,
+  toolType?: unknown,
+  detail?: unknown,
+): string {
+  const fromTitle = extractToolName(title);
+  if (fromTitle) {
+    return fromTitle;
+  }
+  const fromType = normalizeRuntimeString(toolType).trim();
+  if (
+    fromType &&
+    !isProviderToolCallId(fromType) &&
+    fromType !== "mcpToolCall" &&
+    fromType !== "toolCall" &&
+    fromType !== "tool" &&
+    fromType !== "agent"
+  ) {
+    return fromType;
+  }
+  const args = parseToolArgs(typeof detail === "string" ? detail : "");
+  if (args) {
+    if (getFirstStringField(args, ["command", "cmd", "script", "shell_command"])) {
+      return "bash";
+    }
+    if (getFirstStringField(args, ["pattern", "query", "glob"])) {
+      return "grep";
+    }
+    if (getFirstStringField(args, ["old_string", "new_string", "oldString", "newString"])) {
+      return "edit";
+    }
+    if (getFirstStringField(args, ["file_path", "path", "target_file", "filename"])) {
+      return "read";
+    }
+  }
+  return "";
 }
 
 /** AskUserQuestion (native or mcp__ccgui__ / "Mcp Ccgui Askuserquestion"). */

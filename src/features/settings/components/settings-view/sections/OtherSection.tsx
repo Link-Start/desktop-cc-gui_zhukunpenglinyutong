@@ -37,6 +37,7 @@ import {
   isStartupGateOverlayTestEnabled,
   setStartupGateOverlayTestEnabled,
 } from "@/features/startup-orchestration/utils/startupGateOverlayTestFlag";
+import { requestFirstRunSetupReopen } from "@/features/onboarding/utils/setupEvents";
 
 type OtherSectionProps = {
   title: string | null;
@@ -47,6 +48,7 @@ type OtherSectionProps = {
   onDeleteSessionRadarHistory: (
     entries: SessionRadarEntry[],
   ) => Promise<SessionRadarHistoryDeleteResult>;
+  onCloseSettings?: () => void;
 };
 
 export function OtherSection({
@@ -56,6 +58,7 @@ export function OtherSection({
   onUpdateAppSettings,
   sessionRadarRecentCompletedSessions,
   onDeleteSessionRadarHistory,
+  onCloseSettings,
 }: OtherSectionProps) {
   const { t } = useTranslation();
   const [performanceFlagsResetMessage, setPerformanceFlagsResetMessage] =
@@ -149,6 +152,28 @@ export function OtherSection({
       {description ? (
         <div className="settings-section-subtitle">{description}</div>
       ) : null}
+      <div className="settings-toggle-row">
+        <div>
+          <div className="settings-toggle-title">
+            {t("settings.rerunOnboardingTitle")}
+          </div>
+          <div className="settings-toggle-subtitle">
+            {t("settings.rerunOnboardingDesc")}
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          data-testid="rerun-first-run-setup"
+          onClick={() => {
+            onCloseSettings?.();
+            requestFirstRunSetupReopen();
+          }}
+        >
+          {t("settings.rerunOnboardingAction")}
+        </Button>
+      </div>
+      <Separator className="my-4" />
       {/* 内置精选 Skills：原独立侧栏入口已合并到其他设置 */}
       <CuratedSection
         appSettings={appSettings}

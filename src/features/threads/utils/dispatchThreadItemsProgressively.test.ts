@@ -34,9 +34,10 @@ describe("dispatchThreadItemsProgressively", () => {
     });
   });
 
-  it("keeps a Claude-sized IO snapshot on a first-paint tail plus older chip", async () => {
+  it("keeps a first-paint tail plus older chip when history exceeds the window", async () => {
     const dispatch = vi.fn();
-    const items = makeItems(THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE);
+    const overflow = 45;
+    const items = makeItems(THREAD_ITEMS_FIRST_PAINT_COUNT + overflow);
     const result = await dispatchThreadItemsProgressively(dispatch, "claude:1", items, {
       yieldBetweenBatches: async () => {},
     });
@@ -50,8 +51,7 @@ describe("dispatchThreadItemsProgressively", () => {
     );
     expect(result).toEqual({
       displayedCount: THREAD_ITEMS_FIRST_PAINT_COUNT,
-      remainingOlderCount:
-        THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE - THREAD_ITEMS_FIRST_PAINT_COUNT,
+      remainingOlderCount: overflow,
     });
   });
 

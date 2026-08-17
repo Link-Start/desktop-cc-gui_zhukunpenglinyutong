@@ -1866,6 +1866,8 @@ async fn handle_rpc_request(
             let dsh_bin = parse_optional_string(&params, "dshBin");
             state.dsh_doctor(dsh_bin).await
         }
+        "ensure_dsh_host" => state.ensure_dsh_host().await,
+        "cancel_dsh_host" => state.cancel_dsh_host().await,
         "cli_install_plan" => {
             let engine =
                 serde_json::from_value(params.get("engine").cloned().unwrap_or(Value::Null))

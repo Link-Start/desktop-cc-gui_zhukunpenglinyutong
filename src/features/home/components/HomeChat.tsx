@@ -20,6 +20,7 @@ import {
   CommandSeparator,
 } from "../../../components/ui/command";
 import { EngineIcon } from "../../engine/components/EngineIcon";
+import { SetupIncompleteBanner } from "../../onboarding/components/SetupIncompleteBanner";
 import { TokenIndicator } from "../../composer/components/ChatInputBox/TokenIndicator";
 import {
   ComposerBranchBadge,
@@ -79,6 +80,7 @@ export function HomeChat({
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState("");
   const engineLabel = getEngineLabel(selectedEngine);
+  const homeTitle = t("homeChat.minimalTitle", "Create anything");
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId)
     ?? workspaces[0]
     ?? null;
@@ -113,6 +115,7 @@ export function HomeChat({
   return (
     <div className="home-chat">
       <div className="home-chat-shell">
+        <SetupIncompleteBanner />
         <header className="home-chat-hero">
           <div
             className="home-chat-engine-mark"
@@ -128,7 +131,7 @@ export function HomeChat({
 
           <div className="home-chat-headline">
             <h1 className="home-chat-title">
-              {t("homeChat.minimalTitle", "Create anything")}
+              {homeTitle}
             </h1>
           </div>
         </header>

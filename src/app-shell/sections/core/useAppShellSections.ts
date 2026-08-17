@@ -19,11 +19,8 @@ import type { SharedSessionSupportedEngine } from "../../../features/shared-sess
 import type { WorkspaceHomeDeleteResult } from "../../../features/workspaces/types";
 import type { EngineType, WorkspaceInfo } from "../../../types";
 import { isRewindSupportedThreadId } from "../../../features/threads/utils/rewindSupportedThreadId";
-import {
-  getThreadSelectDiffCleanupAction,
-  shouldCollapseRightPanelOnThreadSelect,
-  shouldPreserveEditorOnThreadSelect,
-} from "../threadEditorPreservation";
+import { shouldPreserveEditorOnThreadSelect } from "../threadEditorPreservation";
+import { commitThreadSelection } from "../threadSelect/commitThreadSelection";
 import { useAppShellComposerSendSection } from "../useAppShellComposerSendSection";
 import {
   mergeAppShellDomainBag,
@@ -214,33 +211,34 @@ export function useAppShellSections(input: UseAppShellSectionsInput) {
         targetWorkspaceId: workspaceId,
         activeEditorFilePath,
       });
-      const diffCleanupAction =
-        getThreadSelectDiffCleanupAction(preserveEditor);
-      if (diffCleanupAction === "clear-selected-diff") {
-        setSelectedDiffPath(null);
-      } else {
-        exitDiffView();
-      }
-      resetPullRequestSelection();
-      setHomeOpen(false);
-      setWorkspaceHomeWorkspaceId(null);
-      setAppMode("chat");
-      setActiveTab("codex");
-      if (
-        shouldCollapseRightPanelOnThreadSelect({
-          preserveEditor,
-          requestedCollapse: true,
-        })
-      ) {
-        collapseRightPanel();
-      }
-      selectWorkspace(workspaceId);
-      setActiveThreadId(threadId, workspaceId);
       const threads = threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find((entry: any) => entry.id === threadId);
-      if (thread?.engineSource) {
-        setActiveEngine(thread.engineSource);
-      }
+      commitThreadSelection(
+        {
+          workspaceId,
+          threadId,
+        },
+        {
+          selectWorkspace,
+          setActiveThreadId,
+        },
+        {
+          preserveEditor,
+          requestedCollapseRightPanel: true,
+          engineSource: thread?.engineSource,
+        },
+        {
+          setSelectedDiffPath,
+          exitDiffView,
+          resetPullRequestSelection,
+          setHomeOpen,
+          setWorkspaceHomeWorkspaceId,
+          setAppMode,
+          setActiveTab,
+          collapseRightPanel,
+          setActiveEngine,
+        },
+      );
     },
     [
       activeEditorFilePath,

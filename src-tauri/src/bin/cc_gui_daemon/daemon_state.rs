@@ -671,6 +671,26 @@ impl DaemonState {
         crate::codex::run_dsh_doctor_with_settings(dsh_bin, &settings).await
     }
 
+    pub(super) async fn ensure_dsh_host(&self) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        let runtime = engine::dsh::runtime_settings_for_explicit_start(&settings);
+        let snapshot = engine::dsh::ensure_ready(&runtime).await?.0;
+        Ok(json!({
+            "origin": snapshot.origin,
+            "host": snapshot.host,
+            "port": snapshot.port,
+            "ownership": snapshot.ownership,
+            "describe": snapshot.describe,
+        }))
+    }
+
+    pub(super) async fn cancel_dsh_host(&self) -> Result<Value, String> {
+        let settings = self.app_settings.lock().await.clone();
+        let runtime = engine::dsh::runtime_settings_from_app(&settings);
+        engine::dsh::stop_host(&runtime).await?;
+        Ok(json!({ "ok": true }))
+    }
+
     pub(super) async fn cli_install_plan(
         &self,
         engine: crate::codex_installer::CliInstallEngine,

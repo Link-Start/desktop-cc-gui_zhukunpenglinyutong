@@ -3,6 +3,8 @@ import { useWindowLabel } from "./features/layout/hooks/useWindowLabel";
 import { isDetachedFileExplorerWindowLabel } from "./features/files/detachedFileExplorer";
 import { isBrowserAgentDockWindowLabel } from "./features/browser-agent/browserAgentDockWindow";
 import { StartupGateOverlay } from "./features/app/components/StartupGateOverlay";
+import { FirstRunSetupHost } from "./features/onboarding/components/FirstRunSetupHost";
+import { WorkspaceWallpaperHost } from "./features/theme/components/WorkspaceWallpaperHost";
 import { isStartupGateOverlayTestEnabled } from "./features/startup-orchestration/utils/startupGateOverlayTestFlag";
 import { LazyAppShell } from "./router/lazyAppShell";
 import {
@@ -55,9 +57,11 @@ export function AppRouter() {
   }
   return (
     <>
+      <WorkspaceWallpaperHost />
       <Suspense fallback={null}>
         <LazyAppShell />
       </Suspense>
+      <FirstRunSetupHost />
       {startupGateOverlayEnabledAtMount ? <StartupGateOverlay /> : null}
     </>
   );

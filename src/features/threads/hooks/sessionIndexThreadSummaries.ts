@@ -2,6 +2,7 @@ import type { ThreadSummary } from "../../../types";
 import type { SessionIndexRow } from "../../../services/tauri";
 import { previewThreadName } from "../../../utils/threadItems";
 import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
+import { isCommitMessageHelperPreview } from "../utils/codexBackgroundHelpers";
 import { shouldExcludeOrdinaryNativeRow } from "./sharedNativeVisibility";
 
 const ENGINE_PREFIX: Record<string, string> = {
@@ -69,6 +70,12 @@ export function sessionIndexRowsToThreadSummaries(
     if (
       shouldExcludeOrdinaryNativeRow(id, hidden) ||
       shouldExcludeOrdinaryNativeRow(row.sessionId, hidden)
+    ) {
+      continue;
+    }
+    if (
+      isCommitMessageHelperPreview(String(row.title ?? "")) ||
+      isCommitMessageHelperPreview(String(row.nativeTitle ?? ""))
     ) {
       continue;
     }

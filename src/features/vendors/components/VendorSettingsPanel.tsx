@@ -78,6 +78,7 @@ import {
   CliLifecycleInstallerPanel,
   CliLifecycleProvider,
 } from "./CliLifecycleHeaderActions";
+import { DshConnectionPanel } from "./DshConnectionPanel";
 import {
   consumeVendorModelManagerRequest,
   VENDOR_MODEL_MANAGER_REQUEST_EVENT,
@@ -310,17 +311,7 @@ export function VendorSettingsPanel({
   const [unifiedExecActionBusy, setUnifiedExecActionBusy] = useState(false);
   const [unifiedExecActionNotice, setUnifiedExecActionNotice] =
     useState<InlineNoticeState>(null);
-  const [dshHostDraft, setDshHostDraft] = useState(appSettings.dshHost ?? "127.0.0.1");
-  const [dshPortDraft, setDshPortDraft] = useState(String(appSettings.dshPort ?? 3080));
   const didSeedCodexPluginModelsRef = useRef(false);
-
-  useEffect(() => {
-    setDshHostDraft(appSettings.dshHost ?? "127.0.0.1");
-  }, [appSettings.dshHost]);
-
-  useEffect(() => {
-    setDshPortDraft(String(appSettings.dshPort ?? 3080));
-  }, [appSettings.dshPort]);
 
   const claude = useProviderManagement();
   const codex = useCodexProviderManagement();
@@ -1162,7 +1153,7 @@ export function VendorSettingsPanel({
           </span>
         </button>
         {activeCli === "claude" ? (
-          <CliLifecycleProvider engine="claude" active>
+          <CliLifecycleProvider key="claude" engine="claude" active>
             <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="claude"
@@ -1229,7 +1220,7 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "codex" ? (
-          <CliLifecycleProvider engine="codex" active>
+          <CliLifecycleProvider key="codex" engine="codex" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="codex"
@@ -1423,7 +1414,7 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "kimi" ? (
-          <CliLifecycleProvider engine="kimi" active>
+          <CliLifecycleProvider key="kimi" engine="kimi" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="kimi"
@@ -1500,7 +1491,7 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "grok" ? (
-          <CliLifecycleProvider engine="grok" active>
+          <CliLifecycleProvider key="grok" engine="grok" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="grok"
@@ -1577,7 +1568,7 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "opencode" ? (
-          <CliLifecycleProvider engine="opencode" active>
+          <CliLifecycleProvider key="opencode" engine="opencode" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="opencode"
@@ -1654,7 +1645,7 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "pi" ? (
-          <CliLifecycleProvider engine="pi" active>
+          <CliLifecycleProvider key="pi" engine="pi" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="pi"
@@ -1695,7 +1686,7 @@ export function VendorSettingsPanel({
           </div>
           </CliLifecycleProvider>
         ) : activeCli === "dsh" ? (
-          <CliLifecycleProvider engine="dsh" active>
+          <CliLifecycleProvider key="dsh" engine="dsh" active>
           <div className="vendor-tab-content vendor-tab-content-dense">
             <CliBrandHeader
               id="dsh"
@@ -1711,106 +1702,12 @@ export function VendorSettingsPanel({
               actions={<CliLifecycleHeaderActions />}
             />
             <CliLifecycleInstallerPanel />
-            <VendorSettingsSection
-              label={t("settings.vendor.engineSettings", {
-                defaultValue: "Engine settings",
-              })}
-            >
-              <div className="vendor-group-card">
-                {renderCustomPathEntry("dsh")}
-                <div className="vendor-group-row">
-                  <div className="vendor-group-row-copy">
-                    <span className="vendor-group-row-title">
-                      {t("settings.vendor.dshHost")}
-                    </span>
-                  </div>
-                  <input
-                    className="vendor-input vendor-input-sm"
-                    value={dshHostDraft}
-                    aria-label={t("settings.vendor.dshHost")}
-                    onChange={(event) => setDshHostDraft(event.target.value)}
-                    onBlur={() => {
-                      const nextHost = dshHostDraft.trim() || "127.0.0.1";
-                      setDshHostDraft(nextHost);
-                      if (nextHost === (appSettings.dshHost ?? "127.0.0.1")) {
-                        return;
-                      }
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        dshHost: nextHost,
-                      });
-                    }}
-                  />
-                </div>
-                <div className="vendor-group-row">
-                  <div className="vendor-group-row-copy">
-                    <span className="vendor-group-row-title">
-                      {t("settings.vendor.dshPort")}
-                    </span>
-                  </div>
-                  <input
-                    className="vendor-input vendor-input-sm"
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={dshPortDraft}
-                    aria-label={t("settings.vendor.dshPort")}
-                    onChange={(event) => setDshPortDraft(event.target.value)}
-                    onBlur={() => {
-                      const parsed = Number.parseInt(dshPortDraft, 10);
-                      const nextPort =
-                        Number.isFinite(parsed) && parsed > 0 && parsed <= 65535
-                          ? parsed
-                          : (appSettings.dshPort ?? 3080);
-                      setDshPortDraft(String(nextPort));
-                      if (nextPort === (appSettings.dshPort ?? 3080)) {
-                        return;
-                      }
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        dshPort: nextPort,
-                      });
-                    }}
-                  />
-                </div>
-                <div className="settings-toggle-row vendor-group-row">
-                  <div className="vendor-group-row-copy">
-                    <span className="vendor-group-row-title">
-                      {t("settings.vendor.dshAutoStart")}
-                    </span>
-                  </div>
-                  <Switch
-                    checked={appSettings.dshAutoStart !== false}
-                    aria-label={t("settings.vendor.dshAutoStart")}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        dshAutoStart: checked,
-                      })
-                    }
-                  />
-                </div>
-                <div className="vendor-group-row">
-                  <div className="vendor-group-row-copy">
-                    <span className="vendor-group-row-title">
-                      {t("settings.vendor.dshModelsHint")}
-                    </span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const host = (appSettings.dshHost ?? "").trim() || "127.0.0.1";
-                      const port = appSettings.dshPort || 3080;
-                      void openUrl(`http://${host}:${port}`);
-                    }}
-                  >
-                    {t("settings.vendor.dshOpenUi")}
-                  </Button>
-                </div>
-              </div>
-            </VendorSettingsSection>
+            <DshConnectionPanel
+              active={activeCli === "dsh"}
+              appSettings={appSettings}
+              customPathEntry={renderCustomPathEntry("dsh")}
+              onUpdateAppSettings={onUpdateAppSettings}
+            />
           </div>
           </CliLifecycleProvider>
         ) : (

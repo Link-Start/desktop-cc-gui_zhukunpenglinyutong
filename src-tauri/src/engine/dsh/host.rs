@@ -35,15 +35,15 @@ impl std::fmt::Display for DshRpcError {
     }
 }
 
-/// DSH Host admits images from `resolveModelInfo().inputModalities`,
-/// not from whether the upstream API can see. Custom `llm-pi-ai` routes
-/// fall back to `defaultInput: [text]` when neither the model entry nor
-/// the installed catalog declares modalities.
+/// DSH Host admits images from `resolveModelInfo().inputModalities`.
+/// mossx declares `[text, image]` on writable `llm-pi-ai` routes before
+/// prompt; this mapping is only the leftover case (read-only host, official
+/// text-only adapter, or the upstream still refused after that declaration).
 fn format_dsh_rpc_error(error: &DshRpcError) -> String {
     let reason = error.details.get("reason").and_then(Value::as_str);
     if error.code == "attachment-error" && reason == Some("MODEL_DOES_NOT_SUPPORT_IMAGES") {
         return format!(
-            "{}: {} DSH resolved this model as text-only (custom llm-pi-ai routes fall back to `defaultInput: [text]`). If this endpoint actually accepts images, set `input: [text, image]` on the model or `defaultInput: [text, image]` on that provider route in DSH settings, then retry.",
+            "{}: {} mossx already tries to declare image input on custom llm-pi-ai routes. This leftover refusal means the host is read-only, the adapter is not llm-pi-ai, or the endpoint itself rejected the image. Open DSH Settings only if this host is not writable from mossx.",
             error.code, error.message
         );
     }
@@ -237,16 +237,12 @@ mod tests {
             "unexpected error: {err}"
         );
         assert!(
-            err.contains("resolved this model as text-only"),
+            err.contains("declare image input"),
             "unexpected error: {err}"
         );
         assert!(
-            err.contains("defaultInput"),
-            "actionable DSH settings hint missing: {err}"
-        );
-        assert!(
-            err.contains("input: [text, image]"),
-            "actionable model input hint missing: {err}"
+            !err.contains("set `input: [text, image]`"),
+            "must not tell every user to hand-edit DSH settings: {err}"
         );
     }
 

@@ -5,9 +5,11 @@ import {
   getFirstStringField,
   isBashTool,
   isEditTool,
+  isProviderToolCallId,
   isReadTool,
   isSearchTool,
   parseToolArgs,
+  resolveCanonicalToolName,
   resolveToolStatus,
 } from "./toolSemantics";
 
@@ -33,6 +35,43 @@ describe("toolSemantics", () => {
     expect(extractToolName("Tool: ccgui / AskUserQuestion")).toBe(
       "AskUserQuestion",
     );
+    expect(
+      extractToolName(
+        "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc Dea0cf7d-ffe2-918e-bd8d-1f467cee29d2 0",
+      ),
+    ).toBe("");
+  });
+
+  it("treats Responses-style Call-|fc identities as pairing keys, not tool names", () => {
+    expect(
+      isProviderToolCallId(
+        "Call-c2a75f93-c1af-43f7-89e9-448522ce0462-62|fc 4bc2904f-60c7-981e-925d-3882eec392d8 0",
+      ),
+    ).toBe(true);
+    expect(
+      isProviderToolCallId(
+        "call-b8ac0771-4db6-4465-8413-0284cc72eb6b-129|fc_ca617c64-91b1-91c1-8a00-b2be42d5f507_3",
+      ),
+    ).toBe(true);
+    expect(isProviderToolCallId("read")).toBe(false);
+    expect(
+      resolveCanonicalToolName(
+        "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc_dea0cf7d-ffe2-918e-bd8d-1f467cee29d2_0",
+        "mcpToolCall",
+        JSON.stringify({ file_path: "/Users/zhukunpeng/Desktop/appSettings.ts" }),
+      ),
+    ).toBe("read");
+    expect(
+      resolveCanonicalToolName(
+        "Tool: agent",
+        "mcpToolCall",
+        JSON.stringify({
+          command: "git status --short",
+          description: "Show working tree status",
+        }),
+      ),
+    ).toBe("bash");
+    expect(extractToolName("Tool: agent")).toBe("");
   });
 
   it("resolves command statuses with explicit failure and completion precedence", () => {
