@@ -259,9 +259,46 @@ impl ToolItemKind {
     }
 }
 
-fn resolve_tool_item_kind(tool_name: Option<&str>) -> ToolItemKind {
+fn first_non_empty_object_string<'a>(map: &'a serde_json::Map<String, Value>, keys: &[&str]) -> Option<&'a str> {
+    keys.iter().find_map(|key| {
+        map.get(*key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    })
+}
+
+fn parse_tool_input_object(input: Option<&Value>) -> Option<serde_json::Map<String, Value>> {
+    let value = input?;
+    match value {
+        Value::Object(map) => Some(map.clone()),
+        Value::String(raw) => serde_json::from_str::<Value>(raw).ok().and_then(|parsed| {
+            parsed.as_object().cloned()
+        }),
+        _ => None,
+    }
+}
+
+fn input_looks_like_command(input: Option<&Value>) -> bool {
+    let Some(map) = parse_tool_input_object(input) else {
+        return false;
+    };
+    first_non_empty_object_string(
+        &map,
+        &["command", "cmd", "script", "shell_command", "bash"],
+    )
+    .is_some()
+}
+
+fn resolve_tool_item_kind(tool_name: Option<&str>, input: Option<&Value>) -> ToolItemKind {
     let lower = tool_name.unwrap_or_default().trim().to_ascii_lowercase();
+    // DSH `tool/result` / later `tool-call-delta` chunks often omit `name`.
+    // Classify from structured args so bash is not rewritten as mcpToolCall +
+    // server="agent" (which the canvas then renders as Agent / 子代理).
     if lower.is_empty() {
+        if input_looks_like_command(input) {
+            return ToolItemKind::CommandExecution;
+        }
         return ToolItemKind::MpcToolCall;
     }
     // Command-like tools can contain "write" in their name (for example write_stdin).
@@ -472,7 +509,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             input,
             ..
         } => {
-            let item_kind = resolve_tool_item_kind(Some(tool_name.as_str()));
+            let item_kind = resolve_tool_item_kind(Some(tool_name.as_str()), input.as_ref());
             let item = match item_kind {
                 ToolItemKind::CommandExecution => json!({
                     "id": tool_id,
@@ -529,7 +566,10 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 .cloned()
                 .or_else(|| output.clone());
             let normalized_output_text = normalized_output.as_ref().map(stringify_value);
-            let item_kind = resolve_tool_item_kind(tool_name.as_deref());
+            let item_kind = resolve_tool_item_kind(
+                tool_name.as_deref(),
+                embedded_args.as_ref().or(output.as_ref()),
+            );
             // DSH `tool/result` often omits `name`. Never fall back to the provider
             // call id (`Call-<uuid>|fc_...`) — that string is an identity, not a title.
             // Omit title/tool so the frontend keeps the name from `tool/call`.
@@ -590,7 +630,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             input,
             ..
         } => {
-            let item_kind = resolve_tool_item_kind(tool_name.as_deref());
+            let item_kind = resolve_tool_item_kind(tool_name.as_deref(), input.as_ref());
             let item = match item_kind {
                 ToolItemKind::CommandExecution | ToolItemKind::FileChange => json!({
                     "id": tool_id,
@@ -632,7 +672,7 @@ pub fn engine_event_to_app_server_event_with_turn_context(
             delta,
             ..
         } => {
-            let method = match resolve_tool_item_kind(tool_name.as_deref()) {
+            let method = match resolve_tool_item_kind(tool_name.as_deref(), None) {
                 ToolItemKind::FileChange => "item/fileChange/outputDelta",
                 _ => "item/commandExecution/outputDelta",
             };
@@ -1567,6 +1607,33 @@ mod tests {
         assert!(item.get("title").is_none());
         assert!(item.get("tool").is_none());
         assert_eq!(item["status"], Value::String("completed".to_string()));
+    }
+
+    #[test]
+    fn tool_completed_without_name_classifies_bash_from_command_args() {
+        let event = EngineEvent::ToolCompleted {
+            workspace_id: "ws-dsh".to_string(),
+            tool_id: "call-bash-1".to_string(),
+            tool_name: None,
+            output: Some(json!({
+                "_input": {
+                    "command": "git status --short",
+                    "description": "Show working tree status"
+                },
+                "_output": " M src/app.ts"
+            })),
+            error: None,
+        };
+
+        let mapped =
+            engine_event_to_app_server_event(&event, "thread-1", "item-1").expect("mapped event");
+        let item = &mapped.message["params"]["item"];
+        assert_eq!(item["type"], Value::String("commandExecution".to_string()));
+        assert!(item.get("server").is_none());
+        assert_eq!(
+            item["input"]["command"],
+            Value::String("git status --short".to_string())
+        );
     }
 
     #[test]

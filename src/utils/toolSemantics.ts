@@ -141,6 +141,12 @@ export function extractToolName(title: unknown): string {
     return "";
   }
 
+  // Engine-neutral server label used when DSH/other hosts omit a tool name.
+  // It is not a real tool identity — infer from args instead of showing "Agent".
+  if (/^agent$/i.test(cleanTitle)) {
+    return "";
+  }
+
   // mcp__server__ToolName → ToolName
   if (cleanTitle.includes("__")) {
     const parts = cleanTitle.split("__");
@@ -182,7 +188,8 @@ export function resolveCanonicalToolName(
     !isProviderToolCallId(fromType) &&
     fromType !== "mcpToolCall" &&
     fromType !== "toolCall" &&
-    fromType !== "tool"
+    fromType !== "tool" &&
+    fromType !== "agent"
   ) {
     return fromType;
   }

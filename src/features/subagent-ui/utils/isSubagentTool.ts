@@ -1,4 +1,8 @@
-import { extractToolName } from "../../../utils/toolSemantics";
+import {
+  extractToolName,
+  isBashTool,
+  parseToolArgs,
+} from "../../../utils/toolSemantics";
 
 type ToolLike = {
   toolType?: unknown;
@@ -191,8 +195,40 @@ function looksLikeSubagentPayload(detail: unknown): boolean {
   return false;
 }
 
+function looksLikeOrdinaryCommandPayload(detail: unknown): boolean {
+  const args = parseToolArgs(typeof detail === "string" ? detail : "");
+  if (!args) {
+    return false;
+  }
+  const command = ["command", "cmd", "script", "shell_command", "bash"].some(
+    (key) => typeof args[key] === "string" && args[key].trim().length > 0,
+  );
+  if (!command) {
+    return false;
+  }
+  return !(
+    typeof args.subagent_type === "string" ||
+    typeof args.subagentType === "string" ||
+    typeof args.subagent_id === "string" ||
+    typeof args.subagentId === "string"
+  );
+}
+
 export function isSubagentTool(item: ToolLike): boolean {
   if (isSubagentOutputPoller(item)) {
+    return false;
+  }
+  if (looksLikeOrdinaryCommandPayload(item.detail)) {
+    return false;
+  }
+  const toolNameHint = extractToolName(item.title).trim().toLowerCase();
+  const toolTypeHint = normalizeRuntimeString(item.toolType);
+  if (
+    isBashTool(toolNameHint) ||
+    toolTypeHint === "commandexecution" ||
+    toolTypeHint === "bash" ||
+    toolTypeHint === "shell"
+  ) {
     return false;
   }
   if (isCollabLifecycleTool(item)) {
