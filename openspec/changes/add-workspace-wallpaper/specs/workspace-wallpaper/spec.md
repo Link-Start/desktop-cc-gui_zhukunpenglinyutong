@@ -58,10 +58,12 @@ Settings → 基础 → 外观 MUST 用 preference row + segmented control 提�
 #### Scenario: Chrome shares one wallpaper veil
 
 - **WHEN** wallpaper mode 为 `fluid` 或 `custom`
-- **THEN** sidebar、`.main` 与 `.right-panel` MUST 共用同一层轻色洗 + `backdrop-filter` 毛玻璃，不得再用可调灰蒙层盖图
+- **THEN** sidebar、`.main` 与 `.right-panel` MUST 共用同一层轻色洗，不得再用可调灰蒙层盖图
+- **AND** 毛玻璃 MUST 画在 wallpaper host 上，不得挂在 sidebar / `.main` / `.right-panel` 上另建 stacking context
 - **AND** `.messages` / `.composer` MUST 保持透明，不得再叠一层
-- **AND** `.main` MUST 取消 desktop 圆角，避免壁纸从四角缺口露出
+- **AND** `.main` MUST 取消 desktop 圆角，避免壁纸从四角缺口露出，也不得把项目行 `+` 裁掉
 - **AND** sidebar 与 `.main` 之间 MUST 保留 1px 分割线
+- **AND** `.app` MUST 整层叠在 wallpaper host 之上
 - **AND** `prefers-reduced-transparency` 时 MUST 关掉 frost（blur=0）
 
 #### Scenario: Titlebar controls stay clickable over wallpaper frost

@@ -3,6 +3,7 @@ import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type {
   WorkspaceMenuAction,
   WorkspaceMenuGroup,
@@ -158,7 +159,7 @@ export function SidebarWorkspaceMenuOverlay({
     [closeSubmenu],
   );
 
-  return (
+  const overlay = (
     <div
       className="sidebar-workspace-menu-backdrop"
       onClick={onClose}
@@ -428,4 +429,10 @@ export function SidebarWorkspaceMenuOverlay({
       ) : null}
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return overlay;
+  }
+
+  return createPortal(overlay, document.body);
 }

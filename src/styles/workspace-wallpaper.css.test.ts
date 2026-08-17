@@ -47,10 +47,16 @@ describe("workspace wallpaper styles", () => {
     expect(css).toContain(":root[data-workspace-wallpaper] .messages");
     expect(css).toContain(":root[data-workspace-wallpaper] .right-panel");
     expect(css).toContain(":root[data-workspace-wallpaper] .composer");
+    expect(css).toContain(":root[data-workspace-wallpaper] .terminal-panel");
+    expect(css).toContain(":root[data-workspace-wallpaper] .terminal-surface");
+    expect(css).toContain(
+      ":root[data-workspace-wallpaper] .terminal-surface .xterm",
+    );
+    expect(css).toContain("--terminal-background: transparent;");
     expect(css).toContain(":root[data-workspace-wallpaper] .fvp");
     expect(css).toContain("--workspace-wallpaper-veil:");
     expect(css).toContain(
-      ":root[data-workspace-wallpaper] {\n  --workspace-wallpaper-frost: 12px;\n}",
+      ":root[data-workspace-wallpaper] {\n  --workspace-wallpaper-frost: 12px;\n  --desktop-main-radius: 0;\n  --desktop-main-shadow: none;\n}",
     );
     expect(css).not.toContain(
       "--workspace-wallpaper-wash-opacity: 8%;\n  --workspace-wallpaper-frost:",
@@ -59,6 +65,14 @@ describe("workspace wallpaper styles", () => {
       "backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px))",
     );
     expect(css).toContain(".workspace-wallpaper::after");
+    expect(css).toContain("backdrop-filter: none;");
+    expect(css).toContain(
+      ":root[data-workspace-wallpaper] .app {\n  position: relative;\n  z-index: 1;\n}",
+    );
+    expect(css).toContain(
+      ":root[data-workspace-wallpaper] .sidebar,\n:root[data-workspace-wallpaper] .compact-panel {\n  z-index: 1;\n}",
+    );
+    expect(css).toContain("border-radius: 0 !important;");
     expect(css).toContain("prefers-reduced-transparency");
     expect(css).toContain(".app.reduced-transparency");
     expect(css).toContain("color-mix(");

@@ -1,11 +1,13 @@
 .workspace-wallpaper {
   position: fixed;
   inset: 0;
+  /* Wallpaper is a #root sibling. Stay behind .app; never frost the
+   * chrome columns themselves (WebKit expands backdrop-filter by the
+   * blur radius and paints that halo over the sidebar + button). */
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
   isolation: isolate;
-  contain: paint;
 }
 
 .workspace-wallpaper .first-run-fluid,
@@ -33,6 +35,13 @@
       var(--workspace-wallpaper-wash-opacity, 10%),
     transparent
   );
+  /* Frost belongs on the wallpaper, not on sidebar / .main. Putting
+   * backdrop-filter on those chrome columns creates sibling stacking
+   * contexts; WebKit then paints the later .main card over the sidebar
+   * and clips the project-row + button. */
+  backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px))
+    saturate(1.2);
 }
 
 .workspace-wallpaper .first-run-fluid::after {
@@ -64,6 +73,8 @@
  */
 :root[data-workspace-wallpaper] {
   --workspace-wallpaper-frost: 12px;
+  --desktop-main-radius: 0;
+  --desktop-main-shadow: none;
 }
 
 :root[data-workspace-wallpaper],
@@ -120,6 +131,17 @@
   background: transparent;
 }
 
+:root[data-workspace-wallpaper] .app {
+  position: relative;
+  z-index: 1;
+}
+
+/* Keep the project-row + above any residual .main paint at the seam. */
+:root[data-workspace-wallpaper] .sidebar,
+:root[data-workspace-wallpaper] .compact-panel {
+  z-index: 1;
+}
+
 :root[data-workspace-wallpaper] .app.layout-desktop .sidebar,
 :root[data-workspace-wallpaper] .app.reduced-transparency .sidebar,
 :root[data-workspace-wallpaper] .sidebar,
@@ -131,17 +153,16 @@
 :root[data-workspace-wallpaper] .right-panel.is-solo,
 :root[data-workspace-wallpaper] .app.reduced-transparency .right-panel {
   background: var(--workspace-wallpaper-veil);
-  backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px)) saturate(1.2);
-  -webkit-backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px))
-    saturate(1.2);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /*
- * Frost creates a stacking context on each chrome column, so the titlebar
- * buttons' z-index can no longer climb above the full-width drag-strip.
- * Match the Windows click-through strip and let the real chrome receive
- * the click. Home has no MainTopbar, so DesktopLayout mounts a local
- * drag lane that only becomes hittable while wallpaper is on.
+ * Wallpaper host is a #root sibling. The full-width drag-strip still
+ * sits above chrome unless it click-throughs. Match the Windows strip
+ * and let the real chrome receive the click. Home has no MainTopbar, so
+ * DesktopLayout mounts a local drag lane that only becomes hittable
+ * while wallpaper is on.
  */
 :root[data-workspace-wallpaper] .drag-strip {
   pointer-events: none;
@@ -173,8 +194,9 @@
   --desktop-main-shadow: none;
 }
 
-:root[data-workspace-wallpaper] .app.layout-desktop .main {
-  border-radius: 0;
+:root[data-workspace-wallpaper] .app.layout-desktop .main,
+:root[data-workspace-wallpaper] .app.layout-desktop .home-chat {
+  border-radius: 0 !important;
 }
 
 :root[data-workspace-wallpaper] .app.layout-desktop .sidebar {
@@ -213,9 +235,30 @@
 :root[data-workspace-wallpaper] .app.reduced-transparency .file-tree-top-zone,
 :root[data-workspace-wallpaper][data-theme="light"] .home-chat,
 :root[data-workspace-wallpaper]:not([data-theme]) .home-chat,
-:root[data-workspace-wallpaper][data-theme="light"] .app.reduced-transparency .home-chat {
+:root[data-workspace-wallpaper][data-theme="light"] .app.reduced-transparency .home-chat,
+:root[data-workspace-wallpaper] .terminal-panel,
+:root[data-workspace-wallpaper] .terminal-header,
+:root[data-workspace-wallpaper] .terminal-body,
+:root[data-workspace-wallpaper] .terminal-shell,
+:root[data-workspace-wallpaper] .terminal-surface,
+:root[data-workspace-wallpaper] .app.reduced-transparency .terminal-panel {
   background: transparent;
   backdrop-filter: none;
+}
+
+/*
+ * xterm paints its own canvas/viewport. The panel veil is not enough:
+ * without these overrides the built-in terminal stays a solid slab.
+ */
+:root[data-workspace-wallpaper] .terminal-panel {
+  --terminal-background: transparent;
+}
+
+:root[data-workspace-wallpaper] .terminal-surface .xterm,
+:root[data-workspace-wallpaper] .terminal-surface .xterm-screen,
+:root[data-workspace-wallpaper] .terminal-surface .xterm-viewport,
+:root[data-workspace-wallpaper] .terminal-surface .composition-view {
+  background: transparent !important;
 }
 
 :root[data-workspace-wallpaper] .home-chat::before {

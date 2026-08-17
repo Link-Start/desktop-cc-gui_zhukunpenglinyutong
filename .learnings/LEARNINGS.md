@@ -1,5 +1,61 @@
 # Learnings
 
+## [LRN-20260817-009] user_feedback
+
+**Logged**: 2026-08-17T22:55:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+开启背景后，侧栏「新建会话」菜单会被 Home 输入框盖住。
+
+### Details
+`SidebarWorkspaceMenuOverlay` 虽然是 `position:fixed; z-index:1200`，但挂在 `.sidebar` 里。壁纸打开后 `.app` 有 `position:relative; z-index:1`，菜单的 1200 被困在这个 stacking context 里。`.main` / Home composer 是后画的兄弟层，就能盖住菜单。
+
+### Suggested Action
+侧栏浮动菜单（workspace menu、folder move picker）必须 `createPortal(..., document.body)`，和 `RendererContextMenu` 一样。不要只靠 sidebar 内的 z-index。
+
+### Metadata
+- Source: user_feedback
+- Related Files: src/features/app/components/SidebarWorkspaceMenuOverlay.tsx, src/features/app/components/SidebarFolderMovePicker.tsx
+- Tags: wallpaper, stacking, portal, sidebar-menu
+
+### Resolution
+- **Resolved**: 2026-08-17T22:55:00+08:00
+- **Notes**: Both overlays now portal to document.body.
+
+---
+
+## [LRN-20260817-008] user_feedback
+
+**Logged**: 2026-08-17T22:32:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: frontend
+
+### Summary
+开启流体/自定义背景后，主面板会压住侧栏右缘（项目行 `+` 被圆角白卡片裁掉）。
+
+### Details
+`WorkspaceWallpaperHost` 是 `#root` 里 `.app` 的 sibling。sidebar / `.main` 开 wallpaper 时各自挂 `backdrop-filter` 会建 stacking context；WebKit 还会按 blur 半径把 frost 向外扩，后画的 `.main` 圆角白边盖住项目行 `+`。只改 z-index 不够。
+
+### Suggested Action
+1. 毛玻璃只挂在 `.workspace-wallpaper::after`，chrome 列 `backdrop-filter: none`。
+2. `:root[data-workspace-wallpaper]` 上直接把 `--desktop-main-radius` 清零，`.main` / `.home-chat` 用 `border-radius: 0 !important`。
+3. `.app` 抬到 `z-index:1`，sidebar 再高于 `.main`。不要把壁纸设成 `z-index:-1`（`#root { overflow:hidden }` 会裁掉）。
+
+### Metadata
+- Source: user_feedback
+- Related Files: src/styles/workspace-wallpaper.css, src/features/theme/components/WorkspaceWallpaperHost.tsx, src/router.tsx
+- Tags: wallpaper, stacking, sidebar, backdrop-filter
+
+### Resolution
+- **Resolved**: 2026-08-17T22:32:00+08:00
+- **Notes**: Frost moved to wallpaper `::after`. Chrome columns no longer create backdrop-filter stacking contexts. Radius forced to 0.
+
+---
+
 ## [LRN-20260817-007] user_feedback
 
 **Logged**: 2026-08-17T20:33:20+08:00
