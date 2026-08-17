@@ -65,6 +65,27 @@ describe("sessionIndexThreadSummaries", () => {
     expect(rows[0]?.name).toContain("First");
   });
 
+  it("preserves explicit empty disk size for never-started index rows", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "claude",
+          sessionId: "empty-1",
+          title: "",
+          updatedAt: 10,
+          sizeBytes: 0,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.sizeBytes).toBe(0);
+  });
+
   it("hides Shared-owned and protocol-hidden index rows before first paint", () => {
     const rows = sessionIndexRowsToThreadSummaries(
       [

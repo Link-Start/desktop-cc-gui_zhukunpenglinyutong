@@ -11,7 +11,7 @@
  * 禁止 window.confirm（Tauri WebView 下不可靠 / 可卡死）。
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ArrowRightLeft from "lucide-react/dist/esm/icons/arrow-right-left";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
@@ -58,6 +58,13 @@ import {
   squadBaseBindingKey,
   type RecoveryActionKind,
 } from "../runtime/recoveryErrorMap";
+import {
+  invalidateRecoveryOwnerPrefetch,
+  prefetchRecoveryOwner,
+  takePrefetchedRecoveryOwner,
+  yieldRecoveryClickPaint,
+  type RecoveryOwner,
+} from "../runtime/recoveryClickPath";
 
 type SharedSendStatusBarProps = {
   workspaceId: string | null;
@@ -66,12 +73,6 @@ type SharedSendStatusBarProps = {
 };
 
 type RecoveryWorkState = "idle" | "working" | "held" | "cleared";
-
-type RecoveryOwner =
-  | { kind: "attempt"; attemptId: string; bindingKey: string }
-  | { kind: "binding"; bindingKey: string }
-  | { kind: "clear" }
-  | { kind: "ambiguous" };
 
 type RecoverOutcome = "cleared" | "held" | "active";
 
@@ -229,6 +230,41 @@ export function SharedSendStatusBar({
       : { kind: "clear" };
   }, [workspaceId, threadId]);
 
+  useEffect(() => {
+    if (entry.state !== "recovery-required" || !workspaceId || !threadId) {
+      return;
+    }
+    void prefetchRecoveryOwner(workspaceId, threadId, findRecoveryOwner).catch(
+      () => undefined,
+    );
+    return () => {
+      invalidateRecoveryOwnerPrefetch(workspaceId, threadId);
+    };
+  }, [entry.state, workspaceId, threadId, findRecoveryOwner]);
+
+  const invalidateOwnerPrefetch = useCallback(() => {
+    if (!workspaceId || !threadId) {
+      return;
+    }
+    invalidateRecoveryOwnerPrefetch(workspaceId, threadId);
+  }, [workspaceId, threadId]);
+
+  const resolveFirstRecoveryOwner = useCallback(async () => {
+    if (!workspaceId || !threadId) {
+      return { kind: "ambiguous" } as const;
+    }
+    const prefetched = await takePrefetchedRecoveryOwner(
+      workspaceId,
+      threadId,
+    );
+    return prefetched ?? findRecoveryOwner();
+  }, [workspaceId, threadId, findRecoveryOwner]);
+
+  const beginRecoveryAction = useCallback(async () => {
+    await yieldRecoveryClickPaint();
+    return resolveFirstRecoveryOwner();
+  }, [resolveFirstRecoveryOwner]);
+
   const unlockSession = useCallback(() => {
     if (!workspaceId || !threadId) {
       return;
@@ -260,6 +296,7 @@ export function SharedSendStatusBar({
       if (!workspaceId || !threadId) {
         return "held";
       }
+      invalidateRecoveryOwnerPrefetch(workspaceId, threadId);
       const recovery = await sharedSessionV2RecoverAttempt(
         workspaceId,
         threadId,
@@ -332,7 +369,7 @@ export function SharedSendStatusBar({
     setAutoFailed(false);
     setRecommendSkip(false);
     try {
-      const owner = await findRecoveryOwner();
+      const owner = await beginRecoveryAction();
       if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
@@ -424,7 +461,7 @@ export function SharedSendStatusBar({
   }, [
     workspaceId,
     threadId,
-    findRecoveryOwner,
+    beginRecoveryAction,
     recoverAttemptOwner,
     unlockSession,
     notifyProbeHeld,
@@ -438,7 +475,7 @@ export function SharedSendStatusBar({
     setRecoveryWork("working");
     setLastErrorDetail(null);
     try {
-      const owner = await findRecoveryOwner();
+      const owner = await beginRecoveryAction();
       if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
@@ -465,6 +502,7 @@ export function SharedSendStatusBar({
         });
         return;
       }
+      invalidateOwnerPrefetch();
       const result = await sharedSessionV2InterruptTurn(
         workspaceId,
         threadId,
@@ -494,7 +532,14 @@ export function SharedSendStatusBar({
         durationMs: 4800,
       });
     }
-  }, [workspaceId, threadId, findRecoveryOwner, unlockSession, t]);
+  }, [
+    workspaceId,
+    threadId,
+    beginRecoveryAction,
+    invalidateOwnerPrefetch,
+    unlockSession,
+    t,
+  ]);
 
   const handleStopAndRebuild = useCallback(async () => {
     if (!workspaceId || !threadId) {
@@ -503,7 +548,7 @@ export function SharedSendStatusBar({
     setRecoveryWork("working");
     setLastErrorDetail(null);
     try {
-      const owner = await findRecoveryOwner();
+      const owner = await beginRecoveryAction();
       if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
@@ -522,6 +567,7 @@ export function SharedSendStatusBar({
       }
       if (owner.kind === "attempt") {
         try {
+          invalidateOwnerPrefetch();
           const interruptResult = await sharedSessionV2InterruptTurn(
             workspaceId,
             threadId,
@@ -544,6 +590,7 @@ export function SharedSendStatusBar({
           // best-effort stop；rebuild 仍可能 recovery-active
         }
       }
+      invalidateOwnerPrefetch();
       await rebuildBindingWithMismatchRetry(
         workspaceId,
         threadId,
@@ -566,7 +613,8 @@ export function SharedSendStatusBar({
   }, [
     workspaceId,
     threadId,
-    findRecoveryOwner,
+    beginRecoveryAction,
+    invalidateOwnerPrefetch,
     unlockSession,
     settleCancelled,
     t,
@@ -582,7 +630,7 @@ export function SharedSendStatusBar({
     }
     setRecoveryWork("working");
     try {
-      const owner = await findRecoveryOwner();
+      const owner = await beginRecoveryAction();
       if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
@@ -593,6 +641,7 @@ export function SharedSendStatusBar({
         setRecommendSkip(true);
         return;
       }
+      invalidateOwnerPrefetch();
       await rebuildBindingWithMismatchRetry(
         workspaceId,
         threadId,
@@ -616,7 +665,8 @@ export function SharedSendStatusBar({
     handleStopAndRebuild,
     workspaceId,
     threadId,
-    findRecoveryOwner,
+    beginRecoveryAction,
+    invalidateOwnerPrefetch,
     unlockSession,
     settleCancelled,
     t,
@@ -630,7 +680,7 @@ export function SharedSendStatusBar({
     setRecoveryWork("working");
     setLastErrorDetail(null);
     try {
-      const owner = await findRecoveryOwner();
+      const owner = await beginRecoveryAction();
       if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
@@ -651,6 +701,7 @@ export function SharedSendStatusBar({
         setRecoveryWork("cleared");
         return;
       }
+      invalidateOwnerPrefetch();
       const result = await sharedSessionV2AbandonUnresolvedAttempt(
         workspaceId,
         threadId,
@@ -678,7 +729,8 @@ export function SharedSendStatusBar({
   }, [
     workspaceId,
     threadId,
-    findRecoveryOwner,
+    beginRecoveryAction,
+    invalidateOwnerPrefetch,
     unlockSession,
     settleCancelled,
     t,
@@ -696,7 +748,7 @@ export function SharedSendStatusBar({
     setLastErrorDetail(null);
     setAutoFailed(false);
     try {
-      let owner = await findRecoveryOwner();
+      let owner = await beginRecoveryAction();
       if (owner.kind === "clear") {
         unlockSession();
         setRecoveryWork("cleared");
@@ -720,6 +772,7 @@ export function SharedSendStatusBar({
           return;
         }
         try {
+          invalidateOwnerPrefetch();
           const interruptResult = await sharedSessionV2InterruptTurn(
             workspaceId,
             threadId,
@@ -743,7 +796,7 @@ export function SharedSendStatusBar({
         }
       }
 
-      // rebuild 前再解析一次 owner（interrupt 后可能 clear）
+      // rebuild 前再解析一次 owner（interrupt 后可能 clear）；不走 prefetch
       owner = await findRecoveryOwner();
       if (owner.kind === "clear") {
         unlockSession();
@@ -759,6 +812,7 @@ export function SharedSendStatusBar({
 
       if (owner.kind === "attempt") {
         try {
+          invalidateOwnerPrefetch();
           const interruptResult = await sharedSessionV2InterruptTurn(
             workspaceId,
             threadId,
@@ -782,6 +836,7 @@ export function SharedSendStatusBar({
         }
       }
 
+      invalidateOwnerPrefetch();
       await rebuildBindingWithMismatchRetry(
         workspaceId,
         threadId,
@@ -805,7 +860,9 @@ export function SharedSendStatusBar({
   }, [
     workspaceId,
     threadId,
+    beginRecoveryAction,
     findRecoveryOwner,
+    invalidateOwnerPrefetch,
     recoverAttemptOwner,
     unlockSession,
     settleCancelled,

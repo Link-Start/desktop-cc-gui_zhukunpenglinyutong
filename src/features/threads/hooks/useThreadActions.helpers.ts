@@ -1103,8 +1103,18 @@ export function findFirstHistoryUserMessageId(
 }
 
 function normalizeThreadSizeBytes(value: unknown) {
-  const sizeBytes = asNumber(value);
-  return sizeBytes > 0 ? Math.round(sizeBytes) : undefined;
+  // Must distinguish missing size (unknown history) from explicit 0
+  // (never-started). asNumber() maps missing to 0 and cannot be used here.
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.round(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.round(parsed);
+    }
+  }
+  return undefined;
 }
 
 export function extractThreadSizeBytes(record: Record<string, unknown>) {

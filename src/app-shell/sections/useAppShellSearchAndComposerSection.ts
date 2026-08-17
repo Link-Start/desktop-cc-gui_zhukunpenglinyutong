@@ -40,10 +40,8 @@ import type {
   QuickSwitcherRunningSession,
   QuickSwitcherSessionGroup,
 } from "../../features/quick-switcher/types";
-import {
-  getThreadSelectDiffCleanupAction,
-  shouldPreserveEditorOnThreadSelect,
-} from "./threadEditorPreservation";
+import { shouldPreserveEditorOnThreadSelect } from "./threadEditorPreservation";
+import { commitThreadSelection } from "./threadSelect/commitThreadSelection";
 
 type AppShellTab = "projects" | "codex" | "spec" | "git" | "log";
 type DiffSource = "local" | "pr" | "commit";
@@ -600,18 +598,26 @@ export function useAppShellSearchAndComposerSection(
               targetWorkspaceId: result.workspaceId,
               activeEditorFilePath,
             });
-            const diffCleanupAction =
-              getThreadSelectDiffCleanupAction(preserveEditor);
-            if (diffCleanupAction === "clear-selected-diff") {
-              setSelectedDiffPath(null);
-            } else {
-              exitDiffView();
-            }
-            setSelectedPullRequest(null);
-            setSelectedCommitSha(null);
-            setDiffSource("local");
-            selectWorkspace(result.workspaceId);
-            setActiveThreadId(result.threadId, result.workspaceId);
+            commitThreadSelection(
+              {
+                workspaceId: result.workspaceId,
+                threadId: result.threadId,
+              },
+              {
+                selectWorkspace,
+                setActiveThreadId,
+              },
+              { preserveEditor },
+              {
+                setSelectedDiffPath,
+                exitDiffView,
+                extraChrome: () => {
+                  setSelectedPullRequest(null);
+                  setSelectedCommitSha(null);
+                  setDiffSource("local");
+                },
+              },
+            );
           }
           break;
         case "history":
@@ -634,21 +640,27 @@ export function useAppShellSearchAndComposerSection(
               targetWorkspaceId: result.workspaceId,
               activeEditorFilePath,
             });
-            const diffCleanupAction =
-              getThreadSelectDiffCleanupAction(preserveEditor);
-            if (diffCleanupAction === "clear-selected-diff") {
-              setSelectedDiffPath(null);
-            } else {
-              exitDiffView();
-            }
-            setSelectedPullRequest(null);
-            setSelectedCommitSha(null);
-            setDiffSource("local");
-            selectWorkspace(result.workspaceId);
-            setActiveThreadId(result.threadId, result.workspaceId);
-            if (isCompact) {
-              setActiveTab("codex");
-            }
+            commitThreadSelection(
+              {
+                workspaceId: result.workspaceId,
+                threadId: result.threadId,
+              },
+              {
+                selectWorkspace,
+                setActiveThreadId,
+              },
+              { preserveEditor },
+              {
+                setSelectedDiffPath,
+                exitDiffView,
+                extraChrome: () => {
+                  setSelectedPullRequest(null);
+                  setSelectedCommitSha(null);
+                  setDiffSource("local");
+                },
+                setActiveTab: isCompact ? setActiveTab : undefined,
+              },
+            );
           }
           break;
         case "skill":

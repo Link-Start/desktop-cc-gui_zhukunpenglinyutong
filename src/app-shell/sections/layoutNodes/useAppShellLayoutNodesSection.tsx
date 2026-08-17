@@ -53,10 +53,8 @@ import {
   configureDetachedExternalChangeMonitor,
 } from "../../../services/tauri/workspaceFiles";
 import { shouldEnableMainFileExternalChangeMonitoring } from "../fileExternalMonitoring";
-import {
-  getThreadSelectDiffCleanupAction,
-  shouldPreserveEditorOnThreadSelect,
-} from "../threadEditorPreservation";
+import { shouldPreserveEditorOnThreadSelect } from "../threadEditorPreservation";
+import { commitThreadSelection } from "../threadSelect/commitThreadSelection";
 import { EMPTY_STRING_ARRAY, formatWorkspaceAliasError } from "./helpers";
 import {
   mergeAppShellDomainBag,
@@ -1346,32 +1344,35 @@ export function useAppShellLayoutNodesSection(
         targetWorkspaceId: workspaceId,
         activeEditorFilePath,
       });
-      const diffCleanupAction =
-        getThreadSelectDiffCleanupAction(preserveEditor);
-      closeSettings();
-      if (diffCleanupAction === "clear-selected-diff") {
-        setSelectedDiffPath(null);
-      } else {
-        exitDiffView();
-      }
-      resetPullRequestSelection();
-      setHomeOpen(false);
-      setWorkspaceHomeWorkspaceId(null);
-      if (!preserveEditor) {
-        setCenterMode("chat");
-      }
-      setAppMode("chat");
-      setActiveTab("codex");
-      selectWorkspace(workspaceId);
-      setActiveThreadId(threadId, workspaceId);
-      // Auto-switch engine based on thread's engineSource
       const threads = threadsByWorkspace[workspaceId] ?? [];
       const thread = threads.find(
         (threadEntry: { id: string }) => threadEntry.id === threadId,
       );
-      if (thread?.engineSource) {
-        setActiveEngine(thread.engineSource);
-      }
+      // Click path: identity + chrome only. Do not hydrate the thread list
+      // or force a catalog/disk rescan from this handler.
+      commitThreadSelection(
+        {
+          workspaceId,
+          threadId,
+        },
+        {
+          selectWorkspace,
+          setActiveThreadId,
+        },
+        { preserveEditor, engineSource: thread?.engineSource },
+        {
+          closeSettings,
+          setSelectedDiffPath,
+          exitDiffView,
+          resetPullRequestSelection,
+          setHomeOpen,
+          setWorkspaceHomeWorkspaceId,
+          setCenterMode,
+          setAppMode,
+          setActiveTab,
+          setActiveEngine,
+        },
+      );
     },
   );
   const handleDeleteThread = useEventCallback(

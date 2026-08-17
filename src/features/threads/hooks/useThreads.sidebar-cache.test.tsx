@@ -195,7 +195,7 @@ describe("useThreads sidebar cache", () => {
     });
   });
 
-  it("tracks Codex history loading while selecting an unloaded thread", async () => {
+  it("resumes Codex history in the background without a select-frame curtain", async () => {
     vi.useFakeTimers();
     let resolveResume:
       | ((value: {
@@ -228,9 +228,9 @@ describe("useThreads sidebar cache", () => {
         result.current.setActiveThreadId("thread-history");
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(
-        true,
-      );
+      expect(
+        result.current.historyLoadingByThreadId["thread-history"],
+      ).toBeUndefined();
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -240,9 +240,9 @@ describe("useThreads sidebar cache", () => {
         "ws-1",
         "thread-history",
       );
-      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(
-        true,
-      );
+      expect(
+        result.current.historyLoadingByThreadId["thread-history"],
+      ).toBeUndefined();
 
       await act(async () => {
         resolveResume?.({
@@ -276,7 +276,7 @@ describe("useThreads sidebar cache", () => {
     }
   });
 
-  it("does not clear the next selected thread loading state when an older resume finishes", async () => {
+  it("does not apply an older resume after a newer thread is selected", async () => {
     vi.useFakeTimers();
     const resumeResolvers = new Map<
       string,
@@ -312,9 +312,9 @@ describe("useThreads sidebar cache", () => {
       await act(async () => {
         vi.advanceTimersByTime(50);
       });
-      expect(result.current.historyLoadingByThreadId["thread-history-a"]).toBe(
-        true,
-      );
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-a"],
+      ).toBeUndefined();
 
       act(() => {
         result.current.setActiveThreadId("thread-history-b");
@@ -322,9 +322,9 @@ describe("useThreads sidebar cache", () => {
       expect(
         result.current.historyLoadingByThreadId["thread-history-a"],
       ).toBeUndefined();
-      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(
-        true,
-      );
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-b"],
+      ).toBeUndefined();
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -354,9 +354,10 @@ describe("useThreads sidebar cache", () => {
         await Promise.resolve();
       });
 
-      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(
-        true,
-      );
+      expect(result.current.activeThreadId).toBe("thread-history-b");
+      expect(
+        result.current.historyLoadingByThreadId["thread-history-b"],
+      ).toBeUndefined();
 
       await act(async () => {
         resumeResolvers.get("thread-history-b")?.({
@@ -390,7 +391,7 @@ describe("useThreads sidebar cache", () => {
     }
   });
 
-  it("tracks Claude history loading while selecting an unloaded session", async () => {
+  it("loads Claude history in the background without a select-frame curtain", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: { data: [], nextCursor: null },
     } as never);
@@ -421,7 +422,7 @@ describe("useThreads sidebar cache", () => {
 
       expect(
         result.current.historyLoadingByThreadId["claude:session-history"],
-      ).toBe(true);
+      ).toBeUndefined();
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -434,7 +435,7 @@ describe("useThreads sidebar cache", () => {
       );
       expect(
         result.current.historyLoadingByThreadId["claude:session-history"],
-      ).toBe(true);
+      ).toBeUndefined();
 
       await act(async () => {
         resolveLoad?.({
@@ -519,7 +520,7 @@ describe("useThreads sidebar cache", () => {
     }
   });
 
-  it("does not mark pending Codex threads as history loading", () => {
+  it("does not mark pending Codex threads as history loading", async () => {
     vi.useFakeTimers();
 
     try {
@@ -537,6 +538,58 @@ describe("useThreads sidebar cache", () => {
       expect(
         result.current.historyLoadingByThreadId["codex-pending-1"],
       ).toBeUndefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      expect(resumeThread).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not resume a never-started session with empty disk metadata", async () => {
+    vi.useFakeTimers();
+    writeClientStoreValue("threads", "sidebarSnapshot", {
+      version: 1,
+      updatedAt: 123,
+      workspaces: [workspace],
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "claude:new-empty",
+            name: "New chat",
+            updatedAt: 123,
+            engineSource: "claude",
+            sizeBytes: 0,
+          },
+        ],
+      },
+    });
+
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.setActiveThreadId("claude:new-empty");
+      });
+
+      expect(
+        result.current.historyLoadingByThreadId["claude:new-empty"],
+      ).toBeUndefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      expect(resumeThread).not.toHaveBeenCalled();
+      expect(loadClaudeSession).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -581,7 +634,7 @@ describe("useThreads sidebar cache", () => {
 
       expect(
         result.current.historyLoadingByThreadId["thread-history-error"],
-      ).toBe(true);
+      ).toBeUndefined();
 
       await act(async () => {
         vi.advanceTimersByTime(50);

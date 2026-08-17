@@ -169,6 +169,8 @@ export function mergeSessionDisplaySummary(
     parentThreadId: next.parentThreadId ?? previous.parentThreadId ?? null,
     folderId: next.folderId ?? previous.folderId ?? null,
     autoSession: next.autoSession ?? previous.autoSession ?? null,
+    sizeBytes: next.sizeBytes ?? previous.sizeBytes,
+    physicalPath: next.physicalPath ?? previous.physicalPath,
   };
 }
 

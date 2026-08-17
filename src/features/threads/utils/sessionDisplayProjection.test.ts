@@ -296,6 +296,26 @@ describe("sessionDisplayProjection", () => {
     });
   });
 
+  it("keeps explicit empty disk metadata when a later merge omits size", () => {
+    const previous: ThreadSummary = {
+      id: "claude:new-empty",
+      name: "New chat",
+      updatedAt: 100,
+      engineSource: "claude",
+      threadKind: "native",
+      sizeBytes: 0,
+    };
+    const next: ThreadSummary = {
+      id: "claude:new-empty",
+      name: "New chat",
+      updatedAt: 120,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+
+    expect(mergeSessionDisplaySummary(previous, next).sizeBytes).toBe(0);
+  });
+
   it("projects degraded continuity candidates without resurrecting excluded rows", () => {
     const projected = projectSessionDisplaySummaries({
       baseSummaries: [

@@ -4,6 +4,7 @@ import type { ConversationItem, ThreadSummary } from "../../../types";
 import { expandHiddenSharedBindingIds } from "../../shared-session/runtime/sharedSessionSummaries";
 import {
   buildHiddenAutomaticSessionIdSet,
+  extractThreadSizeBytes,
   filterHiddenAutomaticThreadSummaries,
   isRetainableEngineContinuitySummary,
   isCollabPlanSummarySidebarTitle,
@@ -30,6 +31,15 @@ import {
 } from "./useThreadActions.helpers";
 
 describe("useThreadActions.helpers", () => {
+  it("keeps explicit empty disk size and does not invent zero for missing size", () => {
+    expect(extractThreadSizeBytes({ sizeBytes: 0 })).toBe(0);
+    expect(extractThreadSizeBytes({ size_bytes: "0" })).toBe(0);
+    expect(extractThreadSizeBytes({ fileSizeBytes: 2048 })).toBe(2048);
+    expect(extractThreadSizeBytes({})).toBeUndefined();
+    expect(extractThreadSizeBytes({ sizeBytes: null })).toBeUndefined();
+    expect(extractThreadSizeBytes({ sizeBytes: -12 })).toBeUndefined();
+  });
+
   it("matches hidden automatic session ids across alias forms", () => {
     const hiddenIds = buildHiddenAutomaticSessionIdSet([
       "claude:f87d3167-23d4-47a8-a273-43eb9bd57f8a:2b325056-0242-4450-a18e-1b7b29f718c1",
