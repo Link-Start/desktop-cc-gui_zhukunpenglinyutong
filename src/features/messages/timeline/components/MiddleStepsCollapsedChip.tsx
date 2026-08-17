@@ -17,7 +17,7 @@ type MiddleStepsCollapsedChipProps = {
 
 /**
  * Flat process-phase control:
- *   已处理 · 思考 2 · 工具 5 ›
+ *   思考 2 次 工具调用 5 次 ›
  *   ────────────────────────────────
  */
 export const MiddleStepsCollapsedChip = memo(function MiddleStepsCollapsedChip({
@@ -29,7 +29,6 @@ export const MiddleStepsCollapsedChip = memo(function MiddleStepsCollapsedChip({
   const { t } = useTranslation();
 
   const label = useMemo(() => {
-    const head = t("messages.middleStepsProcessed");
     const stats: string[] = [];
     if (breakdown.reasoningCount > 0) {
       stats.push(
@@ -46,8 +45,8 @@ export const MiddleStepsCollapsedChip = memo(function MiddleStepsCollapsedChip({
     if (stats.length === 0 && count > 0) {
       stats.push(t("messages.middleStepsProcessedSteps", { count }));
     }
-    // e.g. 已处理 · 思考 4 次 工具调用 23 次
-    return stats.length > 0 ? `${head} · ${stats.join(" ")}` : head;
+    // e.g. 思考 4 次 工具调用 23 次
+    return stats.join(" ");
   }, [breakdown, count, t]);
 
   const ariaLabel = t("messages.middleStepsProcessedAria", {

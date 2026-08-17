@@ -708,6 +708,37 @@ describe("threadItems", () => {
     expect(mergedTool.output).toBe("ok");
   });
 
+  it("keeps commandExecution identity when a nameless DSH completion arrives as agent", () => {
+    const existing: ConversationItem = {
+      id: "call-bash-1",
+      kind: "tool",
+      toolType: "commandExecution",
+      title: "Command: Show working tree status",
+      detail: JSON.stringify({
+        command: "git status --short",
+        description: "Show working tree status",
+      }),
+      status: "started",
+      output: "",
+    };
+    const completed: ConversationItem = {
+      id: "call-bash-1",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "Tool: agent",
+      detail: "",
+      status: "completed",
+      output: " M src/app.ts",
+    };
+
+    const merged = upsertItem([existing], completed);
+    const mergedTool = expectToolItem(merged[0]);
+    expect(mergedTool.toolType).toBe("commandExecution");
+    expect(mergedTool.title).toBe("Command: Show working tree status");
+    expect(mergedTool.status).toBe("completed");
+    expect(mergedTool.output).toBe(" M src/app.ts");
+  });
+
   it("keeps the human tool name when a later completion only carries a call id", () => {
     const existing: ConversationItem = {
       id: "call-read-1",
@@ -1646,6 +1677,28 @@ go lang`,
     if (item && item.kind === "tool") {
       expect(item.toolType).toBe("mcpToolCall");
       expect(item.output).toContain("/repo");
+    }
+  });
+
+  it("promotes nameless DSH agent mcpToolCall with command args to a terminal card", () => {
+    const item = buildConversationItem({
+      type: "mcpToolCall",
+      id: "dsh-bash-agent",
+      server: "agent",
+      tool: "agent",
+      arguments: JSON.stringify({
+        command: "git commit -m 'feat(theme): wallpaper'",
+        description: "Commit workspace wallpaper feature",
+      }),
+      status: "completed",
+      output: "[main 84a74b4] feat(theme): wallpaper\n",
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("commandExecution");
+      expect(item.title).toBe("Command: Commit workspace wallpaper feature");
+      const parsed = JSON.parse(item.detail) as Record<string, string>;
+      expect(parsed.command).toBe("git commit -m 'feat(theme): wallpaper'");
     }
   });
 

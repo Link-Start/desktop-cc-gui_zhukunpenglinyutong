@@ -61,6 +61,17 @@ describe("toolSemantics", () => {
         JSON.stringify({ file_path: "/Users/zhukunpeng/Desktop/appSettings.ts" }),
       ),
     ).toBe("read");
+    expect(
+      resolveCanonicalToolName(
+        "Tool: agent",
+        "mcpToolCall",
+        JSON.stringify({
+          command: "git status --short",
+          description: "Show working tree status",
+        }),
+      ),
+    ).toBe("bash");
+    expect(extractToolName("Tool: agent")).toBe("");
   });
 
   it("resolves command statuses with explicit failure and completion precedence", () => {

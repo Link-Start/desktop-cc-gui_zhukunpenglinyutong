@@ -1,10 +1,10 @@
 import type { ConversationItem } from "../../../types";
 
-/** IO / older-history page size. Claude disk window stays 80. */
-export const THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE = 80;
-/** First-paint tail. Keep this well below the Claude IO window so 80-item
- *  snapshots still land a chip instead of dumping the full list. */
-export const THREAD_ITEMS_FIRST_PAINT_COUNT = 16;
+/** IO / older-history page size when revealing the pending first-paint tail. */
+export const THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE = 800;
+/** First-paint tail. Opening a session only hydrates the newest 300 items;
+ *  older rows stay in memory until the chip is clicked. */
+export const THREAD_ITEMS_FIRST_PAINT_COUNT = 300;
 
 export type ThreadItemsDispatch = (action: {
   type: "setThreadItems" | "prependThreadItems";

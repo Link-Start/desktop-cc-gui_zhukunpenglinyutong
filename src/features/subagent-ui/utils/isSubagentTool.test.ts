@@ -80,6 +80,16 @@ describe("isSubagentTool cross-engine", () => {
   it("rejects ordinary tools", () => {
     expect(isSubagentTool({ toolType: "commandExecution", title: "Bash" })).toBe(false);
     expect(isSubagentTool({ toolType: "read", title: "Tool: Read" })).toBe(false);
+    expect(
+      isSubagentTool({
+        toolType: "mcpToolCall",
+        title: "Tool: agent",
+        detail: JSON.stringify({
+          command: "git status --short",
+          description: "Show working tree status",
+        }),
+      }),
+    ).toBe(false);
   });
 
   it("matches Shared description-as-title Agent payload (no Tool: Agent prefix)", () => {

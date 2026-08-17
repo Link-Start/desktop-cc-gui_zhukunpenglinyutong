@@ -171,7 +171,7 @@ describe("resolveCollapsedTimelineItems causal phase collapse", () => {
     });
     expect(toolOnly.timelineItems.map((item) => item.id)).toEqual(["u1", "a1"]);
 
-    // Shared/Native simple Q&A: reasoning only → "已处理 · 思考 1 次", no orphan 思考过程 row.
+    // Shared/Native simple Q&A: reasoning only → "思考 1 次", no orphan 思考过程 row.
     const reasoningOnly = resolveCollapsedTimelineItems({
       activeEngine: "claude",
       timelineSourceItems: [

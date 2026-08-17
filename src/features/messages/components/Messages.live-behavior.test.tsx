@@ -2683,7 +2683,9 @@ describe("Messages live behavior", () => {
     expect(container.querySelector(".thinking-block")).toBeNull();
     expect(container.textContent ?? "").not.toContain("Read causal.ts");
     expect(container.textContent ?? "").toContain("最终输出");
-    expect(container.textContent ?? "").toContain("已处理");
+    expect(container.textContent ?? "").toContain("思考 1 次");
+    expect(container.textContent ?? "").toContain("工具调用 1 次");
+    expect(container.textContent ?? "").not.toContain("已处理");
   });
 
   it("collapses a single process step including lone reasoning into the chip", () => {
@@ -2723,7 +2725,8 @@ describe("Messages live behavior", () => {
     );
 
     expect(toolContainer.querySelector(".messages-process-phase-toggle")).toBeTruthy();
-    expect(toolContainer.textContent ?? "").toContain("已处理");
+    expect(toolContainer.textContent ?? "").toContain("工具调用 1 次");
+    expect(toolContainer.textContent ?? "").not.toContain("已处理");
     expect(toolContainer.textContent ?? "").not.toContain("Read single.ts");
     expect(toolContainer.textContent ?? "").toContain("单步输出");
 
@@ -2761,7 +2764,8 @@ describe("Messages live behavior", () => {
 
     expect(reasonContainer.querySelector(".messages-process-phase-toggle")).toBeTruthy();
     expect(reasonContainer.querySelector(".thinking-block")).toBeNull();
-    expect(reasonContainer.textContent ?? "").toContain("已处理");
+    expect(reasonContainer.textContent ?? "").toContain("思考 1 次");
+    expect(reasonContainer.textContent ?? "").not.toContain("已处理");
     expect(reasonContainer.textContent ?? "").toContain("我是助手");
   });
 
@@ -2926,7 +2930,9 @@ describe("Messages live behavior", () => {
     expect(container.textContent ?? "").toContain("历史最终输出");
     const indicator = container.querySelector(".messages-process-phase-toggle");
     expect(indicator).toBeTruthy();
-    expect(indicator?.textContent ?? "").toContain("已处理");
+    expect(indicator?.textContent ?? "").toContain("思考 1 次");
+    expect(indicator?.textContent ?? "").toContain("工具调用 1 次");
+    expect(indicator?.textContent ?? "").not.toContain("已处理");
     expect(indicator?.textContent ?? "").not.toMatch(/\d+m\s*\d+s|\d+s/);
   });
 

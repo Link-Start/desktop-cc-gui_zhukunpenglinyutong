@@ -32,7 +32,7 @@ const CLAUDE_RENDER_DEBUG_FLAG_KEY = "ccgui.debug.claude.render";
 export const MESSAGES_SLOW_RENDER_WARN_MS = 18;
 export const MESSAGES_SLOW_ANCHOR_WARN_MS = 8;
 // 历史窗口硬兜底（防失控上限）。会话内持续裁剪由
-// ccgui.perf.historyWindowSize（messagesHistoryWindow.ts，默认 150）承担；
+// ccgui.perf.historyWindowSize（messagesHistoryWindow.ts，默认 800）承担；
 // 该 flag 关闭时本常量退化为等效不裁。
 export const VISIBLE_MESSAGE_WINDOW = 10000;
 // 流式 live 尾窗：2026-08 起关闭（值 ≤0 = 不裁剪）。

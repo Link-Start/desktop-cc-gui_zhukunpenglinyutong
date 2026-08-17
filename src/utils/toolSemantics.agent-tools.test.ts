@@ -52,6 +52,16 @@ describe("agent multi-cli tool polish names", () => {
         classifyToolCategory({ toolType: "mcpToolCall", title: name }),
       ).toBe("bash");
     }
+    expect(
+      classifyToolCategory({
+        toolType: "mcpToolCall",
+        title: "Tool: agent",
+        detail: JSON.stringify({
+          command: "git commit -m 'feat(theme): wallpaper'",
+          description: "Commit workspace wallpaper feature",
+        }),
+      }),
+    ).toBe("bash");
   });
 
   it("classifies search and web without swallowing editors", () => {
