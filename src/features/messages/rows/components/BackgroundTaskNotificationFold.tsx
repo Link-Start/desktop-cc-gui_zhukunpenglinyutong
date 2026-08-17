@@ -13,7 +13,7 @@ import { normalizeAgentTaskStatus } from "../../utils/messagesRenderUtils";
 
 type BackgroundTaskNotificationFoldProps = {
   notification: AgentTaskNotification;
-  workspaceId: string;
+  workspaceId?: string | null;
   outputSnapshot: EngineTaskOutputSnapshot | null;
 };
 
