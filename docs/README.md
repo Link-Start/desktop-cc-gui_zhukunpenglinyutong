@@ -57,6 +57,7 @@ status: active
 
 - [`analysis/native-vs-shared-cli-explained.md`](analysis/native-vs-shared-cli-explained.md)
 - [`analysis/native-session-provider-select-vs-disk-overwrite-2026-07-31.md`](analysis/native-session-provider-select-vs-disk-overwrite-2026-07-31.md)
+- [`analysis/sidebar-session-list-fetch-0.8.9-vs-current-2026-08-18.md`](analysis/sidebar-session-list-fetch-0.8.9-vs-current-2026-08-18.md) — 左侧 session 主线：2 层 + 游标还在 + 读层漏口；优化前对照
 - [`research/mossx-multi-cli-provider-session-foundation-design.md`](research/mossx-multi-cli-provider-session-foundation-design.md)
 - [`reports/multi-cli-session-foundation-a-d-impact-and-manual-test-plan-2026-07-28.md`](reports/multi-cli-session-foundation-a-d-impact-and-manual-test-plan-2026-07-28.md)
 
