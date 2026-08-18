@@ -15,7 +15,7 @@ describe("MessagesAnchorRail styles", () => {
 
     expect(shellCss).toMatch(/\.messages-shell\s*\{[\s\S]*container-type:\s*inline-size;/);
     expect(statusCss).toMatch(
-      /\.messages-anchor-rail\s*\{[\s\S]*left:\s*40px;[\s\S]*top:\s*calc\([^;]+;[\s\S]*bottom:\s*22px;/,
+      /\.messages-anchor-rail\s*\{[\s\S]*left:\s*12px;[\s\S]*top:\s*calc\([^;]+;[\s\S]*bottom:\s*22px;/,
     );
     expect(statusCss).toMatch(
       /\.messages-anchor-rail\s*\{[\s\S]*display:\s*flex;[\s\S]*gap:\s*2px;/,

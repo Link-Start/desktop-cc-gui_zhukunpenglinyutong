@@ -7,7 +7,7 @@
  */
 .messages-anchor-rail {
   position: absolute;
-  left: 40px;
+  left: 12px;
   top: calc(var(--main-topbar-height) + 22px);
   bottom: 22px;
   width: 52px;
