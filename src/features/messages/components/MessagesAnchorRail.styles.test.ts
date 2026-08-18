@@ -24,7 +24,7 @@ describe("MessagesAnchorRail styles", () => {
       /\.messages-anchor-item\s*\{[\s\S]*position:\s*relative;[\s\S]*flex:\s*0 0 8px;[\s\S]*height:\s*8px;/,
     );
     expect(statusCss).toMatch(
-      /\.messages-anchor-dash::before\s*\{[\s\S]*width:\s*14px;[\s\S]*height:\s*2px;/,
+      /\.messages-anchor-dash::before\s*\{[\s\S]*width:\s*9px;[\s\S]*height:\s*2px;/,
     );
     expect(statusCss).toMatch(
       /\.messages-anchor-dash\.is-proximity-3::before\s*\{[\s\S]*width:\s*18px;/,
@@ -55,8 +55,11 @@ describe("MessagesAnchorRail styles", () => {
     expect(statusCss).toContain("-webkit-line-clamp: 3;");
     expect(statusCss).not.toContain(".messages-anchor-panel");
     expect(statusCss).not.toContain(".messages-anchor-list");
-    expect(statusCss).toMatch(
+    expect(statusCss).not.toMatch(
       /@container\s*\(max-width:\s*960px\)\s*\{[\s\S]*\.messages-anchor-rail\s*\{[\s\S]*display:\s*none;/,
+    );
+    expect(statusCss).not.toMatch(
+      /@media\s*\(max-width:\s*1100px\)\s*\{[\s\S]*\.messages-anchor-rail\s*\{[\s\S]*display:\s*none;/,
     );
   });
 });
