@@ -759,8 +759,13 @@ describe("useAppSettings", () => {
       await result.current.saveSettings(next);
     });
 
-    expect(result.current.settings.workspaceWallpaper.fluidPreset).toBe("ash");
-    expect(result.current.settings.workspaceWallpaper.fluidMotion).toBe("drift");
+    expect(result.current.settings.workspaceWallpaper).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "ash",
+      fluidMotion: "drift",
+      veilOpacity: 20,
+    });
   });
 
   it("sanitizes preset slots before persisting settings", async () => {
