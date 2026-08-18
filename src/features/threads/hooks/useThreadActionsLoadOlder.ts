@@ -12,16 +12,11 @@ import {
   listThreads as listThreadsService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
-import {
-  filterSessionIndexRowsByEngine,
-  sessionIndexRowsToThreadSummaries,
-} from "./sessionIndexThreadSummaries";
+import { sessionIndexRowsToThreadSummaries } from "./sessionIndexThreadSummaries";
 import { expandHiddenSharedBindingIds } from "../../shared-session/runtime/sharedSessionSummaries";
 import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
 import {
   expandVisibilityHideSet,
-  hasVerifiedSharedHide,
-  isUsableSharedNativeVisibility,
   lastVerifiedSharedHide,
   unionHideSets,
 } from "./sharedNativeVisibility";
@@ -175,9 +170,6 @@ export function useLoadOlderThreadsForWorkspace({
               ? page.data.slice(0, SESSION_INDEX_PAGE_SIZE)
               : page.data;
             const visibility = page.visibility ?? null;
-            const canProjectIndexNatives =
-              isUsableSharedNativeVisibility(visibility) ||
-              hasVerifiedSharedHide(workspace.id);
             const hideSet = unionHideSets(
               expandVisibilityHideSet(visibility),
               lastVerifiedSharedHide(workspace.id),
@@ -185,10 +177,10 @@ export function useLoadOlderThreadsForWorkspace({
                 ...getCollabWorkerNativeHideIds(),
               ]),
             );
-            const rows = canProjectIndexNatives
-              ? pageRows
-              : filterSessionIndexRowsByEngine(pageRows, "pi");
-            const indexSummaries = sessionIndexRowsToThreadSummaries(rows, {
+            // Hide unreadiness must not drop indexed natives to PI-only.
+            // ThreadList expands the in-memory page first; this IPC only
+            // runs after that page is exhausted.
+            const indexSummaries = sessionIndexRowsToThreadSummaries(pageRows, {
               workspaceId: workspace.id,
               mappedTitles,
               getCustomName,

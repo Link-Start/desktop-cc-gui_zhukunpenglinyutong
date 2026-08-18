@@ -16,9 +16,9 @@ import {
 import {
   useWorkspaceThreadListHydration,
   COLD_START_IDLE_MIN_DELAY_MS,
-  POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS,
-  POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
-  POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
+  POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS,
+  POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_WAIT_MS,
+  POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MIN_DELAY_MS,
   WORKSPACE_SWITCH_INTENT_DELAY_MS,
 } from "./useWorkspaceThreadListHydration";
 import { startupOrchestrator } from "../../features/startup-orchestration/utils/startupOrchestrator";
@@ -283,7 +283,7 @@ describe("useWorkspaceThreadListHydration", () => {
     });
   });
 
-  it("keeps manual tracked refreshes on full-catalog even for the active workspace", async () => {
+  it("keeps manual tracked refreshes on first-paint for the active workspace", async () => {
     const workspaces = [createWorkspace("ws-1")];
     const listThreadsForWorkspace = vi.fn<
       (
@@ -320,7 +320,7 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
 
-    // After first-paint, manual tracked without phase map → full-catalog (active phase).
+    // After first-paint, manual tracked without explicit full-catalog stays Index.
     await act(async () => {
       await result.current.listThreadsForWorkspaceTracked(workspaces[0]!);
     });
@@ -329,19 +329,16 @@ describe("useWorkspaceThreadListHydration", () => {
       const modes = listThreadsForWorkspace.mock.calls.map(
         (call) => call[1]?.startupHydrationMode,
       );
-      expect(modes).toContain("full-catalog");
+      expect(modes.length).toBeGreaterThanOrEqual(2);
+      expect(modes.every((mode) => mode === "first-paint")).toBe(true);
+      expect(modes).not.toContain("full-catalog");
     });
 
     const fullCatalogEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
         event.type === "task" && event.taskId === "thread-list:full-catalog:ws-1",
     );
-    expect(
-      fullCatalogEvents.some(
-        (event) =>
-          event.phase === "active-workspace" || event.phase === "on-demand",
-      ),
-    ).toBe(true);
+    expect(fullCatalogEvents).toHaveLength(0);
   });
 
   it("does not stamp startup-gate-ready from an explicit full-catalog timeout", async () => {
@@ -463,8 +460,8 @@ describe("useWorkspaceThreadListHydration", () => {
     );
     expect(fullCatalogEvents.length).toBe(0);
     // Sanity: quiet delays export for production (non-zero) / test (0).
-    expect(POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS).toBeGreaterThanOrEqual(0);
-    expect(POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS).toBeGreaterThanOrEqual(0);
+    expect(POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MIN_DELAY_MS).toBeGreaterThanOrEqual(0);
+    expect(POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_WAIT_MS).toBeGreaterThanOrEqual(0);
   });
 
   it("skips focus-refresh full-catalog while catalog is still fresh", async () => {
@@ -1124,7 +1121,7 @@ describe("useWorkspaceThreadListHydration", () => {
       await reachInFlightSoftRefresh(listThreadsForWorkspace);
 
       // Each click soft-cancels the in-flight run and re-arms a fresh one.
-      for (let defer = 1; defer <= POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS; defer++) {
+      for (let defer = 1; defer <= POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS; defer++) {
         dispatchPointerDown();
         await waitFor(() => {
           expect(softRefreshCalls.length).toBe(defer + 1);
@@ -1138,7 +1135,7 @@ describe("useWorkspaceThreadListHydration", () => {
       // Ceiling reached: the next click must NOT cancel the in-flight run —
       // it is forced through even though the user is still clicking.
       const forcedRunStale =
-        softRefreshCalls[POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS]!.options!
+        softRefreshCalls[POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS]!.options!
           .isStale!;
       dispatchPointerDown();
       expect(forcedRunStale()).toBe(false);
@@ -1147,7 +1144,7 @@ describe("useWorkspaceThreadListHydration", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
       expect(softRefreshCalls.length).toBe(
-        POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS + 1,
+        POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS + 1,
       );
 
       // Counter reset: the following click may defer (soft-cancel) again.
@@ -1155,7 +1152,7 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(forcedRunStale()).toBe(true);
       await waitFor(() => {
         expect(softRefreshCalls.length).toBe(
-          POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS + 2,
+          POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS + 2,
         );
       });
     });

@@ -49,8 +49,8 @@ function hasStartupGateReady(): boolean {
  * Cold-start list guard until gate-ready / force-enter:
  * - only the current active workspace may hydrate (first-paint or full)
  * - no active yet → block all (wait for active assignment)
- * After active first-paint, a quiet idle full-catalog is scheduled once so the
- * sidebar converges beyond snapshot / Codex-only first-paint (multi-engine).
+ * After active first-paint, a quiet idle Index soft re-sync is scheduled once
+ * so the sidebar picks up CLI-created rows without a multi-engine catalog scan.
  * Background workspaces stay cold until explicit expand / Session Management.
  */
 function isColdStartListGuardActive(): boolean {
@@ -154,25 +154,25 @@ export const WORKSPACE_SWITCH_INTENT_DELAY_MS = IS_VITEST ? 0 : 100;
 export const WORKSPACE_SWITCH_INPUT_QUIET_MS = IS_VITEST ? 0 : 300;
 
 /**
- * After active first-paint: quiet-gated multi-engine full-catalog so sidebar
- * leaves stale snapshot / Codex-only rows without competing with first clicks.
+ * After active first-paint: quiet-gated Session Index soft re-sync (writers),
+ * not exhaustive full-catalog. Force refresh still uses full-catalog.
  * @internal exported for tests
  */
-export const POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS = IS_VITEST ? 0 : 800;
-export const POST_FIRST_PAINT_FULL_CATALOG_QUIET_MS = IS_VITEST ? 0 : 600;
-export const POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS = IS_VITEST ? 0 : 8_000;
+export const POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MIN_DELAY_MS = IS_VITEST ? 0 : 800;
+export const POST_FIRST_PAINT_INDEX_SOFT_RESYNC_QUIET_MS = IS_VITEST ? 0 : 600;
+export const POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_WAIT_MS = IS_VITEST ? 0 : 8_000;
 
 /**
- * Pointer soft-cancel keeps clicks ahead of the post-first-paint full-catalog,
- * but a user who never stops clicking would starve it via a cancel → quiet
- * re-arm loop (sidebar stuck on stale snapshot / "加载中"). Cap consecutive
- * deferrals: after MAX_DEFERS soft-cancels or MAX_DEFER_WINDOW_MS since the
- * first defer (whichever hits first), force one run even while the user is
- * still clicking, then reset so the next cycle may defer again.
+ * Pointer soft-cancel keeps clicks ahead of the post-first-paint Index
+ * soft re-sync, but a user who never stops clicking would starve it via a
+ * cancel → quiet re-arm loop. Cap consecutive deferrals: after MAX_DEFERS
+ * soft-cancels or MAX_DEFER_WINDOW_MS since the first defer (whichever hits
+ * first), force one run even while the user is still clicking, then reset
+ * so the next cycle may defer again.
  * @internal exported for tests
  */
-export const POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS = 3;
-export const POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFER_WINDOW_MS = 8_000;
+export const POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS = 3;
+export const POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFER_WINDOW_MS = 8_000;
 
 /** @deprecated Prefer COLD_START_IDLE_* / WORKSPACE_SWITCH_INTENT_DELAY_MS */
 export const COLD_START_FIRST_PAINT_DELAY_MS = COLD_START_IDLE_MIN_DELAY_MS;
@@ -337,24 +337,24 @@ export function useWorkspaceThreadListHydration({
       ) => void)
     | null
   >(null);
-  /** Quiet idle full-catalog after active first-paint (or force-enter re-arm). */
-  const pendingPostFirstPaintFullCatalogCleanupRef = useRef<(() => void) | null>(
+  /** Quiet idle Index soft re-sync after active first-paint (or force-enter re-arm). */
+  const pendingPostFirstPaintIndexSoftResyncCleanupRef = useRef<(() => void) | null>(
     null,
   );
-  const postFirstPaintFullCatalogTargetIdRef = useRef<string | null>(null);
-  /** Workspaces that already had a post-first-paint full-catalog attempt scheduled. */
-  const postFirstPaintFullCatalogArmedIdsRef = useRef(new Set<string>());
+  const postFirstPaintIndexSoftResyncTargetIdRef = useRef<string | null>(null);
+  /** Workspaces that already had a post-first-paint Index soft re-sync scheduled. */
+  const postFirstPaintIndexSoftResyncArmedIdsRef = useRef(new Set<string>());
   /**
    * In-flight post-first-paint soft re-sync target. This run is a raw
    * listThreadsForWorkspace call (off-orchestrator), so pointer soft-cancel
    * uses the generation guard below instead of cancelWorkspaceTasks.
    */
-  const postFirstPaintFullCatalogInFlightIdRef = useRef<string | null>(null);
+  const postFirstPaintIndexSoftResyncInFlightIdRef = useRef<string | null>(null);
   /** Bumped by pointer soft-cancel so the orphan's late setThreads no-op via isStale. */
-  const postFirstPaintFullCatalogGenerationRef = useRef(0);
-  /** Consecutive input-driven deferrals of the post-first-paint full-catalog. */
-  const postFirstPaintFullCatalogDeferCountRef = useRef(0);
-  const postFirstPaintFullCatalogFirstDeferAtRef = useRef(0);
+  const postFirstPaintIndexSoftResyncGenerationRef = useRef(0);
+  /** Consecutive input-driven deferrals of the post-first-paint Index soft re-sync. */
+  const postFirstPaintIndexSoftResyncDeferCountRef = useRef(0);
+  const postFirstPaintIndexSoftResyncFirstDeferAtRef = useRef(0);
   const idleHydrationCleanupByWorkspaceIdRef = useRef(
     new Map<string, () => void>(),
   );
@@ -385,10 +385,10 @@ export function useWorkspaceThreadListHydration({
     [renderScheduler],
   );
 
-  const cancelPendingPostFirstPaintFullCatalog = useCallback(() => {
-    pendingPostFirstPaintFullCatalogCleanupRef.current?.();
-    pendingPostFirstPaintFullCatalogCleanupRef.current = null;
-    postFirstPaintFullCatalogTargetIdRef.current = null;
+  const cancelPendingPostFirstPaintIndexSoftResync = useCallback(() => {
+    pendingPostFirstPaintIndexSoftResyncCleanupRef.current?.();
+    pendingPostFirstPaintIndexSoftResyncCleanupRef.current = null;
+    postFirstPaintIndexSoftResyncTargetIdRef.current = null;
   }, []);
 
   /**
@@ -397,7 +397,7 @@ export function useWorkspaceThreadListHydration({
    * Tracked in-flight + generation-guarded so a post-gate pointerdown can
    * soft-cancel the late apply exactly like an orchestrator soft-ignore.
    */
-  const runPostFirstPaintFullCatalogSoftRefresh = useCallback(
+  const runPostFirstPaintIndexSoftResync = useCallback(
     (workspaceId: string) => {
       if (activeWorkspaceIdRef.current !== workspaceId) {
         return;
@@ -406,8 +406,8 @@ export function useWorkspaceThreadListHydration({
       if (!workspace) {
         return;
       }
-      const generation = ++postFirstPaintFullCatalogGenerationRef.current;
-      postFirstPaintFullCatalogInFlightIdRef.current = workspaceId;
+      const generation = ++postFirstPaintIndexSoftResyncGenerationRef.current;
+      postFirstPaintIndexSoftResyncInFlightIdRef.current = workspaceId;
       void Promise.resolve(
         listThreadsForWorkspace(workspace, {
           preserveState: true,
@@ -417,21 +417,21 @@ export function useWorkspaceThreadListHydration({
           // Pointer soft-cancel bumps the generation: the orphan IPC still
           // finishes but its late setThreads no-op (soft-ignore semantics).
           isStale: () =>
-            postFirstPaintFullCatalogGenerationRef.current !== generation ||
+            postFirstPaintIndexSoftResyncGenerationRef.current !== generation ||
             activeWorkspaceIdRef.current !== workspaceId,
         }),
       )
         .catch(() => undefined)
         .finally(() => {
           if (
-            postFirstPaintFullCatalogInFlightIdRef.current === workspaceId
+            postFirstPaintIndexSoftResyncInFlightIdRef.current === workspaceId
           ) {
-            postFirstPaintFullCatalogInFlightIdRef.current = null;
+            postFirstPaintIndexSoftResyncInFlightIdRef.current = null;
           }
-          if (postFirstPaintFullCatalogGenerationRef.current === generation) {
+          if (postFirstPaintIndexSoftResyncGenerationRef.current === generation) {
             // Settled without a soft-cancel: the deferral cycle is over.
-            postFirstPaintFullCatalogDeferCountRef.current = 0;
-            postFirstPaintFullCatalogFirstDeferAtRef.current = 0;
+            postFirstPaintIndexSoftResyncDeferCountRef.current = 0;
+            postFirstPaintIndexSoftResyncFirstDeferAtRef.current = 0;
           }
         });
     },
@@ -442,10 +442,9 @@ export function useWorkspaceThreadListHydration({
    * Quiet soft re-sync of Session Index after first-paint (NOT exhaustive
    * full-catalog). Picks up CLI-created sessions for Gemini/Grok/OpenCode/DSH
    * without multi-GB inventory. Force refresh still uses full-catalog.
-   * DSH/PI host-or-disk probes still run inside that first-paint pass when
-   * Session Index has no rows for those engines (see useThreadActions).
+   * First-paint / this re-sync never probe DSH/PI disk or host.
    */
-  const schedulePostFirstPaintFullCatalog = useCallback(
+  const schedulePostFirstPaintIndexSoftResync = useCallback(
     (workspaceId: string, options?: { allowRepeat?: boolean }) => {
       const id = workspaceId.trim();
       if (!id) {
@@ -453,34 +452,34 @@ export function useWorkspaceThreadListHydration({
       }
       if (
         !options?.allowRepeat &&
-        postFirstPaintFullCatalogArmedIdsRef.current.has(id)
+        postFirstPaintIndexSoftResyncArmedIdsRef.current.has(id)
       ) {
         return;
       }
 
-      cancelPendingPostFirstPaintFullCatalog();
-      postFirstPaintFullCatalogArmedIdsRef.current.add(id);
-      postFirstPaintFullCatalogTargetIdRef.current = id;
+      cancelPendingPostFirstPaintIndexSoftResync();
+      postFirstPaintIndexSoftResyncArmedIdsRef.current.add(id);
+      postFirstPaintIndexSoftResyncTargetIdRef.current = id;
 
       let unregisterForceCancel: (() => void) | null = null;
       const detachSchedule = () => {
         unregisterForceCancel?.();
         unregisterForceCancel = null;
-        if (postFirstPaintFullCatalogTargetIdRef.current === id) {
-          postFirstPaintFullCatalogTargetIdRef.current = null;
+        if (postFirstPaintIndexSoftResyncTargetIdRef.current === id) {
+          postFirstPaintIndexSoftResyncTargetIdRef.current = null;
         }
-        pendingPostFirstPaintFullCatalogCleanupRef.current = null;
+        pendingPostFirstPaintIndexSoftResyncCleanupRef.current = null;
       };
 
       const runIndexSoftRefresh = () => {
         detachSchedule();
-        runPostFirstPaintFullCatalogSoftRefresh(id);
+        runPostFirstPaintIndexSoftResync(id);
       };
 
       const quietCleanup = scheduleWhenInteractiveQuiet(runIndexSoftRefresh, {
-        quietMs: POST_FIRST_PAINT_FULL_CATALOG_QUIET_MS,
-        minDelayMs: POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
-        maxWaitMs: POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
+        quietMs: POST_FIRST_PAINT_INDEX_SOFT_RESYNC_QUIET_MS,
+        minDelayMs: POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MIN_DELAY_MS,
+        maxWaitMs: POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_WAIT_MS,
       });
       unregisterForceCancel = registerStartupIdleHydrationCancel(() => {
         quietCleanup();
@@ -490,69 +489,70 @@ export function useWorkspaceThreadListHydration({
         quietCleanup();
         detachSchedule();
       };
-      pendingPostFirstPaintFullCatalogCleanupRef.current = combinedCleanup;
+      pendingPostFirstPaintIndexSoftResyncCleanupRef.current = combinedCleanup;
     },
     [
-      cancelPendingPostFirstPaintFullCatalog,
-      runPostFirstPaintFullCatalogSoftRefresh,
+      cancelPendingPostFirstPaintIndexSoftResync,
+      runPostFirstPaintIndexSoftResync,
     ],
   );
 
   /**
-   * Post-gate pointerdown guard: the post-first-paint full-catalog starts
-   * AFTER startup-gate-ready, so the pre-gate pointer shield no longer covers
-   * it — its late setThreads can collide with the first clicks (field: "前 5
-   * 秒点击卡死" on Windows). Soft-cancel the background run (generation bump;
-   * the orphan IPC finishes but its apply no-ops) and re-arm the quiet
-   * schedule. Only this background list task is touched — user-initiated
-   * actions (force refresh etc.) are never cancelled here. Consecutive
-   * deferrals are capped so a clicking user cannot starve convergence.
+   * Post-gate pointerdown guard: the post-first-paint Index soft re-sync
+   * starts AFTER startup-gate-ready, so the pre-gate pointer shield no
+   * longer covers it — its late setThreads can collide with the first
+   * clicks (field: "前 5 秒点击卡死" on Windows). Soft-cancel the background
+   * run (generation bump; the orphan IPC finishes but its apply no-ops)
+   * and re-arm the quiet schedule. Only this background list task is
+   * touched — user-initiated actions (force refresh etc.) are never
+   * cancelled here. Consecutive deferrals are capped so a clicking user
+   * cannot starve convergence.
    */
-  const softCancelPostFirstPaintFullCatalogForInput = useCallback(
+  const softCancelPostFirstPaintIndexSoftResyncForInput = useCallback(
     (workspaceId: string) => {
       const isPending =
-        postFirstPaintFullCatalogTargetIdRef.current === workspaceId;
+        postFirstPaintIndexSoftResyncTargetIdRef.current === workspaceId;
       const isInFlight =
-        postFirstPaintFullCatalogInFlightIdRef.current === workspaceId;
+        postFirstPaintIndexSoftResyncInFlightIdRef.current === workspaceId;
       if (!isPending && !isInFlight) {
         return;
       }
       const now = Date.now();
       const firstDeferAt =
-        postFirstPaintFullCatalogFirstDeferAtRef.current || now;
+        postFirstPaintIndexSoftResyncFirstDeferAtRef.current || now;
       const deferCeilingHit =
-        postFirstPaintFullCatalogDeferCountRef.current >=
-          POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS ||
-        now - firstDeferAt >= POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFER_WINDOW_MS;
+        postFirstPaintIndexSoftResyncDeferCountRef.current >=
+          POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS ||
+        now - firstDeferAt >= POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFER_WINDOW_MS;
       if (deferCeilingHit) {
         // Defer ceiling: run now even though the user is still clicking — the
         // sidebar must converge. Reset so the next cycle may defer again.
-        postFirstPaintFullCatalogDeferCountRef.current = 0;
-        postFirstPaintFullCatalogFirstDeferAtRef.current = 0;
+        postFirstPaintIndexSoftResyncDeferCountRef.current = 0;
+        postFirstPaintIndexSoftResyncFirstDeferAtRef.current = 0;
         if (isPending && !isInFlight) {
-          cancelPendingPostFirstPaintFullCatalog();
-          runPostFirstPaintFullCatalogSoftRefresh(workspaceId);
+          cancelPendingPostFirstPaintIndexSoftResync();
+          runPostFirstPaintIndexSoftResync(workspaceId);
         }
         // In-flight: do not cancel — let this run finish.
         return;
       }
-      postFirstPaintFullCatalogDeferCountRef.current += 1;
-      postFirstPaintFullCatalogFirstDeferAtRef.current = firstDeferAt;
+      postFirstPaintIndexSoftResyncDeferCountRef.current += 1;
+      postFirstPaintIndexSoftResyncFirstDeferAtRef.current = firstDeferAt;
       if (isInFlight) {
         // Soft-cancel: generation bump makes the orphan's late setThreads no-op.
-        postFirstPaintFullCatalogGenerationRef.current += 1;
-        postFirstPaintFullCatalogInFlightIdRef.current = null;
+        postFirstPaintIndexSoftResyncGenerationRef.current += 1;
+        postFirstPaintIndexSoftResyncInFlightIdRef.current = null;
       }
       // Re-arm the quiet-gated schedule so the list converges once the user
       // stops clicking (or the schedule's own maxWait forces it).
-      cancelPendingPostFirstPaintFullCatalog();
-      postFirstPaintFullCatalogArmedIdsRef.current.delete(workspaceId);
-      schedulePostFirstPaintFullCatalog(workspaceId, { allowRepeat: true });
+      cancelPendingPostFirstPaintIndexSoftResync();
+      postFirstPaintIndexSoftResyncArmedIdsRef.current.delete(workspaceId);
+      schedulePostFirstPaintIndexSoftResync(workspaceId, { allowRepeat: true });
     },
     [
-      cancelPendingPostFirstPaintFullCatalog,
-      runPostFirstPaintFullCatalogSoftRefresh,
-      schedulePostFirstPaintFullCatalog,
+      cancelPendingPostFirstPaintIndexSoftResync,
+      runPostFirstPaintIndexSoftResync,
+      schedulePostFirstPaintIndexSoftResync,
     ],
   );
 
@@ -569,17 +569,16 @@ export function useWorkspaceThreadListHydration({
         return { applied: false, stale: true };
       }
 
-      // Default path for direct callers (reload / rename): never assume full-catalog
-      // on a never-hydrated workspace — that was the cold-start "no first-paint" bug.
-      const uiAlreadyHydrated = hydratedThreadListWorkspaceIdsRef.current.has(
-        workspace.id,
-      );
+      // Default path for direct callers (reload / rename / daily): Index
+      // first-paint. Only force or explicit full-catalog fans out engines.
       const fullyHydrated = fullyHydratedThreadListWorkspaceIdsRef.current.has(
         workspace.id,
       );
       let kind: ThreadHydrationKind =
         hydrationKindByWorkspaceIdRef.current.get(workspace.id) ??
-        (uiAlreadyHydrated ? "full-catalog" : "first-paint");
+        (options?.startupHydrationMode === "full-catalog"
+          ? "full-catalog"
+          : "first-paint");
 
       // Focus-refresh historically forced full-catalog ~30s after first settle
       // (cold-start dump: second opencode_session_list + list_claude_sessions).
@@ -678,7 +677,7 @@ export function useWorkspaceThreadListHydration({
               workspace.id,
             );
             markFullCatalogFresh(workspace.id);
-            schedulePostFirstPaintFullCatalog(workspace.id);
+            schedulePostFirstPaintIndexSoftResync(workspace.id);
           }
           publishHydrationUiState(
             setHydratedThreadListWorkspaceIds,
@@ -701,7 +700,7 @@ export function useWorkspaceThreadListHydration({
         }
       }
     },
-    [listThreadsForWorkspace, schedulePostFirstPaintFullCatalog],
+    [listThreadsForWorkspace, schedulePostFirstPaintIndexSoftResync],
   );
 
   const ensureWorkspaceThreadListLoaded = useCallback(
@@ -725,16 +724,15 @@ export function useWorkspaceThreadListHydration({
         hydratedThreadListWorkspaceIdsRef.current.has(workspaceId);
       const fullyHydrated =
         fullyHydratedThreadListWorkspaceIdsRef.current.has(workspaceId);
-      // first-paint if UI never ready; else full-catalog until fully done.
+      // Switch / daily / already-hydrated stay on Index first-paint.
+      // Only force or an explicit full-catalog request fans out engines.
       const kind: ThreadHydrationKind = force
         ? "full-catalog"
         : options?.startupHydrationMode === "first-paint"
           ? "first-paint"
         : options?.startupHydrationMode === "full-catalog"
           ? "full-catalog"
-        : !uiHydrated
-          ? "first-paint"
-          : "full-catalog";
+        : "first-paint";
       // Cold-start: only active workspace may hydrate until gate-ready.
       // User force refresh may target any workspace after gate; during cold-start
       // force still restricted to active to avoid dual-scan storms.
@@ -889,12 +887,12 @@ export function useWorkspaceThreadListHydration({
       // Drop scheduled auto first-paint for the previous target.
       pendingAutoFirstPaintCleanupRef.current?.();
       pendingAutoFirstPaintCleanupRef.current = null;
-      // Drop pending full-catalog for the workspace the user already left.
+      // Drop pending Index soft re-sync for the workspace the user already left.
       if (
-        postFirstPaintFullCatalogTargetIdRef.current ===
+        postFirstPaintIndexSoftResyncTargetIdRef.current ===
         previousActiveWorkspaceId
       ) {
-        cancelPendingPostFirstPaintFullCatalog();
+        cancelPendingPostFirstPaintIndexSoftResync();
       }
       if (autoHydratedActiveWorkspaceIdRef.current === previousActiveWorkspaceId) {
         autoHydratedActiveWorkspaceIdRef.current = null;
@@ -1002,13 +1000,13 @@ export function useWorkspaceThreadListHydration({
     };
   }, [
     activeWorkspaceId,
-    cancelPendingPostFirstPaintFullCatalog,
+    cancelPendingPostFirstPaintIndexSoftResync,
     ensureWorkspaceThreadListLoaded,
     workspacesById,
   ]);
 
-  // Force-enter cancels pending idle full-catalog; re-arm once quiet so the
-  // active sidebar still leaves stale snapshot after the user unmasks early.
+  // Force-enter cancels pending idle Index soft re-sync; re-arm once quiet so
+  // the active sidebar still leaves stale snapshot after the user unmasks early.
   useEffect(() => {
     return subscribeStartupForceEnter(() => {
       const activeId = activeWorkspaceIdRef.current;
@@ -1022,18 +1020,18 @@ export function useWorkspaceThreadListHydration({
         return;
       }
       // Allow one re-arm after force-enter cancelled the first schedule.
-      postFirstPaintFullCatalogArmedIdsRef.current.delete(activeId);
-      schedulePostFirstPaintFullCatalog(activeId, { allowRepeat: true });
+      postFirstPaintIndexSoftResyncArmedIdsRef.current.delete(activeId);
+      schedulePostFirstPaintIndexSoftResync(activeId, { allowRepeat: true });
     });
-  }, [schedulePostFirstPaintFullCatalog]);
+  }, [schedulePostFirstPaintIndexSoftResync]);
 
   // Any pointerdown soft-cancels in-flight background list work so clicks never
   // collide with setThreads:
   // - before gate-ready: first-paint hydration (Cmd+R / reload stress), via
   //   orchestrator cancelWorkspaceTasks + quiet re-arm;
-  // - after gate-ready: the post-first-paint full-catalog soft re-sync, which
+  // - after gate-ready: the post-first-paint Index soft re-sync, which
   //   only starts after the gate opens (generation-guard soft cancel + quiet
-  //   re-arm, capped by POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS /
+  //   re-arm, capped by POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS /
   //   MAX_DEFER_WINDOW_MS so rapid clicking cannot defer it forever).
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1054,7 +1052,7 @@ export function useWorkspaceThreadListHydration({
         }
         return;
       }
-      softCancelPostFirstPaintFullCatalogForInput(activeId);
+      softCancelPostFirstPaintIndexSoftResyncForInput(activeId);
     };
     window.addEventListener("pointerdown", onPointerDown, {
       capture: true,
@@ -1063,7 +1061,7 @@ export function useWorkspaceThreadListHydration({
     return () => {
       window.removeEventListener("pointerdown", onPointerDown, true);
     };
-  }, [softCancelPostFirstPaintFullCatalogForInput]);
+  }, [softCancelPostFirstPaintIndexSoftResyncForInput]);
 
   useEffect(() => {
     if (!activeWorkspaceId || activeWorkspaceProjectionOwnerIds.length <= 1) {
@@ -1097,9 +1095,9 @@ export function useWorkspaceThreadListHydration({
     return () => {
       cleanupByWorkspaceId.forEach((cleanup) => cleanup());
       cleanupByWorkspaceId.clear();
-      cancelPendingPostFirstPaintFullCatalog();
+      cancelPendingPostFirstPaintIndexSoftResync();
     };
-  }, [cancelPendingPostFirstPaintFullCatalog]);
+  }, [cancelPendingPostFirstPaintIndexSoftResync]);
 
   useEffect(() => {
     let disposed = false;

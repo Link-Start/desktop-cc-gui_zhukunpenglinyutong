@@ -18,10 +18,14 @@ import {
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
 import {
-  filterSessionIndexRowsByEngine,
   mergeSummariesForMissingEngines,
   sessionIndexRowsToThreadSummaries,
 } from "./sessionIndexThreadSummaries";
+import {
+  buildNativeIndexEarlyPaintSummaries,
+  projectNativeIndexRowsToSummaries,
+  shouldRememberHideUnreadiness,
+} from "./useThreadActions.nativeIndexProjection";
 import {
   expandVisibilityHideSet,
   isFullyVerifiedSharedNativeVisibility,
@@ -305,6 +309,7 @@ export function useThreadActions({
     previousThreadsByWorkspaceRef,
     threadListCursorByWorkspace,
     setThreadHistoryRecoveryFailed,
+    setThreadHistoryLoading,
     setThreadHistoryLoadingProgress,
   });
 
@@ -399,7 +404,8 @@ export function useThreadActions({
       // First-paint never fans out OpenCode/native multi-engine lists.
       const includeOpenCodeSessions =
         !isFirstPaintHydration && (options?.includeOpenCodeSessions ?? true);
-      // Gemini/Grok/Kimi disk list is opt-in. Default hydrate uses Session Index.
+      // Sidebar production never opts into disk lists. Tests / Session
+      // management may still pass includeEngineDiskLists: true.
       const includeEngineDiskLists =
         !isFirstPaintHydration && options?.includeEngineDiskLists === true;
       const deletedThreadIds = [
@@ -496,10 +502,7 @@ export function useThreadActions({
         // stuck on stale sidebarSnapshot for seconds (user: old list → late correct).
         // One display page (20) per engine feeds the mixed top-20 view; older
         // rows arrive via keyset paging (sidebar 更多).
-        const sessionIndexLimit = Math.max(
-          resolveInitialThreadListTargetCount(workspace) * 4,
-          20,
-        );
+        const sessionIndexLimit = resolveInitialThreadListTargetCount(workspace);
         // Only explicit soft re-sync forces writers; cold first-paint must hit
         // warm SQLite (ms) so stale sidebarSnapshot is replaced immediately.
         const forceIndexSync = Boolean(options?.forceSessionIndexSync);
@@ -572,25 +575,19 @@ export function useThreadActions({
           isFirstPaintHydration &&
           sessionIndexPage &&
           Array.isArray(sessionIndexPage.data) &&
-          sessionIndexPage.data.length > 0 &&
-          canProjectIndexNatives
+          sessionIndexPage.data.length > 0
         ) {
-          const earlyIndexSummaries = mergeSummariesForMissingEngines(
-            mergePreservedSharedThreadsForIndexFirstPaint(
-              sessionIndexRowsToThreadSummaries(sessionIndexPage.data, {
-                workspaceId: workspace.id,
-                mappedTitles: {},
-                getCustomName,
-                hiddenSharedBindingIds: earlyPaintHideSet,
-              }),
-              threadsByWorkspace[workspace.id],
-              getLastGoodThreadSummariesWithoutDeleted(),
-            ),
-            [
-              ...(threadsByWorkspace[workspace.id] ?? []),
-              ...getLastGoodThreadSummariesWithoutDeleted(),
-            ],
-          );
+          if (shouldRememberHideUnreadiness(canProjectIndexNatives)) {
+            rememberPartialSource("shared-visibility-unavailable");
+          }
+          const earlyIndexSummaries = buildNativeIndexEarlyPaintSummaries({
+            rows: sessionIndexPage.data,
+            workspaceId: workspace.id,
+            getCustomName,
+            hideSet: earlyPaintHideSet,
+            currentThreads: threadsByWorkspace[workspace.id],
+            lastGood: getLastGoodThreadSummariesWithoutDeleted(),
+          });
           if (earlyIndexSummaries.length > 0) {
             // Urgent early paint still yields one macrotask when a click is
             // pending — WebView2 hit-test starvation freezes harder than a
@@ -621,51 +618,6 @@ export function useThreadActions({
               },
             });
           }
-        } else if (
-          isFirstPaintHydration &&
-          sessionIndexPage &&
-          Array.isArray(sessionIndexPage.data) &&
-          sessionIndexPage.data.length > 0 &&
-          !canProjectIndexNatives
-        ) {
-          rememberPartialSource("shared-visibility-unavailable");
-          const piIndexSummaries = sessionIndexRowsToThreadSummaries(
-            filterSessionIndexRowsByEngine(sessionIndexPage.data, "pi"),
-            {
-              workspaceId: workspace.id,
-              mappedTitles: {},
-              getCustomName,
-              hiddenSharedBindingIds: earlyPaintHideSet,
-            },
-          );
-          const earlyPiSummaries = mergePreservedSharedThreadsForIndexFirstPaint(
-            piIndexSummaries,
-            threadsByWorkspace[workspace.id],
-            getLastGoodThreadSummariesWithoutDeleted(),
-          );
-          if (earlyPiSummaries.length > 0) {
-            await yieldIfInteractiveInputPending();
-          }
-          if (earlyPiSummaries.length > 0 && isLatestThreadListRequest()) {
-            dispatch({
-              type: "setThreads",
-              workspaceId: workspace.id,
-              threads: earlyPiSummaries,
-            });
-            earlyIndexPaintApplied = true;
-            appliedThreadListUpdate = true;
-          }
-          onDebug?.({
-            id: `${Date.now()}-client-session-index-visibility-pending`,
-            timestamp: Date.now(),
-            source: "client",
-            label: "thread/list session-index visibility pending",
-            payload: {
-              workspaceId: workspace.id,
-              reason: indexVisibility?.reason ?? "visibility-unavailable",
-              piRowCount: piIndexSummaries.length,
-            },
-          });
         } else if (sessionIndexPage === null) {
           rememberPartialSource("session-index-timeout");
         }
@@ -1145,32 +1097,15 @@ export function useThreadActions({
           const canMergeIndexNatives =
             isUsableSharedNativeVisibility(indexVisibility) ||
             hasVerifiedSharedHide(workspace.id);
-          if (!canMergeIndexNatives) {
+          if (shouldRememberHideUnreadiness(canMergeIndexNatives)) {
             rememberPartialSource("shared-visibility-unavailable");
             getLastGoodThreadSummariesWithoutDeleted().forEach((summary) => {
               if (!mergedById.has(summary.id)) {
                 mergedById.set(summary.id, summary);
               }
             });
-            sessionIndexRowsToThreadSummaries(
-              filterSessionIndexRowsByEngine(sessionIndexPage.data ?? [], "pi"),
-              {
-                workspaceId: workspace.id,
-                mappedTitles,
-                getCustomName,
-                hiddenSharedBindingIds,
-              },
-            ).forEach((summary) => {
-              const prev = mergedById.get(summary.id);
-              if (!prev || summary.updatedAt >= prev.updatedAt) {
-                mergedById.set(
-                  summary.id,
-                  prev ? { ...summary, name: prev.name || summary.name } : summary,
-                );
-              }
-            });
-          } else {
-          const indexSummaries = sessionIndexRowsToThreadSummaries(
+          }
+          const indexSummaries = projectNativeIndexRowsToSummaries(
             sessionIndexPage.data ?? [],
             {
               workspaceId: workspace.id,
@@ -1203,7 +1138,6 @@ export function useThreadActions({
               });
             }
           });
-          }
           if (!earlyIndexPaintApplied) {
             onDebug?.({
               id: `${Date.now()}-client-session-index`,
@@ -2136,26 +2070,12 @@ export function useThreadActions({
           (hasGrokSignal || !!cachedGrok || !hasAttemptedGrokRefresh);
         const hasAttemptedDshRefresh =
           dshRefreshAttemptedRef.current[workspace.id] === true;
-        // DSH is host-RPC only and is often missing from Session Index.
-        // First-paint (and the post-first-paint index soft refresh, which
-        // reuses first-paint mode) must still probe the live host once, or
-        // the sidebar permanently loses native DSH history after cold start
-        // marks full-catalog "fresh" without ever listing DSH sessions.
-        const indexHasDshRows = Boolean(
-          sessionIndexPage?.data?.some((row) => {
-            const engine = String(row.engine ?? "")
-              .trim()
-              .toLowerCase();
-            return engine === "dsh";
-          }),
-        );
+        // Sidebar first-paint / Index soft re-sync never probes DSH host.
+        // Disk/host list is opt-in only (tests / Session Management).
         const shouldRefreshDshSessions =
           isLatestThreadListRequest() &&
-          ((includeEngineDiskLists &&
-            (hasDshSignal || !!cachedDsh || !hasAttemptedDshRefresh)) ||
-            (isFirstPaintHydration &&
-              !indexHasDshRows &&
-              !hasAttemptedDshRefresh));
+          includeEngineDiskLists &&
+          (hasDshSignal || !!cachedDsh || !hasAttemptedDshRefresh);
         if (shouldRefreshGrokSessions) {
           void (async () => {
             grokRefreshAttemptedRef.current[workspace.id] = true;
@@ -2458,21 +2378,11 @@ export function useThreadActions({
         }
         const hasAttemptedPiRefresh =
           piRefreshAttemptedRef.current[workspace.id] === true;
-        const indexHasPiRows = Boolean(
-          sessionIndexPage?.data?.some((row) => {
-            const engine = String(row.engine ?? "")
-              .trim()
-              .toLowerCase();
-            return engine === "pi";
-          }),
-        );
+        // Same as DSH: first-paint never probes PI disk. Index is the read layer.
         const shouldRefreshPiSessions =
           isLatestThreadListRequest() &&
-          ((includeEngineDiskLists &&
-            (hasPiSignal || !!cachedPi || !hasAttemptedPiRefresh)) ||
-            (isFirstPaintHydration &&
-              !indexHasPiRows &&
-              !hasAttemptedPiRefresh));
+          includeEngineDiskLists &&
+          (hasPiSignal || !!cachedPi || !hasAttemptedPiRefresh);
         if (shouldRefreshPiSessions) {
           void (async () => {
             piRefreshAttemptedRef.current[workspace.id] = true;

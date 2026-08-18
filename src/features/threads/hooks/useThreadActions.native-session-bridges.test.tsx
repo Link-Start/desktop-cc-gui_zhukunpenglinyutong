@@ -750,7 +750,7 @@ describe("useThreadActions native session bridges", () => {
     );
   });
 
-  it("first-paint still lists DSH host sessions when Session Index has no dsh rows", async () => {
+  it("first-paint does not probe DSH host when Session Index has no dsh rows", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
         data: [],
@@ -777,7 +777,7 @@ describe("useThreadActions native session bridges", () => {
       },
     ]);
 
-    const { result, dispatch } = renderActions();
+    const { result } = renderActions();
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {
@@ -786,25 +786,7 @@ describe("useThreadActions native session bridges", () => {
       });
     });
 
-    await waitFor(() => {
-      expect(listDshSessions).toHaveBeenCalledWith(workspace.path, 50);
-    });
-
-    await waitFor(() => {
-      const setThreadsCalls = dispatch.mock.calls.filter(
-        ([action]) =>
-          action?.type === "setThreads" &&
-          action.workspaceId === workspace.id,
-      );
-      const hasDshRow = setThreadsCalls.some(([action]) =>
-        Array.isArray(action.threads) &&
-        action.threads.some(
-          (thread: { id?: string; engineSource?: string }) =>
-            thread.id === "dsh:session-dsh-history-1" ||
-            thread.engineSource === "dsh",
-        ),
-      );
-      expect(hasDshRow).toBe(true);
-    });
+    expect(listDshSessions).not.toHaveBeenCalled();
+    expect(listPiSessions).not.toHaveBeenCalled();
   });
 });
