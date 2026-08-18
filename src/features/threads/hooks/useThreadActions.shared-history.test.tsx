@@ -2,6 +2,7 @@
 import { act, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resumeThread } from "../../../services/tauri";
+import type { SharedProjectionItem } from "../../messages/presentation/sharedProjection/types";
 import {
   loadSharedProjection,
   loadSharedSession,
@@ -154,8 +155,9 @@ describe("useThreadActions Shared history", () => {
   });
 
   it("clears Shared history loading after V0 Phase-A while projection is still pending", async () => {
-    let resolveProjection: (value: unknown[]) => void = () => undefined;
-    const projectionPromise = new Promise<unknown[]>((resolve) => {
+    let resolveProjection: (value: SharedProjectionItem[]) => void = () =>
+      undefined;
+    const projectionPromise = new Promise<SharedProjectionItem[]>((resolve) => {
       resolveProjection = resolve;
     });
     vi.mocked(loadSharedSession).mockResolvedValue({

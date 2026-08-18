@@ -913,29 +913,34 @@ describe("history loaders", () => {
     const { subscribeDshHistoryLoadProgress } = await import(
       "../../../services/events"
     );
-    let deliverPage:
-      | ((event: {
-          sessionId: string;
-          pageIndex: number;
-          maxPages: number;
-          pageEventCount: number;
-          totalEventCount: number;
-          hasMore: boolean;
-        }) => void)
-      | null = null;
+    type DshPageEvent = {
+      sessionId: string;
+      pageIndex: number;
+      maxPages: number;
+      pageEventCount: number;
+      totalEventCount: number;
+      hasMore: boolean;
+    };
+    const progressCapture: {
+      deliverPage: ((event: DshPageEvent) => void) | null;
+    } = { deliverPage: null };
     vi.mocked(subscribeDshHistoryLoadProgress).mockImplementation((onEvent) => {
-      deliverPage = onEvent;
+      progressCapture.deliverPage = onEvent;
       return () => {
-        deliverPage = null;
+        progressCapture.deliverPage = null;
       };
     });
 
     const reports: string[] = [];
-    let resolveLoad: ((value: { messages: unknown[] }) => void) | null = null;
+    const loadCapture: {
+      resolve: ((value: { messages: unknown[] }) => void) | null;
+    } = { resolve: null };
     const loadDshSession = vi.fn(
       () =>
         new Promise<{ messages: unknown[] }>((resolve) => {
-          resolveLoad = resolve;
+          loadCapture.resolve = (value) => {
+            resolve(value);
+          };
         }),
     );
     const loader = createDshHistoryLoader({
@@ -957,8 +962,8 @@ describe("history loaders", () => {
         { limit: 200 },
       );
     });
-    expect(deliverPage).toBeTypeOf("function");
-    deliverPage?.({
+    expect(progressCapture.deliverPage).toBeTypeOf("function");
+    progressCapture.deliverPage?.({
       sessionId: "session-1",
       pageIndex: 1,
       maxPages: 1,
@@ -970,7 +975,7 @@ describe("history loaders", () => {
       true,
     );
 
-    resolveLoad?.({ messages: [] });
+    loadCapture.resolve?.({ messages: [] });
     await pending;
     vi.mocked(subscribeDshHistoryLoadProgress).mockImplementation(() => () => {});
   });

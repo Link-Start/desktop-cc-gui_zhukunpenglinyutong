@@ -18,10 +18,6 @@ import {
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
 } from "../../../services/tauri";
 import {
-  mergeSummariesForMissingEngines,
-  sessionIndexRowsToThreadSummaries,
-} from "./sessionIndexThreadSummaries";
-import {
   buildNativeIndexEarlyPaintSummaries,
   projectNativeIndexRowsToSummaries,
   shouldRememberHideUnreadiness,
@@ -32,7 +28,6 @@ import {
   isUsableSharedNativeVisibility,
   hasVerifiedSharedHide,
   lastVerifiedSharedHide,
-  mergePreservedSharedThreadsForIndexFirstPaint,
   rememberVerifiedSharedHideIfComplete,
   strengthenVerifiedSharedHide,
   unionHideSets,
@@ -1274,6 +1269,7 @@ export function useThreadActions({
               sessionId: string;
               firstMessage: string;
               nativeTitle?: string | null;
+              createdAt?: number;
               updatedAt: number;
               fileSizeBytes?: number;
               parentSessionId?: string | null;

@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import type { DshHistoryLoadProgressEvent } from "./historyLoadingProgress";
 import { subscribeMappedDshHistoryLoadProgress } from "./subscribeMappedDshHistoryLoadProgress";
 
 const { subscribeDshHistoryLoadProgress } = vi.hoisted(() => ({
-  subscribeDshHistoryLoadProgress: vi.fn(),
+  subscribeDshHistoryLoadProgress: vi.fn<
+    (onEvent: (event: DshHistoryLoadProgressEvent) => void) => () => void
+  >(),
 }));
 
 vi.mock("../../../services/events", () => ({
@@ -11,20 +14,13 @@ vi.mock("../../../services/events", () => ({
 
 describe("subscribeMappedDshHistoryLoadProgress", () => {
   it("maps matching host pages and ignores other sessions", () => {
-    let listener:
-      | ((event: {
-          sessionId: string;
-          pageIndex: number;
-          maxPages: number;
-          pageEventCount: number;
-          totalEventCount: number;
-          hasMore: boolean;
-        }) => void)
-      | null = null;
+    const captured: {
+      listener: ((event: DshHistoryLoadProgressEvent) => void) | null;
+    } = { listener: null };
     subscribeDshHistoryLoadProgress.mockImplementation((onEvent) => {
-      listener = onEvent;
+      captured.listener = onEvent;
       return () => {
-        listener = null;
+        captured.listener = null;
       };
     });
     const onProgress = vi.fn();
@@ -34,7 +30,7 @@ describe("subscribeMappedDshHistoryLoadProgress", () => {
       onProgress,
     });
 
-    listener?.({
+    captured.listener?.({
       sessionId: "other",
       pageIndex: 2,
       maxPages: 40,
@@ -44,7 +40,7 @@ describe("subscribeMappedDshHistoryLoadProgress", () => {
     });
     expect(onProgress).not.toHaveBeenCalled();
 
-    listener?.({
+    captured.listener?.({
       sessionId: "sess-1",
       pageIndex: 2,
       maxPages: 40,
@@ -61,6 +57,6 @@ describe("subscribeMappedDshHistoryLoadProgress", () => {
     );
 
     stop();
-    expect(listener).toBeNull();
+    expect(captured.listener).toBeNull();
   });
 });
