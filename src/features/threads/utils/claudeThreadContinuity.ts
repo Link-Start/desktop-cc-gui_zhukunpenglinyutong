@@ -19,7 +19,7 @@ export function shouldShowHistoryLoadingForSelectionThread(
   }
   // Shared 与 Native（含 DSH `loadDshSession`）都需要画布 loading，避免空态闪烁。
   // gemini/opencode 历史链路较轻，仍保持原排除策略。
-  // DSH 只开布尔幕布，不种 Shared prepare 进度，避免多余 setState。
+  // Native / DSH 选中时写 Native prepare progress，不再只开布尔幕布。
   return (
     !normalizedThreadId.startsWith("gemini:") &&
     !normalizedThreadId.startsWith("opencode:")

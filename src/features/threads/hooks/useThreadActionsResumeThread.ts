@@ -78,6 +78,13 @@ import {
 } from "./useThreadActions.threadList";
 import { type UseThreadActionsOptions } from "./useThreadActions.types";
 import type { HistoryLoadingProgress } from "../utils/historyLoadingProgress";
+import {
+  buildNativeHistoryFinalizeProgress,
+  buildNativeHistoryHydrateProgress,
+  yieldHistoryLoadingPaint,
+} from "../utils/historyLoadingProgress";
+import { runNativeHistoryOpenStages } from "../utils/runNativeHistoryOpenStages";
+import { subscribeMappedDshHistoryLoadProgress } from "../utils/subscribeMappedDshHistoryLoadProgress";
 import { dispatchThreadItemsProgressively } from "../utils/dispatchThreadItemsProgressively";
 import {
   clearPendingOlderHistory,
@@ -663,6 +670,16 @@ export function useThreadActionsResumeThreadForWorkspace(
             return false;
           }
           setThreadHistoryRecoveryFailed(effectiveThreadId, false);
+          if (!effectiveThreadId.startsWith("shared:")) {
+            setThreadHistoryLoadingProgress?.(
+              effectiveThreadId,
+              buildNativeHistoryHydrateProgress("start", snapshotItems.length),
+            );
+            await yieldHistoryLoadingPaint();
+            if (!isCurrentResumeRequest()) {
+              return false;
+            }
+          }
           const applied = await applyHydratedItems(
             effectiveThreadId,
             snapshotItems,
@@ -764,6 +781,12 @@ export function useThreadActionsResumeThreadForWorkspace(
             dispatch({ type: "addUserInputRequest", request });
           });
           setThreadLoaded(effectiveThreadId, true);
+          if (!effectiveThreadId.startsWith("shared:")) {
+            setThreadHistoryLoadingProgress?.(
+              effectiveThreadId,
+              buildNativeHistoryFinalizeProgress(),
+            );
+          }
           return true;
         };
         // end hydrateHistorySnapshot assignment
@@ -1553,15 +1576,27 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("grok:".length);
           try {
-            const result = await loadGrokSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parseGrokHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+            await runNativeHistoryOpenStages({
+              report: (progress) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoadingProgress?.(threadId, progress);
+              },
+              shouldContinue: isCurrentResumeRequest,
+              load: () =>
+                loadGrokSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parseGrokHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1585,15 +1620,27 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("kimi:".length);
           try {
-            const result = await loadKimiSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parseKimiHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+            await runNativeHistoryOpenStages({
+              report: (progress) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoadingProgress?.(threadId, progress);
+              },
+              shouldContinue: isCurrentResumeRequest,
+              load: () =>
+                loadKimiSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parseKimiHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1616,18 +1663,38 @@ export function useThreadActionsResumeThreadForWorkspace(
         });
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("dsh:".length);
-          try {
-            const result = await loadDshSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parseDshHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+          const reportDshProgress = (progress: HistoryLoadingProgress) => {
+            if (!isCurrentResumeRequest()) {
+              return;
             }
-            const restoredTokenUsage = extractDshHistoryTokenUsage(result);
+            setThreadHistoryLoadingProgress?.(threadId, progress);
+          };
+          const stopPageProgress = subscribeMappedDshHistoryLoadProgress({
+            threadId,
+            hostSessionId: realSessionId,
+            onProgress: reportDshProgress,
+          });
+          try {
+            const staged = await runNativeHistoryOpenStages({
+              report: reportDshProgress,
+              shouldContinue: isCurrentResumeRequest,
+              load: () =>
+                loadDshSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parseDshHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
+            const restoredTokenUsage = extractDshHistoryTokenUsage(
+              staged?.result ?? null,
+            );
             if (restoredTokenUsage) {
               dispatch({
                 type: "setThreadTokenUsage",
@@ -1642,6 +1709,8 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
           } catch {
             // Failed to load DSH session history — not fatal
+          } finally {
+            stopPageProgress();
           }
         }
         loadedThreadsRef.current[threadId] = true;
@@ -1657,15 +1726,26 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("pi:".length);
           try {
-            const result = await loadPiSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parsePiHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+            await runNativeHistoryOpenStages({
+              report: (progress) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoadingProgress?.(threadId, progress);
+              },
+              shouldContinue: isCurrentResumeRequest,
+              load: () => loadPiSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parsePiHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",

@@ -68,6 +68,7 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadClaudeSession: loadClaudeSessionService,
+      onProgress: onHistoryProgress,
     });
   }
   if (targetThreadId.startsWith("gemini:")) {
@@ -82,6 +83,7 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadGrokSession: loadGrokSessionService,
+      onProgress: onHistoryProgress,
     });
   }
   if (targetThreadId.startsWith("kimi:")) {
@@ -89,6 +91,7 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadKimiSession: loadKimiSessionService,
+      onProgress: onHistoryProgress,
     });
   }
   if (targetThreadId.startsWith("pi:")) {
@@ -96,6 +99,7 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadPiSession: loadPiSessionService,
+      onProgress: onHistoryProgress,
     });
   }
   if (targetThreadId.startsWith("dsh:")) {
@@ -103,6 +107,7 @@ export function createThreadHistoryLoaderForThread({
       workspaceId,
       workspacePath,
       loadDshSession: loadDshSessionService,
+      onProgress: onHistoryProgress,
     });
   }
   if (targetThreadId.startsWith("opencode:")) {

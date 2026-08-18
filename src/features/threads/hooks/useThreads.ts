@@ -61,6 +61,10 @@ import {
   shouldShowHistoryLoadingForSelectionThread,
 } from "../utils/claudeThreadContinuity";
 import {
+  buildNativeHistoryPrepareProgress,
+  buildSharedHistoryPrepareProgress,
+} from "../utils/historyLoadingProgress";
+import {
   THREAD_SWITCH_LOADED_REFRESH_MS,
   decideThreadSelectResume,
   isKnownNeverStartedThread,
@@ -2229,8 +2233,8 @@ export function useThreads({
       });
       // Unloaded Native / Shared history still needs a select-frame curtain so
       // the canvas does not flash emptyThread while resume is in flight.
-      // DSH uses the same boolean curtain (async loadDshSession); no Shared
-      // prepare progress. Known never-started / failed / already-loaded stay off.
+      // Native / DSH write prepare progress immediately; Shared keeps its own
+      // restore copy. Known never-started / failed / already-loaded stay off.
       const shouldShowHistoryLoading =
         resumeDecision.action === "resume" &&
         !isLoaded &&
@@ -2239,14 +2243,12 @@ export function useThreads({
         setThreadHistoryLoading(canonicalThreadId, true);
         historyLoadingThreadByWorkspaceRef.current[targetId] =
           canonicalThreadId;
-        if (canonicalThreadId.startsWith("shared:")) {
-          setThreadHistoryLoadingProgress(canonicalThreadId, {
-            phase: "prepare",
-            percent: 8,
-            titleKey: "restoringSharedHistory",
-            detailKey: "restoringSharedHistoryPrepare",
-          });
-        }
+        setThreadHistoryLoadingProgress(
+          canonicalThreadId,
+          canonicalThreadId.startsWith("shared:")
+            ? buildSharedHistoryPrepareProgress()
+            : buildNativeHistoryPrepareProgress(),
+        );
       } else {
         clearHistoryLoadingForThread(canonicalThreadId);
       }

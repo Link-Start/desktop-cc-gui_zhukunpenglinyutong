@@ -65,6 +65,35 @@ describe("HistoryLoadingSurface", () => {
     ).toBeTruthy();
   });
 
+  it("pins Native spine nodes to parse/assemble labels", () => {
+    render(
+      <HistoryLoadingSurface
+        progress={{
+          phase: "session",
+          percent: 24,
+          titleKey: "restoringHistory",
+          detailKey: "restoringHistorySessionPage",
+          detailParams: { page: 3, maxPages: 40, pageEvents: 200, totalEvents: 600 },
+        }}
+      />,
+    );
+
+    const status = screen.getByRole("status");
+    expect(status.getAttribute("data-history-loading-mode")).toBe("native");
+    expect(screen.getByText("messages.restoringHistory")).toBeTruthy();
+    expect(screen.getByText("messages.restoringHistorySessionPage")).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
+      "24",
+    );
+    expect(status.querySelector(".messages-history-loading-traveler")).toBeNull();
+    expect(status.querySelector(".messages-history-loading-nodes")).toBeTruthy();
+    expect(
+      screen.getByText(/messages\.restoringHistoryPhaseSession · 24%/),
+    ).toBeTruthy();
+    expect(screen.getByText("messages.restoringHistoryPhaseParse")).toBeTruthy();
+    expect(screen.getByText("messages.restoringHistoryPhaseHydrate")).toBeTruthy();
+  });
+
   it("marks every Shared spine node done on finalize", () => {
     const { container } = render(
       <HistoryLoadingSurface

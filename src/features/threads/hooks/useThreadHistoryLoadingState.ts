@@ -1,6 +1,9 @@
 import { useCallback, useState } from "react";
 import type { HistoryLoadingProgress } from "../utils/historyLoadingProgress";
-import { normalizeHistoryLoadingProgress } from "../utils/historyLoadingProgress";
+import {
+  normalizeHistoryLoadingProgress,
+  sameHistoryLoadingProgress,
+} from "../utils/historyLoadingProgress";
 
 export type ThreadHistoryLoadState = true | "failed";
 
@@ -59,13 +62,7 @@ export function useThreadHistoryLoadingState() {
       const next = normalizeHistoryLoadingProgress(progress);
       setHistoryLoadingProgressByThreadId((current) => {
         const previous = current[threadId];
-        if (
-          previous &&
-          previous.phase === next.phase &&
-          previous.percent === next.percent &&
-          previous.titleKey === next.titleKey &&
-          previous.detailKey === next.detailKey
-        ) {
+        if (sameHistoryLoadingProgress(previous, next)) {
           return current;
         }
         return { ...current, [threadId]: next };

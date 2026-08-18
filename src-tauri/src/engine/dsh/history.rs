@@ -110,24 +110,75 @@ pub async fn list_dsh_sessions(
 const HISTORY_PAGE_SIZE: u32 = 200;
 const HISTORY_MAX_PAGES: usize = 40;
 
+pub const DSH_HISTORY_LOAD_PROGRESS_EVENT: &str = "dsh-history-load-progress";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DshHistoryLoadProgress {
+    pub session_id: String,
+    pub page_index: u32,
+    pub max_pages: u32,
+    pub page_event_count: u32,
+    pub total_event_count: u32,
+    pub has_more: bool,
+}
+
 pub async fn load_dsh_session(
     client: &DshHostClient,
     session_id: &str,
 ) -> Result<DshSessionLoadResult, String> {
+    load_dsh_session_with_progress(client, session_id, None::<fn(&DshHistoryLoadProgress)>).await
+}
+
+pub async fn load_dsh_session_with_progress<F>(
+    client: &DshHostClient,
+    session_id: &str,
+    mut on_progress: Option<F>,
+) -> Result<DshSessionLoadResult, String>
+where
+    F: FnMut(&DshHistoryLoadProgress),
+{
     let session_id = session_id_from_thread(session_id);
-    let (events, last_page) = load_history_pages(client, &session_id).await?;
+    let (events, last_page) =
+        load_history_pages(client, &session_id, on_progress.as_mut()).await?;
     let messages = fold_history_events(&events);
     let usage = usage_from_history_page(&last_page);
     Ok(DshSessionLoadResult { messages, usage })
 }
 
-async fn load_history_pages(
+fn emit_history_load_progress<F>(
+    on_progress: &mut Option<&mut F>,
+    progress: DshHistoryLoadProgress,
+) where
+    F: FnMut(&DshHistoryLoadProgress),
+{
+    if let Some(callback) = on_progress.as_mut() {
+        callback(&progress);
+    }
+}
+
+async fn load_history_pages<F>(
     client: &DshHostClient,
     session_id: &str,
-) -> Result<(Vec<Value>, Value), String> {
+    mut on_progress: Option<&mut F>,
+) -> Result<(Vec<Value>, Value), String>
+where
+    F: FnMut(&DshHistoryLoadProgress),
+{
     let mut collected = Vec::new();
     let mut before_seq = None;
     let mut last_page = Value::Null;
+    emit_history_load_progress(
+        &mut on_progress,
+        DshHistoryLoadProgress {
+            session_id: session_id.to_string(),
+            page_index: 0,
+            max_pages: HISTORY_MAX_PAGES as u32,
+            page_event_count: 0,
+            total_event_count: 0,
+            has_more: true,
+        },
+    );
     for page_index in 0..HISTORY_MAX_PAGES {
         let page = session::history(client, session_id, Some(HISTORY_PAGE_SIZE), before_seq).await?;
         // Projections (usage etc.) only exist on the tail page.
@@ -147,7 +198,19 @@ async fn load_history_pages(
                     .or_else(|| entry.pointer("/event/seq"))
                     .and_then(Value::as_i64)
             });
+        let page_event_count = events.len() as u32;
         if events.is_empty() {
+            emit_history_load_progress(
+                &mut on_progress,
+                DshHistoryLoadProgress {
+                    session_id: session_id.to_string(),
+                    page_index: (page_index as u32) + 1,
+                    max_pages: HISTORY_MAX_PAGES as u32,
+                    page_event_count: 0,
+                    total_event_count: collected.len() as u32,
+                    has_more: false,
+                },
+            );
             break;
         }
         collected.splice(0..0, events);
@@ -155,6 +218,17 @@ async fn load_history_pages(
             .get("hasMore")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        emit_history_load_progress(
+            &mut on_progress,
+            DshHistoryLoadProgress {
+                session_id: session_id.to_string(),
+                page_index: (page_index as u32) + 1,
+                max_pages: HISTORY_MAX_PAGES as u32,
+                page_event_count,
+                total_event_count: collected.len() as u32,
+                has_more,
+            },
+        );
         if !has_more {
             break;
         }

@@ -2,6 +2,9 @@ import type { ThreadTokenUsage } from "../../../types";
 import type { HistoryLoader } from "../contracts/conversationCurtainContracts";
 import { normalizeHistorySnapshot } from "../contracts/conversationCurtainContracts";
 import { asNumber, normalizeDshSessionStats } from "../utils/threadNormalize";
+import type { HistoryLoadingProgressListener } from "../utils/historyLoadingProgress";
+import { runNativeHistoryFetchAndParse } from "../utils/runNativeHistoryOpenStages";
+import { subscribeMappedDshHistoryLoadProgress } from "../utils/subscribeMappedDshHistoryLoadProgress";
 import { parseDshHistoryMessages } from "./dshHistoryParser";
 
 type DshHistoryLoaderOptions = {
@@ -11,12 +14,14 @@ type DshHistoryLoaderOptions = {
     workspacePath: string,
     sessionId: string,
   ) => Promise<unknown>;
+  onProgress?: HistoryLoadingProgressListener;
 };
 
 export function createDshHistoryLoader({
   workspaceId,
   workspacePath,
   loadDshSession,
+  onProgress,
 }: DshHistoryLoaderOptions): HistoryLoader {
   return {
     engine: "dsh",
@@ -41,28 +46,46 @@ export function createDshHistoryLoader({
         });
       }
 
-      const result = await loadDshSession(workspacePath, sessionId);
-      const record = result as { messages?: unknown };
-      const items = parseDshHistoryMessages(record.messages ?? result);
-
-      return normalizeHistorySnapshot({
-        engine: "dsh",
-        workspaceId,
+      const report: HistoryLoadingProgressListener = (progress) => {
+        onProgress?.(progress);
+      };
+      const stopPageProgress = subscribeMappedDshHistoryLoadProgress({
         threadId,
-        items,
-        plan: null,
-        userInputQueue: [],
-        tokenUsage: extractDshHistoryTokenUsage(result),
-        meta: {
+        hostSessionId: sessionId,
+        onProgress: report,
+      });
+      try {
+        const staged = await runNativeHistoryFetchAndParse({
+          report,
+          shouldContinue: () => true,
+          load: () => loadDshSession(workspacePath, sessionId),
+          extractMessages: (payload) =>
+            (payload as { messages?: unknown } | null)?.messages ?? payload,
+          parse: parseDshHistoryMessages,
+        });
+        const result = staged?.result ?? null;
+        const items = staged?.items ?? [];
+        return normalizeHistorySnapshot({
+          engine: "dsh",
           workspaceId,
           threadId,
-          engine: "dsh",
-          activeTurnId: null,
-          isThinking: false,
-          heartbeatPulse: null,
-          historyRestoredAtMs: Date.now(),
-        },
-      });
+          items,
+          plan: null,
+          userInputQueue: [],
+          tokenUsage: extractDshHistoryTokenUsage(result),
+          meta: {
+            workspaceId,
+            threadId,
+            engine: "dsh",
+            activeTurnId: null,
+            isThinking: false,
+            heartbeatPulse: null,
+            historyRestoredAtMs: Date.now(),
+          },
+        });
+      } finally {
+        stopPageProgress();
+      }
     },
   };
 }

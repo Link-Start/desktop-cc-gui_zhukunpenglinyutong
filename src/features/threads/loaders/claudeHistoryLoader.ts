@@ -20,6 +20,8 @@ import { computeDiff } from "../../../utils/diff";
 import { findLiveAssistantShadowTranscriptForRestore } from "../utils/liveAssistantShadowTranscript";
 import { noteThreadRecoverySourceObserved } from "../utils/streamLatencyDiagnostics";
 import { isCliInjectedAgentTaskNotificationText } from "../../engine-task-output/contracts/agentTaskNotification";
+import type { HistoryLoadingProgressListener } from "../utils/historyLoadingProgress";
+import { runNativeHistoryFetchAndParse } from "../utils/runNativeHistoryOpenStages";
 import { asString } from "./historyLoaderUtils";
 
 type ClaudeHistoryLoaderOptions = {
@@ -30,6 +32,7 @@ type ClaudeHistoryLoaderOptions = {
     sessionId: string,
     options?: { limit?: number | null; before?: string | null },
   ) => Promise<unknown>;
+  onProgress?: HistoryLoadingProgressListener;
 };
 
 export const CLAUDE_UI_HISTORY_WINDOW = 80;
@@ -2468,6 +2471,7 @@ export function createClaudeHistoryLoader({
   workspaceId,
   workspacePath,
   loadClaudeSession,
+  onProgress,
 }: ClaudeHistoryLoaderOptions): HistoryLoader {
   return {
     engine: "claude",
@@ -2491,22 +2495,33 @@ export function createClaudeHistoryLoader({
           },
         });
       }
-      const result = await loadClaudeSession(workspacePath, sessionId, {
-        limit: CLAUDE_UI_HISTORY_WINDOW,
+      const staged = await runNativeHistoryFetchAndParse({
+        report: (progress) => {
+          onProgress?.(progress);
+        },
+        shouldContinue: () => true,
+        load: () =>
+          loadClaudeSession(workspacePath, sessionId, {
+            limit: CLAUDE_UI_HISTORY_WINDOW,
+          }),
+        extractMessages: (payload) =>
+          (payload as { messages?: unknown } | null)?.messages ?? payload,
+        parse: (messagesData) =>
+          parseClaudeHistoryMessagesWithShadowRecovery({
+            messagesData,
+            workspacePath,
+            workspaceId,
+            threadId,
+            sessionId,
+          }),
       });
-      const record = result as {
+      const result = staged?.result ?? null;
+      const parsedItems = staged?.items ?? [];
+      const record = (result ?? {}) as {
         messages?: unknown;
         hasMore?: boolean;
         nextCursor?: string | null;
       };
-      const messagesData = record.messages ?? result;
-      const parsedItems = parseClaudeHistoryMessagesWithShadowRecovery({
-        messagesData,
-        workspacePath,
-        workspaceId,
-        threadId,
-        sessionId,
-      });
       const userInputQueue = extractPendingUserInputQueueFromClaudeItems(
         parsedItems,
         workspaceId,

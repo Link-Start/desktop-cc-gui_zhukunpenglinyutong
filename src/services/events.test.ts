@@ -11,6 +11,7 @@ import {
   subscribeMenuCycleCollaborationMode,
   subscribeMenuCycleModel,
   subscribeMenuNewAgent,
+  subscribeDshHistoryLoadProgress,
   subscribeNativeProviderContinuationProgress,
   subscribeRuntimeLogStatus,
   subscribeTerminalOutput,
@@ -426,6 +427,36 @@ describe("events subscriptions", () => {
 
     listener({
       event: "native-provider-continuation-progress",
+      id: 1,
+      payload,
+    });
+    expect(onEvent).toHaveBeenCalledWith(payload);
+
+    cleanup();
+  });
+
+  it("delivers DSH history load progress to subscribers", async () => {
+    let listener: EventCallback<any> = () => {};
+    const unlisten = vi.fn();
+
+    vi.mocked(listen).mockImplementation((_event, handler) => {
+      listener = handler as EventCallback<any>;
+      return Promise.resolve(unlisten);
+    });
+
+    const onEvent = vi.fn();
+    const cleanup = subscribeDshHistoryLoadProgress(onEvent);
+    const payload = {
+      sessionId: "sess-1",
+      pageIndex: 3,
+      maxPages: 40,
+      pageEventCount: 200,
+      totalEventCount: 600,
+      hasMore: true,
+    };
+
+    listener({
+      event: "dsh-history-load-progress",
       id: 1,
       payload,
     });

@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../../services/events", () => ({
+  subscribeDshHistoryLoadProgress: vi.fn(() => () => {}),
+}));
 import { buildWorkspaceSessionActivity } from "../../session-activity/adapters/buildWorkspaceSessionActivity";
 import { createCodexHistoryLoader } from "./codexHistoryLoader";
 import { parseCodexSessionHistory } from "./codexSessionHistory";
@@ -867,6 +871,68 @@ describe("history loaders", () => {
         decodeTokens: 72,
       },
     });
+  });
+
+  it("reports DSH page progress before loadDshSession resolves", async () => {
+    const { subscribeDshHistoryLoadProgress } = await import(
+      "../../../services/events"
+    );
+    let deliverPage:
+      | ((event: {
+          sessionId: string;
+          pageIndex: number;
+          maxPages: number;
+          pageEventCount: number;
+          totalEventCount: number;
+          hasMore: boolean;
+        }) => void)
+      | null = null;
+    vi.mocked(subscribeDshHistoryLoadProgress).mockImplementation((onEvent) => {
+      deliverPage = onEvent;
+      return () => {
+        deliverPage = null;
+      };
+    });
+
+    const reports: string[] = [];
+    let resolveLoad: ((value: { messages: unknown[] }) => void) | null = null;
+    const loadDshSession = vi.fn(
+      () =>
+        new Promise<{ messages: unknown[] }>((resolve) => {
+          resolveLoad = resolve;
+        }),
+    );
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession,
+      onProgress: (progress) => {
+        reports.push(
+          `${progress.detailKey}:${String(progress.detailParams?.page ?? "")}`,
+        );
+      },
+    });
+
+    const pending = loader.load("dsh:session-1");
+    await vi.waitFor(() => {
+      expect(loadDshSession).toHaveBeenCalled();
+    });
+    expect(deliverPage).toBeTypeOf("function");
+    deliverPage?.({
+      sessionId: "session-1",
+      pageIndex: 3,
+      maxPages: 40,
+      pageEventCount: 200,
+      totalEventCount: 600,
+      hasMore: true,
+    });
+    expect(reports.some((entry) => entry.startsWith("restoringHistorySessionPage:3"))).toBe(
+      true,
+    );
+
+    resolveLoad?.({ messages: [] });
+    await pending;
+    vi.mocked(subscribeDshHistoryLoadProgress).mockImplementation(() => () => {});
   });
 
   it("returns an empty dsh snapshot when workspace path is missing", async () => {

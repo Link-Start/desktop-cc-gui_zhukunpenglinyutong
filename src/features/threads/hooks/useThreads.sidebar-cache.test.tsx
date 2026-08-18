@@ -548,50 +548,50 @@ describe("useThreads sidebar cache", () => {
       }),
     );
 
-    vi.useFakeTimers();
-    try {
-      act(() => {
-        result.current.setActiveThreadId("dsh:session-history");
-      });
+    act(() => {
+      result.current.setActiveThreadId("dsh:session-history");
+    });
 
-      expect(
-        result.current.historyLoadingByThreadId["dsh:session-history"],
-      ).toBe(true);
-      expect(
-        result.current.historyLoadingProgressByThreadId["dsh:session-history"],
-      ).toBeUndefined();
+    expect(
+      result.current.historyLoadingByThreadId["dsh:session-history"],
+    ).toBe(true);
+    expect(
+      result.current.historyLoadingProgressByThreadId["dsh:session-history"],
+    ).toEqual({
+      phase: "prepare",
+      percent: 8,
+      titleKey: "restoringHistory",
+      detailKey: "restoringHistoryPrepare",
+    });
 
-      await act(async () => {
-        vi.advanceTimersByTime(50);
-      });
-
+    await waitFor(() => {
       expect(vi.mocked(loadDshSession)).toHaveBeenCalledWith(
         "/tmp/codex",
         "session-history",
       );
-      expect(
-        result.current.historyLoadingByThreadId["dsh:session-history"],
-      ).toBe(true);
+    });
+    expect(
+      result.current.historyLoadingByThreadId["dsh:session-history"],
+    ).toBe(true);
 
-      await act(async () => {
-        resolveLoad?.({
-          messages: [
-            {
-              role: "assistant",
-              content: "Loaded DSH history",
-            },
-          ],
-        });
-        await Promise.resolve();
-        await Promise.resolve();
+    await act(async () => {
+      resolveLoad?.({
+        messages: [
+          {
+            role: "assistant",
+            content: "Loaded DSH history",
+          },
+        ],
       });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
+    await waitFor(() => {
       expect(
         result.current.historyLoadingByThreadId["dsh:session-history"],
       ).toBeUndefined();
-    } finally {
-      vi.useRealTimers();
-    }
+    });
   });
 
   it("does not mark pending DSH threads as history loading", async () => {

@@ -24,6 +24,21 @@ export const HISTORY_LOADING_SPINE_PHASE_I18N_KEYS = {
   merge: "restoringHistoryPhaseMerge",
 } as const;
 
+export const NATIVE_HISTORY_LOADING_SPINE_PHASE_I18N_KEYS = {
+  prepare: "restoringHistoryPhasePrepare",
+  session: "restoringHistoryPhaseSession",
+  projection: "restoringHistoryPhaseParse",
+  merge: "restoringHistoryPhaseHydrate",
+} as const;
+
+export function resolveHistoryLoadingSpinePhaseI18nKeys(
+  surface: "shared" | "native",
+): Record<HistoryLoadingSpineNodeId, string> {
+  return surface === "shared"
+    ? HISTORY_LOADING_SPINE_PHASE_I18N_KEYS
+    : NATIVE_HISTORY_LOADING_SPINE_PHASE_I18N_KEYS;
+}
+
 const SPINE_PHASE_INDEX: Record<HistoryLoadingPhaseId, number> = {
   prepare: 0,
   session: 1,

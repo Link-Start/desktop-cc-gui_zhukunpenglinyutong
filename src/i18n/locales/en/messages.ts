@@ -57,6 +57,13 @@ const messages = {
     emptyThread: "Start a thread and send a prompt to the agent.",
     restoringHistory: "Loading conversation window…",
     restoringHistoryHint: "Loading the local transcript and session state.",
+    restoringHistoryPrepare: "Preparing to open the session…",
+    restoringHistorySession: "Fetching session history…",
+    restoringHistorySessionPage:
+      "Fetching host history page {{page}} / {{maxPages}} ({{pageEvents}} on this page, {{totalEvents}} so far)",
+    restoringHistoryParse: "Parsing {{count}} messages…",
+    restoringHistoryHydrate: "Assembling the canvas ({{count}} items)…",
+    restoringHistoryFinalize: "Finishing canvas restore…",
     restoringSharedHistory: "Restoring Shared session…",
     restoringSharedHistoryPrepare: "Preparing to open the historical Shared session.",
     restoringSharedHistorySession:
@@ -78,6 +85,8 @@ const messages = {
     restoringHistoryPhaseSession: "Snapshot",
     restoringHistoryPhaseProjection: "Projection",
     restoringHistoryPhaseMerge: "Merge",
+    restoringHistoryPhaseParse: "Parse",
+    restoringHistoryPhaseHydrate: "Assemble",
     generatingResponse: "Generating response...",
     responding: "Responding...",
     codexWaitingForFirstText:

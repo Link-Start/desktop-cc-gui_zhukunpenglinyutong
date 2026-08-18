@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
 import appLogo from "../../../../assets/icon.png";
 import type { HistoryLoadingProgress } from "../../../threads/utils/historyLoadingProgress";
+import { isSharedHistoryLoadingProgress } from "../../../threads/utils/historyLoadingProgress";
 import {
-  HISTORY_LOADING_SPINE_PHASE_I18N_KEYS,
   resolveHistoryLoadingSpineNodes,
+  resolveHistoryLoadingSpinePhaseI18nKeys,
   type HistoryLoadingSpineNodeState,
 } from "../presentation/historyLoadingSpine";
 
@@ -31,12 +32,16 @@ export function HistoryLoadingSurface({ progress }: HistoryLoadingSurfaceProps) 
     : t("messages.restoringHistoryHint");
   const percent = progress?.percent ?? null;
   const spineNodes = resolveHistoryLoadingSpineNodes(progress?.phase ?? null);
-  const isShared = progress != null;
+  const hasProgress = progress != null;
+  const isShared = isSharedHistoryLoadingProgress(progress);
+  const spinePhaseKeys = resolveHistoryLoadingSpinePhaseI18nKeys(
+    isShared ? "shared" : "native",
+  );
 
   return (
     <div
       className="empty messages-empty messages-history-loading"
-      data-history-loading-mode={isShared ? "shared" : "native"}
+      data-history-loading-mode={hasProgress ? (isShared ? "shared" : "native") : "native"}
       role="status"
       aria-live="polite"
       aria-busy="true"
@@ -49,7 +54,7 @@ export function HistoryLoadingSurface({ progress }: HistoryLoadingSurfaceProps) 
         aria-valuenow={percent ?? undefined}
         aria-label={title}
       >
-        {isShared ? (
+        {hasProgress ? (
           <div className="messages-history-loading-nodes" aria-hidden="true">
             {spineNodes.map((node) => (
               <span
@@ -76,12 +81,10 @@ export function HistoryLoadingSurface({ progress }: HistoryLoadingSurfaceProps) 
       <div className="messages-history-loading-copy">
         <strong>{title}</strong>
         <span>{detail}</span>
-        {isShared ? (
+        {hasProgress ? (
           <div className="messages-history-loading-phases" aria-hidden="true">
             {spineNodes.map((node) => {
-              const label = t(
-                `messages.${HISTORY_LOADING_SPINE_PHASE_I18N_KEYS[node.id]}`,
-              );
+              const label = t(`messages.${spinePhaseKeys[node.id]}`);
               const isCurrent = node.state === "current";
               return (
                 <span
