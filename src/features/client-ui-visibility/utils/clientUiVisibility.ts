@@ -97,6 +97,8 @@ export type ClientUiVisibilityQueries = {
  * Core chrome that must stay visible. Some Windows clients persisted
  * topToolControls/rightActivityToolbar as false and "lost" the top-right menu
  * and right toolbar; product default is always on.
+ *
+ * topSessionTabs is not essential: hide/show is a user appearance preference.
  */
 export const ESSENTIAL_CLIENT_UI_PANELS: readonly ClientUiPanelId[] = [
   "topToolControls",

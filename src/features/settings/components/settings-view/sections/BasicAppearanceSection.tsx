@@ -846,6 +846,29 @@ export function BasicAppearanceSection({
           </div>
         </div>
 
+        <div
+          className="settings-pref-row"
+          data-testid="settings-top-session-tabs"
+        >
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.clientUiVisibility.panels.topSessionTabs")}
+            </div>
+            <div className="settings-pref-desc">
+              {t("settings.clientUiVisibility.panelDescriptions.topSessionTabs")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
+            <Switch
+              checked={clientUiVisibility.isPanelVisible("topSessionTabs")}
+              aria-label={t("settings.clientUiVisibility.panels.topSessionTabs")}
+              onCheckedChange={(checked) =>
+                clientUiVisibility.setPanelVisible("topSessionTabs", checked)
+              }
+            />
+          </div>
+        </div>
+
         {/* UI scale permanently locked to 100% — control removed (2026-08 freeze). */}
       </div>
 

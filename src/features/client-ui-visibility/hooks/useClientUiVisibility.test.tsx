@@ -105,13 +105,42 @@ describe("useClientUiVisibility", () => {
       CLIENT_UI_VISIBILITY_STORE,
       CLIENT_UI_VISIBILITY_KEY,
       {
-        panels: {},
+        panels: {
+          topToolControls: true,
+          rightActivityToolbar: true,
+        },
         controls: {
           "topTool.clientDocumentation": false,
           "bottomActivity.checkpointDetails": false,
           "bottomActivity.governanceEvidence": false,
         },
       },
+      { immediate: true },
+    );
+  });
+
+  it("honors persisted topSessionTabs false until the user turns it back on", () => {
+    clientStore.set(`${CLIENT_UI_VISIBILITY_STORE}:${CLIENT_UI_VISIBILITY_KEY}`, {
+      panels: { topSessionTabs: false },
+      controls: {},
+    });
+
+    const { result } = renderHook(() => useClientUiVisibility());
+
+    expect(result.current.preference.panels.topSessionTabs).toBe(false);
+    expect(result.current.isPanelVisible("topSessionTabs")).toBe(false);
+
+    act(() => {
+      result.current.setPanelVisible("topSessionTabs", true);
+    });
+
+    expect(result.current.isPanelVisible("topSessionTabs")).toBe(true);
+    expect(writeClientStoreValue).toHaveBeenCalledWith(
+      CLIENT_UI_VISIBILITY_STORE,
+      CLIENT_UI_VISIBILITY_KEY,
+      expect.objectContaining({
+        panels: expect.objectContaining({ topSessionTabs: true }),
+      }),
       { immediate: true },
     );
   });

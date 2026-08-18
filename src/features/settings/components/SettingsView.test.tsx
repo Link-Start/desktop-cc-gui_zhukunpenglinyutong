@@ -27,7 +27,10 @@ import {
   listWorkspaceSessions,
   unarchiveWorkspaceSessions,
 } from "../../../services/tauri";
-import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  resetClientStorageForTests,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import { pushErrorToast } from "../../../services/toasts";
 import {
   DEFAULT_CODE_FONT_FAMILY,
@@ -1513,6 +1516,42 @@ describe("SettingsView Display", () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+
+  it("lets appearance settings hide and show top session tabs", async () => {
+    resetClientStorageForTests();
+    renderDisplaySection();
+
+    const toggle = screen.getByRole("switch", { name: "Top session tabs" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(writeClientStoreValue).toHaveBeenCalledWith(
+        "app",
+        "clientUiVisibility",
+        expect.objectContaining({
+          panels: expect.objectContaining({ topSessionTabs: false }),
+        }),
+        { immediate: true },
+      );
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(writeClientStoreValue).toHaveBeenCalledWith(
+        "app",
+        "clientUiVisibility",
+        expect.objectContaining({
+          panels: expect.objectContaining({ topSessionTabs: true }),
+        }),
+        { immediate: true },
+      );
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
   });
 
   it("updates user message color using reference-compatible format", async () => {
