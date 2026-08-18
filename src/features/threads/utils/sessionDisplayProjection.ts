@@ -6,7 +6,8 @@ import {
 import { isDshRuntimeContextText } from "../../../utils/dshRuntimeContext";
 
 const GENERIC_SESSION_TITLE_PATTERN =
-  /^(codex session|claude session|gemini session|opencode session|grok session|kimi session|pi session|dsh session|deepseek harness session)$/i;
+  /^(codex session|claude session|gemini session|opencode session|grok session|kimi session|pi session|dsh session|deepseek harness session)(?:\s+[a-f0-9-]{4,40})?$/i;
+const WARMUP_TITLE_PATTERN = /^warmup$/i;
 const ORDINAL_AGENT_TITLE_PATTERN = /^agent\s+\d+$/i;
 const SHORT_HEX_TITLE_PATTERN = /^[a-f0-9]{4,8}$/i;
 // 历史遗留:斜杠命令原始记录曾被直接剪成标题(如 "<command-m"),视为无效标题
@@ -64,6 +65,7 @@ function getSessionDisplayTitleStrength(
   if (
     !normalized
     || ORDINAL_AGENT_TITLE_PATTERN.test(normalized)
+    || WARMUP_TITLE_PATTERN.test(normalized)
     || SHORT_HEX_TITLE_PATTERN.test(normalized)
     || COMMAND_TAG_TITLE_PATTERN.test(normalized)
     || PROJECT_MEMORY_TAG_TITLE_PATTERN.test(normalized)

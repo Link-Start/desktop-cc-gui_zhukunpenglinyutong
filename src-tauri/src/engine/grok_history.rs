@@ -285,7 +285,7 @@ fn expand_home_prefixed_path(path: &str) -> Option<PathBuf> {
     dirs::home_dir().map(|home| home.join(relative))
 }
 
-fn resolve_grok_base_dir(custom_home: Option<&str>) -> PathBuf {
+pub(crate) fn resolve_grok_base_dir(custom_home: Option<&str>) -> PathBuf {
     if let Some(home) = custom_home.map(str::trim).filter(|value| !value.is_empty()) {
         if let Some(expanded) = expand_home_prefixed_path(home) {
             return expanded;
@@ -342,7 +342,7 @@ fn url_encode_dir_name(path: &str) -> String {
     encoded
 }
 
-fn candidate_encoded_cwd_names(workspace_path: &Path) -> Vec<String> {
+pub(crate) fn candidate_encoded_cwd_names(workspace_path: &Path) -> Vec<String> {
     let mut names: Vec<String> = build_workspace_path_variants(workspace_path)
         .into_iter()
         .map(|variant| url_encode_dir_name(&variant))
@@ -352,7 +352,7 @@ fn candidate_encoded_cwd_names(workspace_path: &Path) -> Vec<String> {
     names
 }
 
-fn session_dir_looks_valid(session_dir: &Path) -> bool {
+pub(crate) fn session_dir_looks_valid(session_dir: &Path) -> bool {
     session_dir.is_dir()
         && (session_dir.join("chat_history.jsonl").is_file()
             || session_dir.join("summary.json").is_file())
@@ -1429,7 +1429,7 @@ fn parse_messages_from_chat_history_reader<R: BufRead>(
 }
 
 /// Extract a sidebar preview from one raw JSONL line (cheap path for large lines).
-fn first_user_prompt_from_line(line: &str) -> Option<String> {
+pub(crate) fn first_user_prompt_from_line(line: &str) -> Option<String> {
     let line = line.trim();
     if line.is_empty() {
         return None;
@@ -1635,11 +1635,19 @@ async fn build_summary_from_session_dir(
     // Prefer the human's first real prompt over Grok's AI `generated_title`
     // so the sidebar shows e.g. "你好" instead of "Chinese Hello Greeting Session".
     // Stream until first user; never load the whole file.
-    let first_message = first_user_prompt_from_chat_history_path(&chat_history_path)
+    let first_message = if let Some(text) = first_user_prompt_from_chat_history_path(&chat_history_path)
         .await
-        .or(title)
-        .map(|text| truncate_chars(&text, 60))
-        .unwrap_or_else(|| session_id.to_string());
+    {
+        truncate_chars(&text, 60)
+    } else if message_count == 0 {
+        // Empty draft: keep a generic title so stale-empty prune can match.
+        // Do not fall through to generated_title / session_id here.
+        "Grok Session".to_string()
+    } else {
+        title
+            .map(|text| truncate_chars(&text, 60))
+            .unwrap_or_else(|| session_id.to_string())
+    };
 
     let file_size_bytes = std::fs::metadata(&chat_history_path)
         .or_else(|_| std::fs::metadata(&summary_path))

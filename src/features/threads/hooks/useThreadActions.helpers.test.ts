@@ -819,18 +819,32 @@ describe("useThreadActions.helpers", () => {
   });
 
   it("rejects pending placeholders in engine-aware continuity filters", () => {
-    const pendingByEngine = ["claude", "codex", "opencode"] as const;
+    const pendingByEngine = [
+      "claude",
+      "codex",
+      "opencode",
+      "dsh",
+      "gemini",
+      "grok",
+      "kimi",
+      "pi",
+    ] as const;
 
     for (const engine of pendingByEngine) {
-      const summary: ThreadSummary = {
+      const bare: ThreadSummary = {
         id: `${engine}-pending-123`,
         name: "Pending",
         updatedAt: 100,
         engineSource: engine,
         threadKind: "native",
       };
+      const prefixed: ThreadSummary = {
+        ...bare,
+        id: `${engine}:${engine}-pending-1787016153035-0bittx`,
+      };
 
-      expect(isRetainableEngineContinuitySummary(engine, summary)).toBe(false);
+      expect(isRetainableEngineContinuitySummary(engine, bare)).toBe(false);
+      expect(isRetainableEngineContinuitySummary(engine, prefixed)).toBe(false);
     }
   });
 

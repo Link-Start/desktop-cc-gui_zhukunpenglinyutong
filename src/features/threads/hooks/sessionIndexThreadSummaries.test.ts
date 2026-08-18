@@ -235,4 +235,45 @@ describe("sessionIndexThreadSummaries", () => {
       "claude:old",
     ]);
   });
+
+  it("does not resurrect stale local pending drafts when an engine is missing from index", () => {
+    const merged = mergeSummariesForMissingEngines(
+      [
+        {
+          id: "codex-1",
+          name: "Codex",
+          updatedAt: 20,
+          engineSource: "codex",
+          threadKind: "native",
+        },
+      ],
+      [
+        {
+          id: "grok:grok-pending-1787016153035-0bittx",
+          name: "grok session",
+          updatedAt: 40,
+          engineSource: "grok",
+          threadKind: "native",
+        },
+        {
+          id: "grok-pending-1787016153035-0bittx",
+          name: "grok session",
+          updatedAt: 39,
+          engineSource: "grok",
+          threadKind: "native",
+        },
+        {
+          id: "grok:14a64a80-c9ab-4ff1-a1de-196dca031750",
+          name: "Real Grok",
+          updatedAt: 10,
+          engineSource: "grok",
+          threadKind: "native",
+        },
+      ],
+    );
+    expect(merged.map((row) => row.id)).toEqual([
+      "codex-1",
+      "grok:14a64a80-c9ab-4ff1-a1de-196dca031750",
+    ]);
+  });
 });

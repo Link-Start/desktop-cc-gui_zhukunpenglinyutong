@@ -173,12 +173,55 @@ pub async fn archive_dsh_session(client: &DshHostClient, session_id: &str) -> Re
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DshLatestUserPeek {
+    HasRealUser,
+    Empty,
+    Unknown,
+}
+
+pub(crate) fn dsh_latest_page_verdict(events: &[Value], has_more: bool) -> DshLatestUserPeek {
+    let messages = fold_history_events(events);
+    if messages.iter().any(|message| message.role == "user") {
+        return DshLatestUserPeek::HasRealUser;
+    }
+    if has_more {
+        return DshLatestUserPeek::Unknown;
+    }
+    DshLatestUserPeek::Empty
+}
+
+/// One latest history page only. `hasMore` without a user message stays Unknown
+/// so a long assistant tail cannot be mistaken for an empty session.
+pub async fn peek_dsh_latest_page_user(
+    client: &DshHostClient,
+    session_id: &str,
+) -> Result<DshLatestUserPeek, String> {
+    let session_id = session_id_from_thread(session_id);
+    let page = session::history(client, &session_id, Some(HISTORY_PAGE_SIZE), None).await?;
+    let events = page
+        .get("events")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let has_more = page
+        .get("hasMore")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    Ok(dsh_latest_page_verdict(&events, has_more))
+}
+
 fn summary_from_list_item(item: &Value) -> Option<DshSessionSummary> {
     let session_id = item.get("sessionId").and_then(Value::as_str)?.to_string();
     if session_id.is_empty() {
         return None;
     }
     let updated_at = item.get("updatedAt").and_then(Value::as_i64).unwrap_or(0);
+    let created_at = item
+        .get("createdAt")
+        .and_then(Value::as_i64)
+        .filter(|value| *value > 0)
+        .unwrap_or(updated_at);
     let title = item
         .pointer("/projections/values/title")
         .and_then(Value::as_str)
@@ -186,7 +229,7 @@ fn summary_from_list_item(item: &Value) -> Option<DshSessionSummary> {
     Some(DshSessionSummary {
         first_message: sanitize_dsh_sidebar_title(title),
         updated_at,
-        created_at: updated_at,
+        created_at,
         message_count: 0,
         engine: Some("dsh".to_string()),
         canonical_session_id: Some(session_id.clone()),
@@ -728,6 +771,10 @@ mod tests {
         assert_eq!(messages[1].role, "assistant");
         assert_eq!(messages[1].text, "你好");
         assert_eq!(messages[1].source_kind, None);
+        assert_eq!(
+            dsh_latest_page_verdict(&entries, true),
+            DshLatestUserPeek::HasRealUser
+        );
     }
 
     #[test]
@@ -776,6 +823,14 @@ mod tests {
         ];
         let messages = fold_history_events(&entries);
         assert!(messages.is_empty());
+        assert_eq!(
+            dsh_latest_page_verdict(&entries, false),
+            DshLatestUserPeek::Empty
+        );
+        assert_eq!(
+            dsh_latest_page_verdict(&entries, true),
+            DshLatestUserPeek::Unknown
+        );
     }
 
     #[test]

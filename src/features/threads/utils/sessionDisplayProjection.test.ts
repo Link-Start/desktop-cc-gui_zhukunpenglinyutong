@@ -15,7 +15,10 @@ describe("sessionDisplayProjection", () => {
     expect(isWeakSessionDisplayTitle("Kimi Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("DSH Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("DeepSeek Harness Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("PI session 019fe705")).toBe(true);
+    expect(isWeakSessionDisplayTitle("Warmup")).toBe(true);
     expect(isWeakSessionDisplayTitle("分析左侧栏消失问题")).toBe(false);
+    expect(isWeakSessionDisplayTitle("PI session about rust")).toBe(false);
   });
 
   it("classifies clipped raw command-tag names as weak titles", () => {

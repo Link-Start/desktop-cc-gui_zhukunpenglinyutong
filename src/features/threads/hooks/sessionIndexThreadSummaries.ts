@@ -203,9 +203,39 @@ function summaryEngineKey(summary: ThreadSummary): string {
 }
 
 /**
+ * Client "new session" drafts: `{engine}-pending-{millis}-{nonce}`.
+ * Index projection prefixes some engines (`grok:grok-pending-...`).
+ * Shared / subagent placeholders are not local drafts.
+ */
+const LOCAL_PENDING_DRAFT_PATTERN =
+  /^([a-z][a-z0-9]*)-pending-(\d{10,16})-([a-z0-9]{4,12})$/i;
+
+export function isLocalPendingDraftThreadId(
+  engine: string | null | undefined,
+  threadId: string,
+): boolean {
+  const wanted = String(engine ?? "")
+    .trim()
+    .toLowerCase();
+  const raw = threadId.trim();
+  if (!wanted || !raw || wanted === "shared") {
+    return false;
+  }
+  const bare = raw.includes(":")
+    ? raw.slice(raw.indexOf(":") + 1).trim()
+    : raw;
+  const match = LOCAL_PENDING_DRAFT_PATTERN.exec(bare);
+  if (!match) {
+    return false;
+  }
+  return match[1].toLowerCase() === wanted;
+}
+
+/**
  * Index-only first-paint can return a partial engine set. Keep last-good /
  * snapshot rows for engines the Index page did not include so the list still
  * shows every native type the workspace already knew about.
+ * Stale local pending drafts must not come back after Index tombstone.
  */
 export function mergeSummariesForMissingEngines(
   incoming: ThreadSummary[],
@@ -218,6 +248,9 @@ export function mergeSummariesForMissingEngines(
   const incomingIds = new Set(incoming.map((row) => row.id));
   const extras = continuity.filter((row) => {
     if (!row.id || incomingIds.has(row.id)) {
+      return false;
+    }
+    if (isLocalPendingDraftThreadId(summaryEngineKey(row), row.id)) {
       return false;
     }
     return !present.has(summaryEngineKey(row));

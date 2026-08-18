@@ -848,6 +848,11 @@ pub async fn list_session_index_for_workspace(
         }
     }
 
+    // First page only: GC stale empty native drafts after sync, before SQL list.
+    if keyset_before.is_none() {
+        super::empty_prune::prune_stale_empty_native_sessions(&path_str, Some(&*state)).await;
+    }
+
     let path_for_list = path_str.clone();
     let (data, has_more) = tokio::task::spawn_blocking(move || {
         let connection = open_connection()?;

@@ -221,7 +221,7 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                     title = excluded.title,
                     native_title = excluded.native_title,
                     updated_at = excluded.updated_at,
-                    created_at = COALESCE(excluded.created_at, session_index.created_at),
+                    created_at = COALESCE(session_index.created_at, excluded.created_at),
                     cwd = COALESCE(excluded.cwd, session_index.cwd),
                     workspace_path = COALESCE(excluded.workspace_path, session_index.workspace_path),
                     physical_path = COALESCE(excluded.physical_path, session_index.physical_path),
@@ -737,6 +737,48 @@ pub(crate) fn tombstone_session_ids(
     Ok(updated)
 }
 
+/// Prune-only tombstone: match exact `(engine, session_id)`.
+/// Never mark the same bare id on other engines (that would revive the Grok vanish class).
+pub(crate) fn tombstone_engine_sessions(
+    connection: &Connection,
+    pairs: &[(String, String)],
+) -> Result<usize, String> {
+    if pairs.is_empty() {
+        return Ok(0);
+    }
+    let marked_at = now_ms();
+    let mut updated = 0usize;
+    let mut statement = connection
+        .prepare(
+            "UPDATE session_index
+             SET tombstoned_at = COALESCE(tombstoned_at, ?1)
+             WHERE engine = ?2 AND session_id = ?3",
+        )
+        .map_err(|error| error.to_string())?;
+    let mut marker = connection
+        .prepare(
+            "INSERT INTO session_index (
+                engine, session_id, title, updated_at, indexed_at, tombstoned_at
+             ) VALUES (?1, ?2, '', ?3, ?3, ?3)
+             ON CONFLICT(engine, session_id) DO NOTHING",
+        )
+        .map_err(|error| error.to_string())?;
+    for (engine, session_id) in pairs {
+        let engine = engine.trim().to_ascii_lowercase();
+        let session_id = session_id.trim();
+        if engine.is_empty() || session_id.is_empty() {
+            continue;
+        }
+        updated += statement
+            .execute(params![marked_at, engine, session_id])
+            .map_err(|error| error.to_string())? as usize;
+        marker
+            .execute(params![engine, session_id, marked_at])
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(updated)
+}
+
 fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionIndexRow> {
     Ok(SessionIndexRow {
         engine: row.get(0)?,
@@ -834,6 +876,44 @@ mod tests {
         assert!(load_backfill_state(&connection, "codex:/tmp/proj")
             .expect("reload")
             .complete);
+    }
+
+    #[test]
+    fn upsert_keeps_existing_created_at_when_refresh_sends_newer() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        let first = SessionIndexRow {
+            engine: "dsh".into(),
+            session_id: "dsh-clock".into(),
+            title: "dsh session".into(),
+            native_title: None,
+            updated_at: 1_000,
+            created_at: Some(1_000),
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        };
+        upsert_rows(&connection, &[first]).expect("insert");
+        let refresh = SessionIndexRow {
+            engine: "dsh".into(),
+            session_id: "dsh-clock".into(),
+            title: "dsh session".into(),
+            native_title: None,
+            updated_at: 20 * 60 * 1000,
+            created_at: Some(20 * 60 * 1000),
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        };
+        upsert_rows(&connection, &[refresh]).expect("refresh");
+        let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].created_at, Some(1_000));
+        assert_eq!(listed[0].updated_at, 20 * 60 * 1000);
     }
 
     #[test]

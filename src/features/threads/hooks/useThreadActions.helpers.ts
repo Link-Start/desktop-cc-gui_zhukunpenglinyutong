@@ -1864,6 +1864,10 @@ const PENDING_PREFIXES_BY_ENGINE: Partial<Record<EngineSource, string>> = {
   codex: "codex-pending-",
   opencode: "opencode-pending-",
   dsh: "dsh-pending-",
+  gemini: "gemini-pending-",
+  grok: "grok-pending-",
+  kimi: "kimi-pending-",
+  pi: "pi-pending-",
 };
 
 function isPendingEngineThreadId(
@@ -1874,7 +1878,8 @@ function isPendingEngineThreadId(
   if (!prefix) {
     return false;
   }
-  return threadId.trim().toLowerCase().startsWith(prefix);
+  const id = threadId.trim().toLowerCase();
+  return id.startsWith(prefix) || id.startsWith(`${engine}:${prefix}`);
 }
 
 /**
