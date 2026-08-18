@@ -20,6 +20,7 @@ import {
   isMossxProgramControlTitle,
 } from "../../../utils/contextProtocol";
 import { remapThreadParentsToSharedOwners } from "../../shared-session/runtime/sharedSessionSummaries";
+import { sharedHideIdentityIntersects } from "../../shared-session/runtime/sharedHideIdentity";
 import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
 import {
   shouldHidePlaceholderNativeDraftFromSidebar,
@@ -1360,20 +1361,12 @@ export function isSharedControlPlaneSpawnTitle(
   return isSharedCollabWorkerSpawnTitle(normalized);
 }
 
-/** hide set 命中：id 本体 + 去 engine 前缀后的 raw uuid */
+/** hide set 命中：id 本体 + 已知 engine 前缀 + Codex rollout stem / canonical uuid */
 export function threadIdInHiddenSharedBindingSet(
   threadId: string,
   hiddenSharedBindingIds: ReadonlySet<string>,
 ): boolean {
-  const id = threadId.trim();
-  if (!id) return false;
-  if (hiddenSharedBindingIds.has(id)) return true;
-  const colon = id.indexOf(":");
-  if (colon > 0) {
-    const bare = id.slice(colon + 1).trim();
-    if (bare && hiddenSharedBindingIds.has(bare)) return true;
-  }
-  return false;
+  return sharedHideIdentityIntersects(threadId, hiddenSharedBindingIds);
 }
 
 /**

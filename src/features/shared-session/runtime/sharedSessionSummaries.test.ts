@@ -328,4 +328,83 @@ describe("sharedSessionSummaries", () => {
       ),
     ).toBe(false);
   });
+
+  it("hides Shared Codex pups when parent is a Windows live rollout stem", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const summary = normalizeSharedSessionSummary({
+      id: "shared-codex-win",
+      threadId: "shared:shared-codex-win",
+      title: "Shared Codex Win",
+      updatedAt: 1,
+      selectedEngine: "codex",
+      nativeThreadIds: [`codex:${uuid}`],
+    });
+    expect(summary).not.toBeNull();
+    const map = buildNativeOwnerToSharedThreadMap([summary!]);
+    expect(lookupSharedOwnerByNativeParent(rolloutStem, map)).toBe(
+      "shared:shared-codex-win",
+    );
+    expect(lookupSharedOwnerByNativeParent(`codex:${rolloutStem}`, map)).toBe(
+      "shared:shared-codex-win",
+    );
+
+    const threads = [
+      {
+        id: "shared:shared-codex-win",
+        name: "Shared Codex Win",
+        updatedAt: 1,
+        engineSource: "codex" as const,
+        threadKind: "shared" as const,
+        nativeThreadIds: [`codex:${uuid}`],
+      },
+    ];
+    const keys = buildSharedSidebarHiddenParentKeys(threads);
+    expect(keys.has(uuid)).toBe(true);
+    expect(keys.has(`codex:${uuid}`)).toBe(true);
+    expect([...keys].some((key) => key.startsWith("rollout-"))).toBe(false);
+
+    expect(
+      isSharedSidebarHiddenPup({ id: "pup-socrates" }, rolloutStem, keys),
+    ).toBe(true);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "pup-singer" },
+        `codex:${rolloutStem}`,
+        keys,
+      ),
+    ).toBe(true);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "native-child" },
+        "codex:visible-parent",
+        keys,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not invent engine hide keys for Windows / POSIX filesystem ids", () => {
+    const winDrive = expandHiddenSharedBindingIds(["S:\\AIWorker\\proj"]);
+    expect([...winDrive]).toEqual(["S:\\AIWorker\\proj"]);
+
+    const winUnc = expandHiddenSharedBindingIds(["\\\\?\\C:\\AIWorker\\proj"]);
+    expect([...winUnc]).toEqual(["\\\\?\\C:\\AIWorker\\proj"]);
+
+    const macHome = expandHiddenSharedBindingIds(["/Users/me/proj"]);
+    expect([...macHome]).toEqual(["/Users/me/proj"]);
+
+    const linuxHome = expandHiddenSharedBindingIds(["/home/me/proj"]);
+    expect([...linuxHome]).toEqual(["/home/me/proj"]);
+
+    const emptyMap = new Map<string, string>();
+    expect(lookupSharedOwnerByNativeParent("S:\\AIWorker\\proj", emptyMap)).toBeNull();
+    expect(lookupSharedOwnerByNativeParent("/Users/me/proj", emptyMap)).toBeNull();
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "cwd-row" },
+        "S:\\AIWorker\\proj",
+        new Set(["shared:s1"]),
+      ),
+    ).toBe(false);
+  });
 });

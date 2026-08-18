@@ -127,4 +127,61 @@ describe("useThreadRows", () => {
     expect(sharedRow?.hasChildren).toBe(false);
     expect(rows.totalRoots).toBe(2);
   });
+
+  it("hides Shared Codex pups whose parent is a rollout stem alias on any OS", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const shared: ThreadSummary = {
+      id: "shared:s-codex",
+      name: "Shared Codex",
+      updatedAt: 300,
+      engineSource: "codex",
+      threadKind: "shared",
+      nativeThreadIds: [`codex:${uuid}`],
+    };
+    const windowsLivePup: ThreadSummary = {
+      id: `codex:${rolloutStem}-child`,
+      name: "Socrates",
+      parentThreadId: rolloutStem,
+      updatedAt: 400,
+      engineSource: "codex",
+    };
+    const prefixedStemPup: ThreadSummary = {
+      id: "child-singer",
+      name: "Singer",
+      parentThreadId: `codex:${rolloutStem}`,
+      updatedAt: 390,
+      engineSource: "codex",
+    };
+    const nativeParent: ThreadSummary = {
+      id: "codex:visible-parent",
+      name: "Native Parent",
+      updatedAt: 100,
+      engineSource: "codex",
+    };
+    const nativeChild: ThreadSummary = {
+      id: "codex:visible-child",
+      name: "Native Child",
+      parentThreadId: "codex:visible-parent",
+      updatedAt: 200,
+      engineSource: "codex",
+    };
+
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [shared, windowsLivePup, prefixedStemPup, nativeParent, nativeChild],
+      true,
+      "ws-1",
+      getPinTimestamp,
+    );
+
+    const visibleIds = rows.unpinnedRows.map((row) => row.thread.id);
+    expect(visibleIds).toEqual([
+      "shared:s-codex",
+      "codex:visible-parent",
+      "codex:visible-child",
+    ]);
+    expect(visibleIds).not.toContain(windowsLivePup.id);
+    expect(visibleIds).not.toContain("child-singer");
+  });
 });

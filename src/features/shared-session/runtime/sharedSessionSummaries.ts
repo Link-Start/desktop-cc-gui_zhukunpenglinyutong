@@ -4,20 +4,18 @@ import {
   isSharedSessionSupportedEngine,
   normalizeSharedSessionEngine,
 } from "../utils/sharedSessionEngines";
+import {
+  SHARED_HIDE_ENGINE_PREFIXES,
+  collectSharedHideIdentityKeys,
+  extractCodexCanonicalSessionId,
+  hasKnownSharedEnginePrefix,
+  isSharedHideFilesystemPathId,
+  sharedHideIdentityIntersects,
+} from "./sharedHideIdentity";
 
 const UNSUPPORTED_SHARED_ENGINE_PREFIXES = [
   "gemini:",
   "gemini-pending-",
-] as const;
-
-/** Shared-supported engines whose native list ids use `engine:{raw}` form. */
-const SHARED_HIDE_ENGINE_PREFIXES = [
-  "claude",
-  "codex",
-  "kimi",
-  "grok",
-  "opencode",
-  "pi",
 ] as const;
 
 type SharedSessionSummary = {
@@ -108,9 +106,8 @@ export function normalizeSharedSessionSummaries(value: unknown): SharedSessionSu
 }
 
 /**
- * Expand Shared Hidden Binding ids so hide filters match both raw and
- * `engine:{raw}` forms (catalog uses prefixes; some bindings historically
- * stored raw session ids).
+ * Expand Shared Hidden Binding ids so hide filters match raw、`engine:{raw}`、
+ * Codex rollout stem 与 canonical uuid。路径形 id（Win 盘符 / UNC / POSIX）不补前缀。
  */
 export function expandHiddenSharedBindingIds(
   nativeThreadIds: Iterable<string>,
@@ -121,21 +118,21 @@ export function expandHiddenSharedBindingIds(
     if (!id) {
       continue;
     }
-    expanded.add(id);
+    collectSharedHideIdentityKeys(id).forEach((key) => expanded.add(key));
+    if (
+      isSharedHideFilesystemPathId(id) ||
+      hasKnownSharedEnginePrefix(id) ||
+      extractCodexCanonicalSessionId(id)
+    ) {
+      continue;
+    }
     const lower = id.toLowerCase();
     for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
-      const prefix = `${engine}:`;
-      if (lower.startsWith(prefix)) {
-        const stripped = id.slice(prefix.length).trim();
-        if (stripped) {
-          expanded.add(stripped);
-        }
-      } else if (
+      if (
         !id.includes(":") ||
         lower.startsWith(`${engine}-pending-`) ||
         lower.startsWith(`${engine}-pending-shared-`)
       ) {
-        // raw / pending placeholder → also match catalog form
         expanded.add(`${engine}:${id}`);
       }
     }
@@ -193,22 +190,16 @@ export function lookupSharedOwnerByNativeParent(
   if (!parent || nativeToShared.size === 0) {
     return null;
   }
-  const exact = nativeToShared.get(parent);
-  if (exact) {
-    return exact;
-  }
-  const colon = parent.indexOf(":");
-  if (colon > 0) {
-    const bare = parent.slice(colon + 1).trim();
-    if (bare) {
-      const byBare = nativeToShared.get(bare);
-      if (byBare) {
-        return byBare;
-      }
+  for (const key of collectSharedHideIdentityKeys(parent)) {
+    const hit = nativeToShared.get(key);
+    if (hit) {
+      return hit;
     }
+  }
+  if (isSharedHideFilesystemPathId(parent) || hasKnownSharedEnginePrefix(parent)) {
     return null;
   }
-  // bare / pending：补 engine 前缀再查
+  // bare / pending：补 engine 前缀再查（路径与已知前缀不再二次发明）
   for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
     const byPrefixed = nativeToShared.get(`${engine}:${parent}`);
     if (byPrefixed) {
@@ -312,14 +303,11 @@ export function isSharedSidebarHiddenPup(
   if (parent.startsWith("shared:")) {
     return true;
   }
-  if (hiddenParentKeys.has(parent)) {
+  if (sharedHideIdentityIntersects(parent, hiddenParentKeys)) {
     return true;
   }
-  // 与 lookupSharedOwnerByNativeParent 对称的形态变体
-  const colon = parent.indexOf(":");
-  if (colon > 0) {
-    const bare = parent.slice(colon + 1).trim();
-    return Boolean(bare && hiddenParentKeys.has(bare));
+  if (isSharedHideFilesystemPathId(parent) || hasKnownSharedEnginePrefix(parent)) {
+    return false;
   }
   for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
     if (hiddenParentKeys.has(`${engine}:${parent}`)) {

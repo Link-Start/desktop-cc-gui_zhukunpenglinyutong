@@ -28,6 +28,7 @@ import {
   selectReplacementThreadByMessageHistory,
   selectReplacementThreadByMessageHistoryDecision,
   stripHiddenSharedBindingSummaries,
+  threadIdInHiddenSharedBindingSet,
   threadIdMatchesHiddenAutomaticSessionSet,
 } from "./useThreadActions.helpers";
 
@@ -1309,6 +1310,80 @@ describe("useThreadActions.helpers", () => {
     expect(merged.map((r) => r.id)).toEqual(["codex:visible-user"]);
   });
 
+  it("strips Windows Codex rollout-stem owner rows when hide set only has the uuid", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const hidden = expandHiddenSharedBindingIds([`codex:${uuid}`]);
+    expect([...hidden].some((key) => key.startsWith("rollout-"))).toBe(false);
+
+    const input: ThreadSummary[] = [
+      {
+        id: "shared:s-codex",
+        name: "Shared Codex",
+        updatedAt: 3,
+        threadKind: "shared",
+        engineSource: "codex",
+      },
+      {
+        id: rolloutStem,
+        name: "luna 模型思考强…",
+        updatedAt: 2,
+        engineSource: "codex",
+      },
+      {
+        id: `codex:${rolloutStem}`,
+        name: "Base directory f…",
+        updatedAt: 2,
+        engineSource: "codex",
+      },
+      {
+        id: "codex:visible-user",
+        name: "User Codex",
+        updatedAt: 1,
+        engineSource: "codex",
+      },
+    ];
+    expect(stripHiddenSharedBindingSummaries(input, hidden).map((row) => row.id)).toEqual([
+      "shared:s-codex",
+      "codex:visible-user",
+    ]);
+
+    expect(threadIdInHiddenSharedBindingSet(rolloutStem, hidden)).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet(`codex:${rolloutStem}`, hidden),
+    ).toBe(true);
+
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: rolloutStem,
+          name: "Leaked owner stem",
+          updatedAt: 4,
+          engineSource: "codex",
+        },
+      ],
+      [
+        {
+          sessionId: `codex:${rolloutStem}`,
+          title: "Leaked live stem",
+          updatedAt: 20,
+          engine: "codex",
+        },
+        {
+          sessionId: "codex:visible-user",
+          title: "User Codex",
+          updatedAt: 15,
+          engine: "codex",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+      hidden,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["codex:visible-user"]);
+  });
+
   it("mergeGrok clears leaked baseline even when sessions filter empties", () => {
     const hidden = new Set(["grok:leaked-1"]);
     const baseline: ThreadSummary[] = [
@@ -1609,4 +1684,75 @@ describe("useThreadActions.helpers", () => {
     expect(merged.find((row) => row.id === "codex-1")?.updatedAt).toBe(900);
   });
 
+});
+
+describe("thread-list ingest hide prefilter", () => {
+  it("drops Codex rollout stems against a uuid-only hide set", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const hidden = expandHiddenSharedBindingIds([uuid]);
+    expect([...hidden].some((key) => key.startsWith("rollout-"))).toBe(false);
+
+    expect(threadIdInHiddenSharedBindingSet(rolloutStem, hidden)).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet(`codex:${rolloutStem}`, hidden),
+    ).toBe(true);
+    expect(threadIdInHiddenSharedBindingSet(uuid, hidden)).toBe(true);
+    expect(threadIdInHiddenSharedBindingSet(`codex:${uuid}`, hidden)).toBe(
+      true,
+    );
+    expect(
+      threadIdInHiddenSharedBindingSet("codex:visible-user", hidden),
+    ).toBe(false);
+  });
+
+  it("keeps filesystem path ids that do not intersect hide identity", () => {
+    const hidden = expandHiddenSharedBindingIds([
+      "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e",
+    ]);
+
+    expect(
+      threadIdInHiddenSharedBindingSet("S:\\AIWorker\\proj", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("\\\\?\\C:\\Users\\app", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("\\\\server\\share\\sess", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("/Users/chen/code/proj", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("/home/chen/code/proj", hidden),
+    ).toBe(false);
+  });
+
+  it("uses the sidebar-prefixed engine id as the ingest candidate", () => {
+    const hidden = expandHiddenSharedBindingIds([
+      "gemini:sess-gemini",
+      "dsh:sess-dsh",
+      "claude:sess-claude",
+      "opencode:sess-opencode",
+    ]);
+
+    expect(
+      threadIdInHiddenSharedBindingSet("gemini:sess-gemini", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("dsh:sess-dsh", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("claude:sess-claude", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("opencode:sess-opencode", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("gemini:visible", hidden),
+    ).toBe(false);
+    expect(threadIdInHiddenSharedBindingSet("sess-gemini", hidden)).toBe(
+      false,
+    );
+  });
 });
