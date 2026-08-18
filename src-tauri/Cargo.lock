@@ -555,6 +555,7 @@ dependencies = [
  "toml 0.8.2",
  "trash",
  "uuid",
+ "webview2-com",
  "which",
  "windows-sys 0.61.2",
  "zip",
