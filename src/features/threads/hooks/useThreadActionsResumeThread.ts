@@ -26,7 +26,10 @@ import {
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
-import { extractDshHistoryTokenUsage } from "../loaders/dshHistoryLoader";
+import {
+  DSH_UI_HISTORY_WINDOW,
+  extractDshHistoryTokenUsage,
+} from "../loaders/dshHistoryLoader";
 import { parseDshHistoryMessages } from "../loaders/dshHistoryParser";
 import { parsePiHistoryMessages } from "../loaders/piHistoryParser";
 import {
@@ -1679,7 +1682,9 @@ export function useThreadActionsResumeThreadForWorkspace(
               report: reportDshProgress,
               shouldContinue: isCurrentResumeRequest,
               load: () =>
-                loadDshSessionService(workspacePath, realSessionId),
+                loadDshSessionService(workspacePath, realSessionId, {
+                  limit: DSH_UI_HISTORY_WINDOW,
+                }),
               extractMessages: (payload) =>
                 (payload as { messages?: unknown }).messages ?? payload,
               parse: parseDshHistoryMessages,
@@ -1702,6 +1707,16 @@ export function useThreadActionsResumeThreadForWorkspace(
                 tokenUsage: restoredTokenUsage,
               });
             }
+            const dshWindow = staged?.result as
+              | { hasMore?: boolean; nextCursor?: string | null }
+              | null
+              | undefined;
+            dispatch({
+              type: "setThreadHistoryWindow",
+              threadId,
+              hasMore: dshWindow?.hasMore === true,
+              nextCursor: dshWindow?.nextCursor ?? null,
+            });
             dispatch({
               type: "setThreadHistoryRestoredAt",
               threadId,

@@ -165,6 +165,7 @@ mod shared_sessions {
         pub(crate) id: String,
         pub(crate) thread_id: String,
         pub(crate) title: String,
+        pub(crate) created_at: u64,
         pub(crate) updated_at: u64,
         pub(crate) selected_engine: EngineType,
         pub(crate) thread_kind: String,
@@ -184,6 +185,8 @@ mod shared_sessions {
     struct SharedSessionMetaLite {
         id: String,
         title: String,
+        #[serde(default)]
+        created_at: u64,
         updated_at: u64,
         selected_engine: EngineType,
         #[serde(default)]
@@ -279,6 +282,11 @@ mod shared_sessions {
                 id: meta.id.clone(),
                 thread_id: shared_thread_id(&meta.id),
                 title: meta.title.clone(),
+                created_at: if meta.created_at > 0 {
+                    meta.created_at
+                } else {
+                    meta.updated_at
+                },
                 updated_at: meta.updated_at,
                 selected_engine: meta.selected_engine,
                 thread_kind: "shared".to_string(),

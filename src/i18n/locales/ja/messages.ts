@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "ローカルの記録とセッション状態を読み込んでいます。",
     "restoringHistoryPrepare": "セッションを開く準備をしています…",
     "restoringHistorySession": "セッション履歴を取得しています…",
-    "restoringHistorySessionPage": "host 履歴の {{page}} / {{maxPages}} ページを取得中（このページ {{pageEvents}} 件、累計 {{totalEvents}} 件）",
+    "restoringHistorySessionPage": "host 履歴の {{page}} / {{maxPages}} ページを取得中（このページ {{pageEvents}} 件のメッセージ、累計 {{totalEvents}} 件）",
     "restoringHistoryParse": "{{count}} 件のメッセージを解析しています…",
     "restoringHistoryHydrate": "キャンバスを組み立てています（{{count}} 件）…",
     "restoringHistoryFinalize": "キャンバスの復元を完了しています…",

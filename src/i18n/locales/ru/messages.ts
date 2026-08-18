@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "Загрузка локального транскрипта и состояния сессии.",
     "restoringHistoryPrepare": "Подготовка к открытию сессии…",
     "restoringHistorySession": "Загрузка истории сессии…",
-    "restoringHistorySessionPage": "Загрузка страницы {{page}} / {{maxPages}} истории host ({{pageEvents}} на этой странице, {{totalEvents}} всего)",
+    "restoringHistorySessionPage": "Загрузка страницы {{page}} / {{maxPages}} истории host ({{pageEvents}} сообщений на этой странице, {{totalEvents}} всего)",
     "restoringHistoryParse": "Разбор {{count}} сообщений…",
     "restoringHistoryHydrate": "Сборка холста ({{count}} элементов)…",
     "restoringHistoryFinalize": "Завершение восстановления холста…",

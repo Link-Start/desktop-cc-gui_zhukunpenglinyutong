@@ -318,4 +318,33 @@ describe("createOlderHistoryRequester", () => {
     expect(harness.requester("codex:thread")).toBe(false);
     expect(harness.loadPage).not.toHaveBeenCalled();
   });
+
+  it("loads a DSH disk page with the 200-message window", async () => {
+    const dshThreadId = "dsh:session-1";
+    const harness = createHarness({
+      window: { hasMore: true, nextCursor: "161882" },
+    });
+
+    expect(harness.requester(dshThreadId)).toBe(true);
+    expect(harness.loadPage).toHaveBeenCalledWith({
+      threadId: dshThreadId,
+      workspaceId: "ws-1",
+      workspacePath: "/tmp/ws",
+      before: "161882",
+      limit: 200,
+    });
+    await vi.waitFor(() => {
+      expect(harness.actions.map((action) => action.type)).toEqual([
+        "prependThreadItems",
+        "setThreadHistoryWindow",
+      ]);
+    });
+    expect(harness.dispatched[1]).toEqual({
+      type: "setThreadHistoryWindow",
+      threadId: dshThreadId,
+      hasMore: true,
+      nextCursor: "40",
+    });
+    clearPendingOlderHistory(dshThreadId);
+  });
 });

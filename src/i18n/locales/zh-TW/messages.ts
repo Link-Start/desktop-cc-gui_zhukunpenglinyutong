@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "正在載入本機逐字稿與工作階段狀態。",
     "restoringHistoryPrepare": "準備開啟工作階段…",
     "restoringHistorySession": "正在拉取工作階段歷史…",
-    "restoringHistorySessionPage": "正在拉取 host 歷史第 {{page}} / {{maxPages}} 頁（本頁 {{pageEvents}} 條，累計 {{totalEvents}} 條）",
+    "restoringHistorySessionPage": "正在拉取 host 歷史第 {{page}} / {{maxPages}} 頁（本頁 {{pageEvents}} 則訊息，累計 {{totalEvents}} 則）",
     "restoringHistoryParse": "正在解析 {{count}} 則訊息…",
     "restoringHistoryHydrate": "正在組裝畫布（{{count}} 條）…",
     "restoringHistoryFinalize": "正在完成畫布還原…",

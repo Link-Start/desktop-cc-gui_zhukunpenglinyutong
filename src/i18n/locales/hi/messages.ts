@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "स्थानीय ट्रांसक्रिप्ट और सत्र स्थिति लोड हो रही है।",
     "restoringHistoryPrepare": "सत्र खोलने की तैयारी…",
     "restoringHistorySession": "सत्र इतिहास लाया जा रहा है…",
-    "restoringHistorySessionPage": "host इतिहास पृष्ठ {{page}} / {{maxPages}} लाया जा रहा है (इस पृष्ठ पर {{pageEvents}}, अब तक {{totalEvents}})",
+    "restoringHistorySessionPage": "host इतिहास पृष्ठ {{page}} / {{maxPages}} लाया जा रहा है (इस पृष्ठ पर {{pageEvents}} संदेश, अब तक {{totalEvents}})",
     "restoringHistoryParse": "{{count}} संदेश पार्स हो रहे हैं…",
     "restoringHistoryHydrate": "कैनवास जोड़ा जा रहा है ({{count}} आइटम)…",
     "restoringHistoryFinalize": "कैनवास पुनर्स्थापना पूरी हो रही है…",

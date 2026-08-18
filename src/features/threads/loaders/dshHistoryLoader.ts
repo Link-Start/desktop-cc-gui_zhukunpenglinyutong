@@ -7,12 +7,17 @@ import { runNativeHistoryFetchAndParse } from "../utils/runNativeHistoryOpenStag
 import { subscribeMappedDshHistoryLoadProgress } from "../utils/subscribeMappedDshHistoryLoadProgress";
 import { parseDshHistoryMessages } from "./dshHistoryParser";
 
+export const DSH_UI_HISTORY_WINDOW = 200;
+
+type DshHistoryLoadOptions = { limit?: number | null; before?: string | null };
+
 type DshHistoryLoaderOptions = {
   workspaceId: string;
   workspacePath: string | null;
   loadDshSession: (
     workspacePath: string,
     sessionId: string,
+    options?: DshHistoryLoadOptions,
   ) => Promise<unknown>;
   onProgress?: HistoryLoadingProgressListener;
 };
@@ -58,13 +63,20 @@ export function createDshHistoryLoader({
         const staged = await runNativeHistoryFetchAndParse({
           report,
           shouldContinue: () => true,
-          load: () => loadDshSession(workspacePath, sessionId),
+          load: () =>
+            loadDshSession(workspacePath, sessionId, {
+              limit: DSH_UI_HISTORY_WINDOW,
+            }),
           extractMessages: (payload) =>
             (payload as { messages?: unknown } | null)?.messages ?? payload,
           parse: parseDshHistoryMessages,
         });
         const result = staged?.result ?? null;
         const items = staged?.items ?? [];
+        const record = (result ?? {}) as {
+          hasMore?: boolean;
+          nextCursor?: string | null;
+        };
         return normalizeHistorySnapshot({
           engine: "dsh",
           workspaceId,
@@ -81,6 +93,8 @@ export function createDshHistoryLoader({
             isThinking: false,
             heartbeatPulse: null,
             historyRestoredAtMs: Date.now(),
+            historyHasMore: record.hasMore === true,
+            historyNextCursor: record.nextCursor ?? null,
           },
         });
       } finally {

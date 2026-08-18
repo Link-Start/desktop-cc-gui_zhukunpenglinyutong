@@ -82,6 +82,24 @@ describe("mapDshHistoryLoadProgressEvent", () => {
     expect(pageFour.detailParams?.page).toBe(4);
     expect(sameHistoryLoadingProgress(pageThree, pageFour)).toBe(false);
   });
+
+  it("keeps the requested page budget when the open path asked for one page", () => {
+    expect(
+      mapDshHistoryLoadProgressEvent({
+        sessionId: "sess-1",
+        pageIndex: 1,
+        maxPages: 1,
+        pageEventCount: 180,
+        totalEventCount: 180,
+        hasMore: true,
+      }).detailParams,
+    ).toEqual({
+      page: 1,
+      maxPages: 1,
+      pageEvents: 180,
+      totalEvents: 180,
+    });
+  });
 });
 
 describe("native history progress identity", () => {

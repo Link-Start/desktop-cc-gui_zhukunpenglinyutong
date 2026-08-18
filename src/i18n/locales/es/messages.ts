@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "Cargando la transcripción local y el estado de la sesión.",
     "restoringHistoryPrepare": "Preparando para abrir la sesión…",
     "restoringHistorySession": "Obteniendo el historial de la sesión…",
-    "restoringHistorySessionPage": "Obteniendo la página {{page}} / {{maxPages}} del historial del host ({{pageEvents}} en esta página, {{totalEvents}} en total)",
+    "restoringHistorySessionPage": "Obteniendo la página {{page}} / {{maxPages}} del historial del host ({{pageEvents}} mensajes en esta página, {{totalEvents}} en total)",
     "restoringHistoryParse": "Analizando {{count}} mensajes…",
     "restoringHistoryHydrate": "Ensamblando el lienzo ({{count}} elementos)…",
     "restoringHistoryFinalize": "Finalizando la restauración del lienzo…",

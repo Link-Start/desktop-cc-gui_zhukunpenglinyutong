@@ -57,7 +57,7 @@ const messages = {
     restoringHistoryPrepare: "准备打开会话…",
     restoringHistorySession: "正在拉取会话历史…",
     restoringHistorySessionPage:
-      "正在拉取 host 历史第 {{page}} / {{maxPages}} 页（本页 {{pageEvents}} 条，累计 {{totalEvents}} 条）",
+      "正在拉取 host 历史第 {{page}} / {{maxPages}} 页（本页 {{pageEvents}} 条消息，累计 {{totalEvents}} 条）",
     restoringHistoryParse: "正在解析 {{count}} 条消息…",
     restoringHistoryHydrate: "正在组装画布（{{count}} 条）…",
     restoringHistoryFinalize: "正在完成画布恢复…",

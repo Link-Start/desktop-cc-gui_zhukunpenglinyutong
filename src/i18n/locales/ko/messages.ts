@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "로컬 트랜스크립트와 세션 상태를 불러오는 중입니다.",
     "restoringHistoryPrepare": "세션을 열 준비 중…",
     "restoringHistorySession": "세션 기록을 가져오는 중…",
-    "restoringHistorySessionPage": "host 기록 {{page}} / {{maxPages}} 페이지를 가져오는 중 (이 페이지 {{pageEvents}}개, 누적 {{totalEvents}}개)",
+    "restoringHistorySessionPage": "host 기록 {{page}} / {{maxPages}} 페이지를 가져오는 중 (이 페이지 메시지 {{pageEvents}}개, 누적 {{totalEvents}}개)",
     "restoringHistoryParse": "{{count}}개 메시지를 파싱하는 중…",
     "restoringHistoryHydrate": "캔버스를 조립하는 중 ({{count}}개)…",
     "restoringHistoryFinalize": "캔버스 복원을 완료하는 중…",

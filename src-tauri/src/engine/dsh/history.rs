@@ -73,6 +73,10 @@ pub struct DshSessionLoadResult {
     pub messages: Vec<DshSessionMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<DshSessionUsage>,
+    #[serde(default)]
+    pub has_more: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_cursor: Option<String>,
 }
 
 pub async fn list_dsh_sessions(
@@ -107,8 +111,65 @@ pub async fn list_dsh_sessions(
     Ok(sessions)
 }
 
-const HISTORY_PAGE_SIZE: u32 = 200;
-const HISTORY_MAX_PAGES: usize = 40;
+pub const HISTORY_PAGE_SIZE: u32 = 200;
+pub const HISTORY_MAX_PAGES: usize = 40;
+/// UI / silent default: one host page (200 messages). Escape hatch is
+/// `limit = HISTORY_PAGE_SIZE * HISTORY_MAX_PAGES`.
+pub const DSH_UI_HISTORY_LIMIT: u32 = HISTORY_PAGE_SIZE;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DshHistoryLoadWindow {
+    pub max_pages: usize,
+    pub before_seq: Option<i64>,
+}
+
+pub fn resolve_dsh_history_load_window(
+    limit: Option<u32>,
+    before: Option<&str>,
+) -> DshHistoryLoadWindow {
+    let requested = limit.unwrap_or(DSH_UI_HISTORY_LIMIT);
+    let page_size = HISTORY_PAGE_SIZE.max(1) as usize;
+    let raw_pages = if requested == 0 {
+        1
+    } else {
+        (requested as usize + page_size - 1) / page_size
+    };
+    let max_pages = raw_pages.clamp(1, HISTORY_MAX_PAGES);
+    let before_seq = before
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i64>().ok());
+    DshHistoryLoadWindow {
+        max_pages,
+        before_seq,
+    }
+}
+
+fn first_history_event_seq(events: &[Value]) -> Option<i64> {
+    events.first().and_then(|entry| {
+        entry
+            .get("seq")
+            .or_else(|| entry.pointer("/event/seq"))
+            .and_then(Value::as_i64)
+    })
+}
+
+fn next_cursor_from_events(events: &[Value], has_more: bool) -> Option<String> {
+    if !has_more {
+        return None;
+    }
+    first_history_event_seq(events).map(|seq| seq.to_string())
+}
+
+fn folded_history_progress_count(events: &[Value]) -> u32 {
+    fold_history_events(events).len() as u32
+}
+
+struct LoadedHistoryPages {
+    events: Vec<Value>,
+    last_page: Value,
+    has_more: bool,
+}
 
 pub const DSH_HISTORY_LOAD_PROGRESS_EVENT: &str = "dsh-history-load-progress";
 
@@ -127,23 +188,37 @@ pub async fn load_dsh_session(
     client: &DshHostClient,
     session_id: &str,
 ) -> Result<DshSessionLoadResult, String> {
-    load_dsh_session_with_progress(client, session_id, None::<fn(&DshHistoryLoadProgress)>).await
+    load_dsh_session_with_options(
+        client,
+        session_id,
+        None,
+        None,
+        None::<fn(&DshHistoryLoadProgress)>,
+    )
+    .await
 }
 
-pub async fn load_dsh_session_with_progress<F>(
+pub async fn load_dsh_session_with_options<F>(
     client: &DshHostClient,
     session_id: &str,
+    limit: Option<u32>,
+    before: Option<&str>,
     mut on_progress: Option<F>,
 ) -> Result<DshSessionLoadResult, String>
 where
     F: FnMut(&DshHistoryLoadProgress),
 {
     let session_id = session_id_from_thread(session_id);
-    let (events, last_page) =
-        load_history_pages(client, &session_id, on_progress.as_mut()).await?;
-    let messages = fold_history_events(&events);
-    let usage = usage_from_history_page(&last_page);
-    Ok(DshSessionLoadResult { messages, usage })
+    let window = resolve_dsh_history_load_window(limit, before);
+    let loaded = load_history_pages(client, &session_id, window, on_progress.as_mut()).await?;
+    let messages = fold_history_events(&loaded.events);
+    let usage = usage_from_history_page(&loaded.last_page);
+    Ok(DshSessionLoadResult {
+        messages,
+        usage,
+        has_more: loaded.has_more,
+        next_cursor: next_cursor_from_events(&loaded.events, loaded.has_more),
+    })
 }
 
 fn emit_history_load_progress<F>(
@@ -160,28 +235,32 @@ fn emit_history_load_progress<F>(
 async fn load_history_pages<F>(
     client: &DshHostClient,
     session_id: &str,
+    window: DshHistoryLoadWindow,
     mut on_progress: Option<&mut F>,
-) -> Result<(Vec<Value>, Value), String>
+) -> Result<LoadedHistoryPages, String>
 where
     F: FnMut(&DshHistoryLoadProgress),
 {
     let mut collected = Vec::new();
-    let mut before_seq = None;
+    let mut before_seq = window.before_seq;
     let mut last_page = Value::Null;
+    let mut result_has_more = false;
+    let mut folded_total = 0u32;
+    let max_pages = window.max_pages.max(1);
     emit_history_load_progress(
         &mut on_progress,
         DshHistoryLoadProgress {
             session_id: session_id.to_string(),
             page_index: 0,
-            max_pages: HISTORY_MAX_PAGES as u32,
+            max_pages: max_pages as u32,
             page_event_count: 0,
             total_event_count: 0,
             has_more: true,
         },
     );
-    for page_index in 0..HISTORY_MAX_PAGES {
+    for page_index in 0..max_pages {
         let page = session::history(client, session_id, Some(HISTORY_PAGE_SIZE), before_seq).await?;
-        // Projections (usage etc.) only exist on the tail page.
+        // Projections (usage etc.) only exist on the newest page of a tail fetch.
         if page_index == 0 {
             last_page = page.clone();
         }
@@ -190,31 +269,26 @@ where
             .and_then(Value::as_array)
             .cloned()
             .unwrap_or_default();
-        let next_before = events
-            .first()
-            .and_then(|entry| {
-                entry
-                    .get("seq")
-                    .or_else(|| entry.pointer("/event/seq"))
-                    .and_then(Value::as_i64)
-            });
-        let page_event_count = events.len() as u32;
+        let next_before = first_history_event_seq(&events);
+        let folded_page_count = folded_history_progress_count(&events);
         if events.is_empty() {
             emit_history_load_progress(
                 &mut on_progress,
                 DshHistoryLoadProgress {
                     session_id: session_id.to_string(),
                     page_index: (page_index as u32) + 1,
-                    max_pages: HISTORY_MAX_PAGES as u32,
+                    max_pages: max_pages as u32,
                     page_event_count: 0,
-                    total_event_count: collected.len() as u32,
+                    total_event_count: folded_total,
                     has_more: false,
                 },
             );
+            result_has_more = false;
             break;
         }
         collected.splice(0..0, events);
-        let has_more = page
+        folded_total = folded_total.saturating_add(folded_page_count);
+        let host_has_more = page
             .get("hasMore")
             .and_then(Value::as_bool)
             .unwrap_or(false);
@@ -223,21 +297,32 @@ where
             DshHistoryLoadProgress {
                 session_id: session_id.to_string(),
                 page_index: (page_index as u32) + 1,
-                max_pages: HISTORY_MAX_PAGES as u32,
-                page_event_count,
-                total_event_count: collected.len() as u32,
-                has_more,
+                max_pages: max_pages as u32,
+                page_event_count: folded_page_count,
+                total_event_count: folded_total,
+                has_more: host_has_more,
             },
         );
-        if !has_more {
+        if !host_has_more {
+            result_has_more = false;
             break;
         }
         match next_before {
-            Some(seq) if before_seq != Some(seq) => before_seq = Some(seq),
-            _ => break,
+            Some(seq) if before_seq != Some(seq) => {
+                before_seq = Some(seq);
+                result_has_more = true;
+            }
+            _ => {
+                result_has_more = false;
+                break;
+            }
         }
     }
-    Ok((collected, last_page))
+    Ok(LoadedHistoryPages {
+        events: collected,
+        last_page,
+        has_more: result_has_more,
+    })
 }
 
 pub async fn archive_dsh_session(client: &DshHostClient, session_id: &str) -> Result<(), String> {
@@ -1071,5 +1156,86 @@ mod tests {
     #[test]
     fn history_page_without_projections_is_none() {
         assert!(usage_from_history_page(&json!({ "events": [] })).is_none());
+    }
+
+    #[test]
+    fn default_limit_is_one_host_page() {
+        let window = resolve_dsh_history_load_window(None, None);
+        assert_eq!(window.max_pages, 1);
+        assert_eq!(window.before_seq, None);
+    }
+
+    #[test]
+    fn limit_maps_to_host_pages_and_clamps() {
+        assert_eq!(
+            resolve_dsh_history_load_window(Some(200), None).max_pages,
+            1
+        );
+        assert_eq!(
+            resolve_dsh_history_load_window(Some(201), None).max_pages,
+            2
+        );
+        assert_eq!(resolve_dsh_history_load_window(Some(0), None).max_pages, 1);
+        assert_eq!(
+            resolve_dsh_history_load_window(Some(8000), None).max_pages,
+            HISTORY_MAX_PAGES
+        );
+    }
+
+    #[test]
+    fn before_parses_seq_and_rejects_garbage() {
+        assert_eq!(
+            resolve_dsh_history_load_window(Some(200), Some("161882")).before_seq,
+            Some(161882)
+        );
+        assert_eq!(
+            resolve_dsh_history_load_window(None, Some("  ")).before_seq,
+            None
+        );
+        assert_eq!(
+            resolve_dsh_history_load_window(None, Some("abc")).before_seq,
+            None
+        );
+    }
+
+    #[test]
+    fn next_cursor_is_oldest_seq_only_when_has_more() {
+        let events = vec![json!({ "seq": 10 }), json!({ "seq": 20 })];
+        assert_eq!(
+            next_cursor_from_events(&events, true).as_deref(),
+            Some("10")
+        );
+        assert_eq!(next_cursor_from_events(&events, false), None);
+        assert_eq!(
+            next_cursor_from_events(&[json!({ "event": { "seq": 7 } })], true).as_deref(),
+            Some("7")
+        );
+    }
+
+    #[test]
+    fn progress_count_uses_folded_messages_not_raw_events() {
+        let events = vec![
+            json!({ "event": { "type": "user/message", "data": { "text": "hi" } } }),
+            json!({
+                "event": {
+                    "type": "assistant/chunk",
+                    "data": { "chunk": { "type": "text-delta", "text": "a" } }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "assistant/chunk",
+                    "data": { "chunk": { "type": "text-delta", "text": "b" } }
+                }
+            }),
+            json!({
+                "event": {
+                    "type": "turn/end",
+                    "data": { "reason": { "kind": "completed" } }
+                }
+            }),
+        ];
+        assert_eq!(events.len(), 4);
+        assert_eq!(folded_history_progress_count(&events), 2);
     }
 }

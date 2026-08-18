@@ -568,6 +568,7 @@ describe("useThreads sidebar cache", () => {
       expect(vi.mocked(loadDshSession)).toHaveBeenCalledWith(
         "/tmp/codex",
         "session-history",
+        { limit: 200 },
       );
     });
     expect(

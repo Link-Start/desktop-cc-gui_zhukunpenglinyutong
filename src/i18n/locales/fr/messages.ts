@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "Chargement de la transcription locale et de l'état de la session.",
     "restoringHistoryPrepare": "Préparation de l'ouverture de la session…",
     "restoringHistorySession": "Récupération de l'historique de la session…",
-    "restoringHistorySessionPage": "Récupération de la page {{page}} / {{maxPages}} de l'historique host ({{pageEvents}} sur cette page, {{totalEvents}} au total)",
+    "restoringHistorySessionPage": "Récupération de la page {{page}} / {{maxPages}} de l'historique host ({{pageEvents}} messages sur cette page, {{totalEvents}} au total)",
     "restoringHistoryParse": "Analyse de {{count}} messages…",
     "restoringHistoryHydrate": "Assemblage du canevas ({{count}} éléments)…",
     "restoringHistoryFinalize": "Finalisation de la restauration du canevas…",

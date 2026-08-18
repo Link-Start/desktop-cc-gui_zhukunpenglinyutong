@@ -502,11 +502,19 @@ export async function listDshSessions(workspacePath: string, limit?: number | nu
 
 /**
  * Load DSH session history. Does not resume the agent.
+ * `limit` is a folded-message budget (default 200 = one host page).
+ * `before` continues from a previous `nextCursor`.
  */
-export async function loadDshSession(workspacePath: string, sessionId: string): Promise<Record<string, unknown> | null> {
+export async function loadDshSession(
+  workspacePath: string,
+  sessionId: string,
+  options?: { limit?: number | null; before?: string | null },
+): Promise<Record<string, unknown> | null> {
   return invoke<Record<string, unknown> | null>("load_dsh_session", {
     workspacePath,
     sessionId,
+    limit: options?.limit ?? null,
+    before: options?.before ?? null,
   });
 }
 

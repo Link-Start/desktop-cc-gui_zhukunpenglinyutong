@@ -60,7 +60,7 @@ const messages = {
     restoringHistoryPrepare: "Preparing to open the session…",
     restoringHistorySession: "Fetching session history…",
     restoringHistorySessionPage:
-      "Fetching host history page {{page}} / {{maxPages}} ({{pageEvents}} on this page, {{totalEvents}} so far)",
+      "Fetching host history page {{page}} / {{maxPages}} ({{pageEvents}} messages on this page, {{totalEvents}} so far)",
     restoringHistoryParse: "Parsing {{count}} messages…",
     restoringHistoryHydrate: "Assembling the canvas ({{count}} items)…",
     restoringHistoryFinalize: "Finishing canvas restore…",

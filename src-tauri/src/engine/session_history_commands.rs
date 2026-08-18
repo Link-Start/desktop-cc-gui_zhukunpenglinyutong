@@ -615,10 +615,14 @@ pub async fn list_dsh_sessions(
 }
 
 /// Load DSH session history. Does not resume the agent.
+/// `limit` is a folded-message budget (default 200 = one host page).
+/// `before` is the previous page's `nextCursor` (`beforeSeq`).
 #[tauri::command]
 pub async fn load_dsh_session(
     workspace_path: String,
     session_id: String,
+    limit: Option<u32>,
+    before: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -628,7 +632,12 @@ pub async fn load_dsh_session(
             &*state,
             app,
             "load_dsh_session",
-            json!({ "workspacePath": workspace_path, "sessionId": session_id }),
+            json!({
+                "workspacePath": workspace_path,
+                "sessionId": session_id,
+                "limit": limit,
+                "before": before,
+            }),
         )
         .await;
     }
@@ -637,9 +646,11 @@ pub async fn load_dsh_session(
     let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
     let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
     let app_handle = app.clone();
-    let result = crate::engine::dsh::history::load_dsh_session_with_progress(
+    let result = crate::engine::dsh::history::load_dsh_session_with_options(
         &client,
         &session_id,
+        limit,
+        before.as_deref(),
         Some(move |progress: &crate::engine::dsh::history::DshHistoryLoadProgress| {
             if let Err(error) = app_handle.emit(
                 crate::engine::dsh::history::DSH_HISTORY_LOAD_PROGRESS_EVENT,

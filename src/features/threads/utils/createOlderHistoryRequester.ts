@@ -1,5 +1,4 @@
 import type { ConversationItem } from "../../../types";
-import { CLAUDE_UI_HISTORY_WINDOW } from "../loaders/claudeHistoryLoader";
 import {
   hasPendingOlderHistory,
   takeAllRemainingOlderHistory,
@@ -8,9 +7,12 @@ import {
 import type { OlderHistoryRequestOptions } from "./olderHistoryRequestBridge";
 import { notifyOlderHistoryBeforePrepend } from "./olderHistoryScrollRestoreBridge";
 import {
-  loadClaudeOlderHistoryPage,
-  type LoadClaudeOlderHistoryPageResult,
-} from "./loadClaudeOlderHistoryPage";
+  loadRegisteredOlderHistoryPage,
+  resolveOlderHistoryDiskEngine,
+  resolveOlderHistoryDiskLimit,
+  type LoadOlderHistoryPageInput,
+  type LoadOlderHistoryPageResult,
+} from "./olderHistoryPage";
 
 export type OlderHistoryWindowState = {
   hasMore: boolean;
@@ -47,8 +49,8 @@ export type OlderHistoryRequesterDeps = {
   getDiskPageEpoch: (threadId: string) => number;
   inFlightByThread: Map<string, OlderHistoryInFlight>;
   loadPage?: (
-    input: Parameters<typeof loadClaudeOlderHistoryPage>[0],
-  ) => Promise<LoadClaudeOlderHistoryPageResult>;
+    input: LoadOlderHistoryPageInput,
+  ) => Promise<LoadOlderHistoryPageResult>;
   notifyBeforePrepend?: (
     threadId: string,
     detail?: { prependedCount: number },
@@ -83,7 +85,7 @@ function resolveWindowAfterMemoryDrain(
 export function createOlderHistoryRequester(
   deps: OlderHistoryRequesterDeps,
 ): (threadId: string, options?: OlderHistoryRequestOptions) => boolean {
-  const loadPage = deps.loadPage ?? loadClaudeOlderHistoryPage;
+  const loadPage = deps.loadPage ?? loadRegisteredOlderHistoryPage;
   const notifyBeforePrepend =
     deps.notifyBeforePrepend ?? notifyOlderHistoryBeforePrepend;
 
@@ -124,7 +126,8 @@ export function createOlderHistoryRequester(
       return false;
     }
 
-    if (!threadId.startsWith("claude:")) {
+    const diskEngine = resolveOlderHistoryDiskEngine(threadId);
+    if (!diskEngine) {
       return false;
     }
 
@@ -149,7 +152,7 @@ export function createOlderHistoryRequester(
           workspaceId: workspace.workspaceId,
           workspacePath: workspace.workspacePath,
           before: cursor,
-          limit: CLAUDE_UI_HISTORY_WINDOW,
+          limit: resolveOlderHistoryDiskLimit(diskEngine),
         });
         if (deps.getDiskPageEpoch(threadId) !== epoch) {
           return;

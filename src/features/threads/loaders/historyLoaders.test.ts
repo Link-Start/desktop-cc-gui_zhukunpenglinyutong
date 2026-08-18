@@ -736,6 +736,8 @@ describe("history loaders", () => {
     const snapshot = await loader.load("kimi:session-1");
     expect(snapshot.engine).toBe("kimi");
     expect(snapshot.threadId).toBe("kimi:session-1");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toHaveLength(3);
     expect(snapshot.items[0]).toEqual(
       expect.objectContaining({
@@ -772,42 +774,48 @@ describe("history loaders", () => {
   });
 
   it("loads dsh history into normalized snapshot", async () => {
+    const loadDshSession = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "dsh-user-1",
+          kind: "message",
+          role: "user",
+          text: "hello",
+        },
+        {
+          id: "dsh-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "hi",
+        },
+        {
+          id: "dsh-tool-1",
+          kind: "tool",
+          title: "Grep",
+          toolInput: { pattern: "foo" },
+        },
+        {
+          id: "dsh-tool-1",
+          kind: "tool",
+          title: "Grep",
+          toolOutput: "3 matches",
+        },
+      ],
+    });
     const loader = createDshHistoryLoader({
       workspaceId: "ws-dsh",
       workspacePath: "/tmp/workspace",
-      loadDshSession: vi.fn().mockResolvedValue({
-        messages: [
-          {
-            id: "dsh-user-1",
-            kind: "message",
-            role: "user",
-            text: "hello",
-          },
-          {
-            id: "dsh-assistant-1",
-            kind: "message",
-            role: "assistant",
-            text: "hi",
-          },
-          {
-            id: "dsh-tool-1",
-            kind: "tool",
-            title: "Grep",
-            toolInput: { pattern: "foo" },
-          },
-          {
-            id: "dsh-tool-1",
-            kind: "tool",
-            title: "Grep",
-            toolOutput: "3 matches",
-          },
-        ],
-      }),
+      loadDshSession,
     });
 
     const snapshot = await loader.load("dsh:session-1");
+    expect(loadDshSession).toHaveBeenCalledWith("/tmp/workspace", "session-1", {
+      limit: 200,
+    });
     expect(snapshot.engine).toBe("dsh");
     expect(snapshot.threadId).toBe("dsh:session-1");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toHaveLength(3);
     expect(snapshot.items[0]).toEqual(
       expect.objectContaining({
@@ -828,6 +836,34 @@ describe("history loaders", () => {
         output: "3 matches",
       }),
     );
+  });
+
+  it("writes DSH hasMore and nextCursor from the tail payload", async () => {
+    const loadDshSession = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "dsh-user-1",
+          kind: "message",
+          role: "user",
+          text: "hello",
+        },
+      ],
+      hasMore: true,
+      nextCursor: "161682",
+    });
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession,
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(loadDshSession).toHaveBeenCalledWith("/tmp/workspace", "session-1", {
+      limit: 200,
+    });
+    expect(snapshot.meta.historyHasMore).toBe(true);
+    expect(snapshot.meta.historyNextCursor).toBe("161682");
+    expect(snapshot.items).toHaveLength(1);
   });
 
   it("hydrates dsh token usage and sessionStats from history", async () => {
@@ -915,18 +951,22 @@ describe("history loaders", () => {
 
     const pending = loader.load("dsh:session-1");
     await vi.waitFor(() => {
-      expect(loadDshSession).toHaveBeenCalled();
+      expect(loadDshSession).toHaveBeenCalledWith(
+        "/tmp/workspace",
+        "session-1",
+        { limit: 200 },
+      );
     });
     expect(deliverPage).toBeTypeOf("function");
     deliverPage?.({
       sessionId: "session-1",
-      pageIndex: 3,
-      maxPages: 40,
-      pageEventCount: 200,
-      totalEventCount: 600,
+      pageIndex: 1,
+      maxPages: 1,
+      pageEventCount: 180,
+      totalEventCount: 180,
       hasMore: true,
     });
-    expect(reports.some((entry) => entry.startsWith("restoringHistorySessionPage:3"))).toBe(
+    expect(reports.some((entry) => entry.startsWith("restoringHistorySessionPage:1"))).toBe(
       true,
     );
 
@@ -978,6 +1018,8 @@ describe("history loaders", () => {
     );
     expect(snapshot.engine).toBe("pi");
     expect(snapshot.threadId).toBe("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toEqual([
       expect.objectContaining({
         kind: "message",
@@ -1048,6 +1090,8 @@ describe("history loaders", () => {
     const snapshot = await loader.load("grok:session-1");
     expect(snapshot.engine).toBe("grok");
     expect(snapshot.threadId).toBe("grok:session-1");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toHaveLength(3);
     expect(snapshot.items[0]).toEqual(
       expect.objectContaining({

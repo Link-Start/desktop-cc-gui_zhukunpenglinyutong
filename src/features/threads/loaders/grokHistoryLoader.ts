@@ -70,6 +70,8 @@ export function createGrokHistoryLoader({
           isThinking: false,
           heartbeatPulse: null,
           historyRestoredAtMs: Date.now(),
+          historyHasMore: false,
+          historyNextCursor: null,
         },
       });
     },

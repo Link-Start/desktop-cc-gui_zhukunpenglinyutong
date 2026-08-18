@@ -62,7 +62,7 @@ const messages = {
     "restoringHistoryHint": "Carregando a transcrição local e o estado da sessão.",
     "restoringHistoryPrepare": "Preparando para abrir a sessão…",
     "restoringHistorySession": "Buscando o histórico da sessão…",
-    "restoringHistorySessionPage": "Buscando a página {{page}} / {{maxPages}} do histórico do host ({{pageEvents}} nesta página, {{totalEvents}} até agora)",
+    "restoringHistorySessionPage": "Buscando a página {{page}} / {{maxPages}} do histórico do host ({{pageEvents}} mensagens nesta página, {{totalEvents}} até agora)",
     "restoringHistoryParse": "Analisando {{count}} mensagens…",
     "restoringHistoryHydrate": "Montando o canvas ({{count}} itens)…",
     "restoringHistoryFinalize": "Concluindo a restauração do canvas…",
