@@ -8,8 +8,8 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use super::store::{
-    load_backfill_state, mark_source_synced, normalize_path_key, save_backfill_state,
-    source_is_fresh, upsert_rows, BackfillState, SessionIndexRow,
+    invalidate_source_freshness, load_backfill_state, mark_source_synced, normalize_path_key,
+    save_backfill_state, source_is_fresh, upsert_rows, BackfillState, SessionIndexRow,
 };
 use crate::engine::claude_history::encode_project_path;
 
@@ -942,8 +942,22 @@ pub(crate) fn commit_engine_rows(
         engine,
         normalize_path_key(&workspace_path.to_string_lossy())
     );
+    let is_partial = partial_source.is_some();
+    if is_partial && rows.is_empty() {
+        invalidate_source_freshness(connection, &source_key)?;
+        return Ok(WriterResult {
+            upserted: 0,
+            engines: vec![engine],
+            partial_source,
+            skipped_fresh: false,
+        });
+    }
     let upserted = upsert_rows(connection, &rows)?;
-    mark_source_synced(connection, &source_key, fingerprint, rows.len())?;
+    if is_partial {
+        invalidate_source_freshness(connection, &source_key)?;
+    } else {
+        mark_source_synced(connection, &source_key, fingerprint, rows.len())?;
+    }
     Ok(WriterResult {
         upserted,
         engines: vec![engine],
@@ -1350,6 +1364,63 @@ mod tests {
             .expect("invalidate");
         assert!(
             !engine_source_is_fresh(&connection, "pi", workspace, "fp-a").expect("invalidated")
+        );
+    }
+
+    #[test]
+    fn commit_engine_rows_timeout_does_not_wipe_or_mark_fresh() {
+        let connection = Connection::open_in_memory().expect("db");
+        connection
+            .execute_batch(super::super::store::DDL)
+            .expect("ddl");
+        let workspace = Path::new(r"C:\Users\me\proj");
+        let existing = SessionIndexRow {
+            engine: "grok".into(),
+            session_id: "grok-keep".into(),
+            title: "keep".into(),
+            native_title: None,
+            updated_at: 200,
+            created_at: None,
+            cwd: Some(r"C:\Users\me\proj".into()),
+            workspace_path: Some(r"C:\Users\me\proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        };
+        upsert_rows(&connection, &[existing]).expect("seed");
+        mark_source_synced(
+            &connection,
+            "grok:c:/users/me/proj",
+            "fp-ok",
+            1,
+        )
+        .expect("mark");
+        assert!(engine_source_is_fresh(&connection, "grok", workspace, "fp-ok").expect("fresh"));
+
+        let result = commit_engine_rows(
+            &connection,
+            "grok",
+            workspace,
+            Vec::new(),
+            "fp-ok",
+            Some("grok-sync-timeout".into()),
+        )
+        .expect("timeout commit");
+        assert_eq!(result.upserted, 0);
+        assert_eq!(result.partial_source.as_deref(), Some("grok-sync-timeout"));
+        assert!(
+            !engine_source_is_fresh(&connection, "grok", workspace, "fp-ok")
+                .expect("must not stay fresh")
+        );
+        let listed = super::super::store::list_for_workspace_path(
+            &connection,
+            r"C:\Users\me\proj",
+            10,
+        )
+        .expect("list");
+        assert!(
+            listed.iter().any(|row| row.session_id == "grok-keep"),
+            "timeout empty commit must not wipe indexed grok rows: {listed:?}"
         );
     }
 }

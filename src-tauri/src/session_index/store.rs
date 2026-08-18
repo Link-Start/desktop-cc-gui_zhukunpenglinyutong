@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-const DDL: &str = r#"
+pub(crate) const DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS session_index (
   engine TEXT NOT NULL,
   session_id TEXT NOT NULL,
@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS session_index_sources (
   fingerprint TEXT NOT NULL,
   last_sync_ms INTEGER NOT NULL,
   row_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS session_index_backfill (
+  source_key TEXT PRIMARY KEY,
+  cursor TEXT NOT NULL DEFAULT '',
+  complete INTEGER NOT NULL DEFAULT 0,
+  updated_ms INTEGER NOT NULL
 );
 "#;
 
@@ -140,11 +147,43 @@ pub(crate) fn normalize_path_key(path: &str) -> String {
         return String::new();
     }
     let mut normalized = trimmed.replace('\\', "/");
-    while normalized.len() > 1 && normalized.ends_with('/') {
+
+    // Windows extended-length prefixes after slash unification:
+    // \\?\C:\foo → //?/C:/foo → C:/foo
+    // \\?\UNC\server\share → //?/UNC/server/share → //server/share
+    if let Some(rest) = normalized.strip_prefix("//?/UNC/") {
+        normalized = format!("//{rest}");
+    } else if let Some(rest) = normalized.strip_prefix("//?/") {
+        normalized = rest.to_string();
+    }
+
+    while should_strip_trailing_slash(&normalized) {
         normalized.pop();
     }
-    // Case-fold on Windows-style paths is left to comparison helper.
+
+    if is_windows_style_path(&normalized) {
+        normalized.make_ascii_lowercase();
+    }
     normalized
+}
+
+fn should_strip_trailing_slash(path: &str) -> bool {
+    if path.len() <= 1 || !path.ends_with('/') {
+        return false;
+    }
+    // Keep drive roots such as C:/
+    if path.len() == 3 && path.as_bytes()[1] == b':' {
+        return false;
+    }
+    path != "//"
+}
+
+fn is_windows_style_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
+        return true;
+    }
+    path.starts_with("//")
 }
 
 pub(crate) fn paths_equivalent(left: &str, right: &str) -> bool {
@@ -156,14 +195,10 @@ pub(crate) fn paths_equivalent(left: &str, right: &str) -> bool {
     if left == right {
         return true;
     }
-    #[cfg(windows)]
-    {
+    if is_windows_style_path(&left) && is_windows_style_path(&right) {
         return left.eq_ignore_ascii_case(&right);
     }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+    false
 }
 
 pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> Result<usize, String> {
@@ -325,8 +360,21 @@ pub(crate) fn workspace_index_sources_invalidated(
     Ok(count > 0)
 }
 
+pub(crate) fn invalidate_source_freshness(
+    connection: &Connection,
+    source_key: &str,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "UPDATE session_index_sources SET last_sync_ms = 0 WHERE source_key = ?1",
+            [source_key],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 const INDEX_LIST_ENGINES: &[&str] = &[
-    "claude", "codex", "gemini", "grok", "kimi", "opencode", "pi",
+    "claude", "codex", "gemini", "grok", "kimi", "opencode", "pi", "dsh",
 ];
 
 fn list_slice_for_workspace_engine(
@@ -355,6 +403,81 @@ fn list_slice_for_workspace_engine(
     Ok(rows)
 }
 
+fn row_matches_workspace(row: &SessionIndexRow, key: &str) -> bool {
+    row.workspace_path
+        .as_deref()
+        .is_some_and(|value| paths_equivalent(value, key))
+        || row
+            .cwd
+            .as_deref()
+            .is_some_and(|value| paths_equivalent(value, key))
+}
+
+fn row_is_before_cursor(row: &SessionIndexRow, before: Option<&(i64, String)>) -> bool {
+    let Some((before_updated, before_id)) = before else {
+        return true;
+    };
+    row.updated_at < *before_updated
+        || (row.updated_at == *before_updated && row.session_id.as_str() > before_id.as_str())
+}
+
+/// Scan recent Index rows and fold in path-equivalent matches.
+/// Read-only: never rewrites workspace_path. Always run — not only when
+/// the exact-key page is empty — so a non-empty Claude page still surfaces
+/// Grok/PI written under a drifted Windows key.
+fn merge_equivalent_workspace_rows(
+    connection: &Connection,
+    key: &str,
+    limit: usize,
+    existing: &mut std::collections::HashSet<(String, String)>,
+    rows: &mut Vec<SessionIndexRow>,
+    before: Option<(i64, String)>,
+) -> Result<(), String> {
+    let scan_limit = (limit.saturating_mul(20).max(100)) as i64;
+    let mut fallback = connection
+        .prepare(
+            "SELECT engine, session_id, title, native_title, updated_at, created_at,
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes
+             FROM session_index
+             WHERE tombstoned_at IS NULL
+             ORDER BY updated_at DESC, session_id ASC
+             LIMIT ?1",
+        )
+        .map_err(|error| error.to_string())?;
+    let recent = fallback
+        .query_map(params![scan_limit], map_row)
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let mut per_engine: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for row in rows.iter() {
+        *per_engine.entry(row.engine.clone()).or_insert(0) += 1;
+    }
+    for row in recent {
+        if !row_matches_workspace(&row, key) {
+            continue;
+        }
+        if !row_is_before_cursor(&row, before.as_ref()) {
+            continue;
+        }
+        if !INDEX_LIST_ENGINES.contains(&row.engine.as_str()) {
+            continue;
+        }
+        let identity = (row.engine.clone(), row.session_id.clone());
+        if !existing.insert(identity) {
+            continue;
+        }
+        let count = per_engine.entry(row.engine.clone()).or_insert(0);
+        if *count >= limit {
+            continue;
+        }
+        *count += 1;
+        rows.push(row);
+    }
+    Ok(())
+}
+
 pub(crate) fn list_for_workspace_path(
     connection: &Connection,
     workspace_path: &str,
@@ -378,51 +501,7 @@ pub(crate) fn list_for_workspace_path(
         }
     }
 
-    if rows.is_empty() {
-        // Fallback: scan a larger recent window and path-equivalent filter.
-        let mut fallback = connection
-            .prepare(
-                "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                        cwd, workspace_path, physical_path, parent_session_id, size_bytes
-                 FROM session_index
-                 WHERE tombstoned_at IS NULL
-                 ORDER BY updated_at DESC, session_id ASC
-                 LIMIT ?1",
-            )
-            .map_err(|error| error.to_string())?;
-        let recent = fallback
-            .query_map(params![(limit.saturating_mul(20).max(100)) as i64], map_row)
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        let mut per_engine: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
-        for row in recent {
-            let matches = row
-                .workspace_path
-                .as_deref()
-                .map(|value| paths_equivalent(value, &key))
-                .unwrap_or(false)
-                || row
-                    .cwd
-                    .as_deref()
-                    .map(|value| paths_equivalent(value, &key))
-                    .unwrap_or(false);
-            if !matches {
-                continue;
-            }
-            let identity = (row.engine.clone(), row.session_id.clone());
-            if !existing.insert(identity) {
-                continue;
-            }
-            let count = per_engine.entry(row.engine.clone()).or_insert(0);
-            if *count >= limit {
-                continue;
-            }
-            *count += 1;
-            rows.push(row);
-        }
-    }
+    merge_equivalent_workspace_rows(connection, &key, limit, &mut existing, &mut rows, None)?;
     rows.sort_by(|left, right| {
         right
             .updated_at
@@ -443,8 +522,6 @@ pub(crate) fn list_for_workspace_path_before(
     if key.is_empty() {
         return Ok(Vec::new());
     }
-    // Prefer exact workspace_path / cwd match in SQL; post-filter with
-    // paths_equivalent for Windows case folding edge cases.
     let fetch_limit = (limit.saturating_add(1)) as i64;
     let mut statement = connection
         .prepare(
@@ -476,62 +553,31 @@ pub(crate) fn list_for_workspace_path_before(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
 
-    if rows.len() < limit {
-        // Fallback: scan a larger recent window and path-equivalent filter.
-        // Handles path normalization mismatches (trailing slash, case).
-        let mut fallback = connection
-            .prepare(
-                "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                        cwd, workspace_path, physical_path, parent_session_id, size_bytes
-                 FROM session_index
-                 WHERE tombstoned_at IS NULL
-                 ORDER BY updated_at DESC, session_id ASC
-                 LIMIT ?1",
-            )
-            .map_err(|error| error.to_string())?;
-        let recent = fallback
-            .query_map(params![(limit.saturating_mul(20).max(100)) as i64], map_row)
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        let existing: std::collections::HashSet<(String, String)> = rows
-            .iter()
-            .map(|row| (row.engine.clone(), row.session_id.clone()))
-            .collect();
-        for row in recent {
-            if rows.len() >= limit {
-                break;
-            }
-            let matches = row
-                .workspace_path
-                .as_deref()
-                .map(|value| paths_equivalent(value, &key))
-                .unwrap_or(false)
-                || row
-                    .cwd
-                    .as_deref()
-                    .map(|value| paths_equivalent(value, &key))
-                    .unwrap_or(false);
-            if !matches {
-                continue;
-            }
-            if existing.contains(&(row.engine.clone(), row.session_id.clone())) {
-                continue;
-            }
-            rows.push(row);
-        }
-        rows.sort_by(|left, right| {
-            right
-                .updated_at
-                .cmp(&left.updated_at)
-                .then_with(|| left.session_id.cmp(&right.session_id))
-        });
-        rows.truncate(limit);
-    }
+    let mut existing: std::collections::HashSet<(String, String)> = rows
+        .iter()
+        .map(|row| (row.engine.clone(), row.session_id.clone()))
+        .collect();
+    merge_equivalent_workspace_rows(
+        connection,
+        &key,
+        limit,
+        &mut existing,
+        &mut rows,
+        before,
+    )?;
+    rows.sort_by(|left, right| {
+        right
+            .updated_at
+            .cmp(&left.updated_at)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
+    rows.truncate(limit);
     Ok(rows)
 }
 
 /// Count all non-tombstoned rows matching a workspace (any engine).
+/// Includes path-equivalent keys so has_more does not drop Grok on a drifted
+/// Windows path while Claude sits on the current key.
 pub(crate) fn count_for_workspace_path(
     connection: &Connection,
     workspace_path: &str,
@@ -540,15 +586,33 @@ pub(crate) fn count_for_workspace_path(
     if key.is_empty() {
         return Ok(0);
     }
-    connection
-        .query_row(
-            "SELECT COUNT(*) FROM session_index
-             WHERE (workspace_path = ?1 OR cwd = ?1)
-               AND tombstoned_at IS NULL",
-            params![key],
-            |row| row.get(0),
+    let mut statement = connection
+        .prepare(
+            "SELECT cwd, workspace_path FROM session_index WHERE tombstoned_at IS NULL",
         )
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    let mapped = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+    let mut count = 0i64;
+    for item in mapped {
+        let (cwd, workspace) = item.map_err(|error| error.to_string())?;
+        let matches = workspace
+            .as_deref()
+            .is_some_and(|value| paths_equivalent(value, &key))
+            || cwd
+                .as_deref()
+                .is_some_and(|value| paths_equivalent(value, &key));
+        if matches {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 /// Persisted incremental-backfill state for one `{engine}:{workspace_path}`.
@@ -866,6 +930,161 @@ mod tests {
         assert!(
             workspace_index_sources_invalidated(&connection, "/tmp/proj")
                 .expect("stale after PI send")
+        );
+    }
+
+    #[test]
+    fn normalize_path_key_folds_windows_drive_and_extended_prefix() {
+        assert_eq!(
+            normalize_path_key(r"C:\Users\me\proj"),
+            "c:/users/me/proj"
+        );
+        assert_eq!(
+            normalize_path_key(r"c:\Users\me\proj\"),
+            "c:/users/me/proj"
+        );
+        assert_eq!(
+            normalize_path_key(r"\\?\C:\Users\me\proj"),
+            "c:/users/me/proj"
+        );
+        assert_eq!(
+            normalize_path_key(r"\\?\UNC\server\share\proj"),
+            "//server/share/proj"
+        );
+        assert_eq!(normalize_path_key("C:/"), "c:/");
+        assert!(paths_equivalent(
+            r"C:\Users\me\proj",
+            r"\\?\c:\Users\me\proj\"
+        ));
+        assert!(paths_equivalent(
+            r"\\server\share\proj",
+            r"\\?\UNC\SERVER\share\proj\"
+        ));
+        assert!(!paths_equivalent("/tmp/proj", "/tmp/other"));
+    }
+
+    fn index_row_at(
+        engine: &str,
+        session_id: &str,
+        updated_at: i64,
+        workspace_path: &str,
+    ) -> SessionIndexRow {
+        SessionIndexRow {
+            engine: engine.into(),
+            session_id: session_id.into(),
+            title: session_id.into(),
+            native_title: None,
+            updated_at,
+            created_at: None,
+            cwd: Some(workspace_path.into()),
+            workspace_path: Some(workspace_path.into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        }
+    }
+
+    #[test]
+    fn list_always_merges_equivalent_keys_when_claude_page_is_nonempty() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        upsert_rows(
+            &connection,
+            &[
+                index_row_at("claude", "claude-b", 200, "C:/Users/me/proj"),
+                index_row_at("grok", "grok-a", 150, r"c:\Users\me\proj"),
+                index_row_at("pi", "pi-a", 140, r"\\?\C:\Users\me\proj"),
+                index_row_at("dsh", "dsh-a", 130, "C:/Users/me/proj"),
+            ],
+        )
+        .expect("upsert");
+        let listed = list_for_workspace_path(&connection, r"C:\Users\me\proj", 10).expect("list");
+        let engines: Vec<_> = listed.iter().map(|row| row.engine.as_str()).collect();
+        assert!(engines.contains(&"claude"), "{engines:?}");
+        assert!(engines.contains(&"grok"), "{engines:?}");
+        assert!(engines.contains(&"pi"), "{engines:?}");
+        assert!(engines.contains(&"dsh"), "{engines:?}");
+        assert_eq!(count_for_workspace_path(&connection, r"C:\Users\me\proj").expect("count"), 4);
+    }
+
+    #[test]
+    fn keyset_list_includes_equivalent_grok_and_dsh() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        upsert_rows(
+            &connection,
+            &[
+                index_row_at("claude", "claude-new", 300, "C:/Users/me/proj"),
+                index_row_at("grok", "grok-old", 100, r"c:\Users\me\proj"),
+                index_row_at("dsh", "dsh-old", 90, r"\\?\C:\Users\me\proj"),
+            ],
+        )
+        .expect("upsert");
+        let page = list_for_workspace_path_before(
+            &connection,
+            r"C:\Users\me\proj",
+            10,
+            Some((300, "claude-new".into())),
+        )
+        .expect("keyset");
+        assert!(page.iter().any(|row| row.session_id == "grok-old"));
+        assert!(page.iter().any(|row| row.session_id == "dsh-old"));
+    }
+
+    #[test]
+    fn engine_table_sentinel_keeps_sync_backfill_list_and_timeout_aligned() {
+        let store = include_str!("store.rs");
+        let writers = include_str!("writers.rs");
+        let commands = include_str!("commands.rs");
+        let required = [
+            "claude", "codex", "gemini", "grok", "kimi", "opencode", "pi", "dsh",
+        ];
+        let engine_table = store
+            .split("const INDEX_LIST_ENGINES")
+            .nth(1)
+            .and_then(|rest| rest.split(';').next())
+            .expect("INDEX_LIST_ENGINES table missing");
+        for engine in required {
+            assert!(
+                engine_table.contains(&format!("\"{engine}\"")),
+                "INDEX_LIST_ENGINES missing {engine}"
+            );
+        }
+        for writer in [
+            "sync_claude_for_workspace",
+            "sync_codex_for_workspace",
+            "sync_kimi_for_workspace",
+            "rows_from_gemini_summaries",
+            "rows_from_grok_summaries",
+            "rows_from_pi_summaries",
+            "rows_from_dsh_summaries",
+            "rows_from_opencode_entries",
+        ] {
+            assert!(writers.contains(writer), "writers.rs missing {writer}");
+        }
+        for command in [
+            "sync_claude_for_workspace",
+            "sync_codex_for_workspace",
+            "sync_kimi_for_workspace",
+            "sync_opencode_engine",
+            "list_gemini_sessions",
+            "list_grok_sessions",
+            "list_pi_sessions",
+            "list_dsh_sessions",
+        ] {
+            assert!(commands.contains(command), "commands.rs missing {command}");
+        }
+        assert!(
+            commands.contains("SKIP_BACKFILL: opencode"),
+            "OpenCode must declare SKIP_BACKFILL"
+        );
+        assert!(
+            commands.contains("const ASYNC_ENGINE_LIST_TIMEOUT"),
+            "async timeout contract missing"
+        );
+        assert!(
+            commands.contains("Duration::from_secs(3)"),
+            "async engine list timeout must stay 3s"
         );
     }
 }

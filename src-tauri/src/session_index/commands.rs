@@ -638,7 +638,7 @@ fn merge_backfill(
 }
 
 /// One bounded historical-backfill batch per engine for a workspace.
-/// OpenCode has no durable disk index (soft-empty) and is intentionally skipped.
+/// SKIP_BACKFILL: opencode — no durable disk index (soft-empty); only light sync.
 pub(crate) async fn backfill_session_index_core(
     state: &AppState,
     workspace_id: &str,
