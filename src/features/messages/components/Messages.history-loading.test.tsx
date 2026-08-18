@@ -59,6 +59,44 @@ describe("Messages history loading", () => {
     expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeTruthy();
   });
 
+  it("does not block Shared canvas on leftover projection progress after V0 items are visible", () => {
+    render(
+      <Messages
+        items={[
+          {
+            id: "v0-user",
+            kind: "message",
+            role: "user",
+            text: "already painted from V0",
+          },
+        ]}
+        threadId="shared:session-phase-a"
+        workspaceId="ws-1"
+        isThinking={false}
+        isHistoryLoading={false}
+        historyLoadingProgress={{
+          phase: "projection",
+          percent: 58,
+          titleKey: "restoringSharedHistory",
+          detailKey: "restoringSharedHistoryProjection",
+        }}
+        activeEngine="claude"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("already painted from V0")).toBeTruthy();
+    expect(screen.queryByText("messages.restoringSharedHistory")).toBeNull();
+    expect(
+      screen.queryByText("messages.restoringSharedHistoryProjection"),
+    ).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeNull();
+    expect(screen.queryByText("messages.emptyThread")).toBeNull();
+  });
+
   it("shows Shared restore phase copy and determinate progress", () => {
     render(
       <Messages

@@ -464,6 +464,37 @@ describe("sharedHistoryLoader", () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
+  it("notifies Phase-A ready before a hanging projection resolves", async () => {
+    const onPhaseAReady = vi.fn();
+    let resolveProjection: (value: unknown[]) => void = () => undefined;
+    const projectionPromise = new Promise<unknown[]>((resolve) => {
+      resolveProjection = resolve;
+    });
+    const loader = createSharedHistoryLoader({
+      workspaceId: "ws-1",
+      loadSharedSession: vi.fn().mockResolvedValue({
+        selectedEngine: "claude",
+        items: [{ id: "legacy", kind: "message", role: "user", text: "v0" }],
+      }),
+      loadSharedProjection: vi.fn().mockReturnValue(projectionPromise),
+      projectionTimeoutMs: 10_000,
+      onPhaseAReady,
+    });
+
+    const loadPromise = loader.load("shared:phase-a");
+    await vi.waitFor(() => {
+      expect(onPhaseAReady).toHaveBeenCalledTimes(1);
+    });
+    const phaseA = onPhaseAReady.mock.calls[0]?.[0] as {
+      items: Array<{ id?: string; text?: string }>;
+    };
+    expect(phaseA.items[0]).toMatchObject({ id: "legacy", text: "v0" });
+
+    resolveProjection([]);
+    const snapshot = await loadPromise;
+    expect(snapshot.items[0]).toMatchObject({ id: "legacy", text: "v0" });
+  });
+
   it("returns V0 immediately when projection soft-times out and merges later", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     let resolveProjection: (value: unknown[]) => void = () => undefined;

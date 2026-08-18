@@ -37,7 +37,7 @@
 
 - [x] 5.1 分析文链到 OpenSpec change
 - [x] 5.2 design/specs 按对抗 review 修正（lookup 为主，channel 为增强）
-- [ ] 5.3 `openspec validate fix-live-settle-assistant-tool-order --strict`
+- [x] 5.3 `openspec validate fix-live-settle-assistant-tool-order --strict`
 - [ ] 5.4 P0 手测：Shared Claude + Native Claude
 
 ## 6. 非目标自检

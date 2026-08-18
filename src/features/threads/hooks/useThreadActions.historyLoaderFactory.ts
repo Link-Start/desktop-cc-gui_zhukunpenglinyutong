@@ -31,6 +31,7 @@ export function createThreadHistoryLoaderForThread({
   preferLocalCodexHistory,
   onHistoryProgress,
   projectionTimeoutMs,
+  onSharedPhaseAReady,
   onSharedProjectionMerged,
 }: {
   targetThreadId: string;
@@ -40,6 +41,11 @@ export function createThreadHistoryLoaderForThread({
   onHistoryProgress?: HistoryLoadingProgressListener;
   /** Shared projection soft-timeout (ms); see sharedHistoryLoader. */
   projectionTimeoutMs?: number;
+  /**
+   * Shared only: V0 session snapshot is ready. Caller hydrates and clears
+   * the blocking history-loading curtain without waiting for projection.
+   */
+  onSharedPhaseAReady?: (snapshot: NormalizedHistorySnapshot) => void;
   /**
    * Shared only: projection finished after Phase-A V0 returned (soft-timeout path).
    * Caller applies with resume-generation / live-turn guards.
@@ -53,6 +59,7 @@ export function createThreadHistoryLoaderForThread({
       loadSharedProjection: loadSharedProjectionService,
       onProgress: onHistoryProgress,
       projectionTimeoutMs,
+      onPhaseAReady: onSharedPhaseAReady,
       onProjectionMerged: onSharedProjectionMerged,
     });
   }

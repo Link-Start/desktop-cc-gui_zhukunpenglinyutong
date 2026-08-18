@@ -107,6 +107,7 @@ type ResumeThreadForWorkspaceContext = UseThreadActionsOptions & {
     Record<string, ThreadSummary[]>
   >;
   setThreadHistoryRecoveryFailed: (threadId: string, failed: boolean) => void;
+  setThreadHistoryLoading?: (threadId: string, isLoading: boolean) => void;
   setThreadHistoryLoadingProgress?: (
     threadId: string,
     progress: HistoryLoadingProgress | null,
@@ -150,6 +151,7 @@ export function useThreadActionsResumeThreadForWorkspace(
     latestThreadsByWorkspaceRef,
     previousThreadsByWorkspaceRef,
     setThreadHistoryRecoveryFailed: rawSetThreadHistoryRecoveryFailed,
+    setThreadHistoryLoading,
     setThreadHistoryLoadingProgress,
   } = deps;
   const resumeRequestGenerationByScopeRef = useRef<Record<string, number>>({});
@@ -488,6 +490,27 @@ export function useThreadActionsResumeThreadForWorkspace(
                   setThreadHistoryLoadingProgress(targetThreadId, progress);
                 }
               : undefined,
+            onSharedPhaseAReady: (phaseASnapshot) => {
+              // V0 is enough to paint. Drop the blocking curtain before
+              // projection starts or times out (D1). Empty V0 must not
+              // hydrate during Phase-A — wait for the open path to finish
+              // so we do not mark loaded before projection settles.
+              if (!isCurrentResumeRequest()) {
+                return;
+              }
+              void (async () => {
+                if (phaseASnapshot.items.length > 0) {
+                  await hydrateHistorySnapshot(
+                    targetThreadId,
+                    phaseASnapshot,
+                  );
+                }
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoading?.(targetThreadId, false);
+              })();
+            },
             onSharedProjectionMerged: (mergedSnapshot) => {
               // Recovery「已解锁」与 history projection 解耦：后台 merge 不得挡发送。
               // 仅在仍是本次 resume 且线程未在跑 live turn 时应用。
@@ -1822,6 +1845,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       useUnifiedHistoryLoader,
       workspacePathsByIdRef,
       rawSetThreadHistoryRecoveryFailed,
+      setThreadHistoryLoading,
       setThreadHistoryLoadingProgress,
     ],
   );

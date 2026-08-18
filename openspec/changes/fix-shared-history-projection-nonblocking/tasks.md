@@ -18,7 +18,7 @@
 - [x] 3.1 `sharedHistoryLoader`（或调用方）单测：V0 先 ready、projection 慢/失败保留 V0
 - [x] 3.2 projection 成功迟到：merge 后 items 符合既有 merge 权威
 - [x] 3.3 `useThreadActions` shared-history 测试：loading 在 V0 后清除
-- [ ] 3.4 Messages history-loading：Shared 不再因 projection phase 整页阻塞（如有契约测试则更新）
+- [x] 3.4 Messages history-loading：Shared 不再因 projection phase 整页阻塞（如有契约测试则更新）
 
 ## 4. 可选 P1（同 PR 或 follow-up）
 
