@@ -149,6 +149,8 @@ vi.mock("../../git/components/WorkspaceEditableDiffReviewSurface", () => ({
 vi.mock("../../../services/clientStorage", () => ({
   getClientStoreSync: vi.fn(),
   writeClientStoreValue: vi.fn(),
+  isClientStoreReady: vi.fn(() => true),
+  whenClientStoreReady: vi.fn(async () => undefined),
 }));
 
 vi.mock("../../../services/tauri", () => ({
@@ -2367,6 +2369,112 @@ describe("GitHistoryPanel interactions", () => {
         topic: "optimize",
         reviewers: "alice,bob",
         cc: "carol",
+      });
+    });
+    expect(clientStorage.writeClientStoreValue).toHaveBeenCalledWith(
+      "layout",
+      "gitPushTargetHistory:w1",
+      [
+        {
+          remote: "origin",
+          branch: "cxn/feat-003",
+          pushToGerrit: true,
+          topic: "optimize",
+          reviewers: "alice,bob",
+          cc: "carol",
+          pushTags: false,
+          runHooks: false,
+          forceWithLease: false,
+        },
+      ],
+    );
+  });
+
+  it("restores recent push settings from history chips", async () => {
+    vi.mocked(clientStorage.getClientStoreSync).mockImplementation(
+      (_store, key) => {
+        if (key === "gitPushTargetHistory:w1") {
+          return [
+            {
+              remote: "upstream",
+              branch: "chore/bump-version-0.9.1",
+              pushToGerrit: true,
+              topic: "optimize",
+              reviewers: "alice",
+              cc: "carol",
+              pushTags: false,
+              runHooks: true,
+              forceWithLease: false,
+            },
+            {
+              remote: "origin",
+              branch: "main",
+              pushToGerrit: false,
+              topic: "",
+              reviewers: "",
+              cc: "",
+              pushTags: false,
+              runHooks: true,
+              forceWithLease: false,
+            },
+          ];
+        }
+        return undefined;
+      },
+    );
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("feat: one")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("git.push"));
+
+    await waitFor(() => {
+      expect(screen.getByText("git.historyPushDialogRecentLabel")).toBeTruthy();
+    });
+
+    const targetBranchInput = screen.getByLabelText(
+      "git.historyPushDialogTargetBranchLabel",
+    ) as HTMLInputElement;
+    expect(targetBranchInput.value).toBe("chore/bump-version-0.9.1");
+    expect(screen.getByLabelText("git.historyPushDialogRemoteLabel").textContent).toContain(
+      "upstream",
+    );
+    expect(screen.getByLabelText("git.historyPushDialogTopicLabel")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "origin → main" }));
+
+    await waitFor(() => {
+      expect(targetBranchInput.value).toBe("main");
+    });
+    expect(screen.getByLabelText("git.historyPushDialogRemoteLabel").textContent).toContain(
+      "origin",
+    );
+    expect(screen.queryByLabelText("git.historyPushDialogTopicLabel")).toBeNull();
+
+    const pushDialog = document.querySelector(".git-history-push-dialog");
+    const confirmPushButton = Array.from(
+      pushDialog?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+    ).find((node) => node.textContent?.trim() === "git.push");
+    expect(confirmPushButton).toBeTruthy();
+    await waitFor(() => {
+      expect(confirmPushButton?.disabled).toBe(false);
+    });
+    fireEvent.click(confirmPushButton as HTMLElement);
+
+    await waitFor(() => {
+      expect(tauriService.pushGit).toHaveBeenCalledWith("w1", {
+        remote: "origin",
+        branch: "main",
+        forceWithLease: false,
+        pushTags: false,
+        runHooks: true,
+        pushToGerrit: false,
+        topic: null,
+        reviewers: null,
+        cc: null,
       });
     });
   });

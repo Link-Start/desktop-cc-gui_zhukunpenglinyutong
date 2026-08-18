@@ -307,6 +307,8 @@ const git = {
     "historyPushDialogPushTags": "टैग push करें",
     "historyPushDialogRunHooks": "Git hooks चलाएँ",
     "historyPushDialogForceWithLease": "Force with lease",
+    "historyPushDialogRecentLabel": "हाल के पुश",
+    "historyPushDialogRecentGerrit": "Gerrit",
     "historyCreatePr": "PR",
     "historyCreatePrDialogTitle": "Pull Request बनाएँ",
     "historyCreatePrDialogSubtitle": "पैरामीटर की पुष्टि करें, फिर precheck, push, PR निर्माण और वैकल्पिक अनुमोदन टिप्पणी चलाएँ।",

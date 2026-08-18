@@ -4,6 +4,7 @@ import {
 } from "./GitOperationTokens";
 import { resolveGitPullExplanation } from "../utils/gitPullExplanation";
 import type { GitHistoryPanelViewScope } from "./GitHistoryPanelImpl";
+import { isPushTargetHistoryMatch } from "../utils/pushTargetHistory";
 
 const SYNC_COMMAND_TOKENS: GitOperationToken[] = [
   { kind: "command", value: "git pull" },
@@ -73,6 +74,8 @@ export function renderGitHistoryPanelDialogs(scope: GitHistoryPanelViewScope) {
     handleSelectPullTargetBranch,
     handleSelectPushRemote,
     handleSelectPushTargetBranch,
+    handleSelectPushHistory,
+    History,
     isHistoryDiffModalMaximized,
     localizeKnownGitError,
     onCreateCodeAnnotation,
@@ -142,6 +145,7 @@ export function renderGitHistoryPanelDialogs(scope: GitHistoryPanelViewScope) {
     pushTargetBranchMenuRef,
     pushTargetBranchPickerRef,
     pushTargetBranchTrimmed,
+    pushTargetHistory,
     pushTargetSummaryBranch,
     pushToGerrit,
     pushTopic,
@@ -1300,6 +1304,54 @@ export function renderGitHistoryPanelDialogs(scope: GitHistoryPanelViewScope) {
                 )
               : null}
             <div className="git-history-push-section git-history-push-section-controls">
+              {pushTargetHistory.length > 0 ? (
+                <div className="git-history-push-recent">
+                  <span className="git-history-push-field-label">
+                    <History size={12} />
+                    {t("git.historyPushDialogRecentLabel")}
+                  </span>
+                  <div
+                    className="git-history-push-recent-list"
+                    role="group"
+                    aria-label={t("git.historyPushDialogRecentLabel")}
+                  >
+                    {pushTargetHistory.map((entry) => {
+                      const isActive = isPushTargetHistoryMatch(entry, {
+                        remote: pushRemoteTrimmed,
+                        branch: pushTargetBranchTrimmed,
+                        pushToGerrit,
+                      });
+                      return (
+                        <button
+                          key={`${entry.remote}:${entry.branch}:${entry.pushToGerrit ? "gerrit" : "plain"}`}
+                          type="button"
+                          className={`git-history-push-recent-item${isActive ? " is-active" : ""}`}
+                          aria-label={`${entry.remote} → ${entry.branch}`}
+                          aria-pressed={isActive}
+                          disabled={pushSubmitting}
+                          title={`${entry.remote} → ${entry.branch}`}
+                          onClick={() => handleSelectPushHistory(entry)}
+                        >
+                          <span className="git-history-push-recent-item-remote">
+                            {entry.remote}
+                          </span>
+                          <span className="git-history-push-recent-item-separator">
+                            →
+                          </span>
+                          <span className="git-history-push-recent-item-branch">
+                            {entry.branch}
+                          </span>
+                          {entry.pushToGerrit ? (
+                            <span className="git-history-push-recent-item-badge">
+                              {t("git.historyPushDialogRecentGerrit")}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <div className="git-history-push-grid">
                 <div className="git-history-create-branch-field">
                   <span className="git-history-push-field-label">

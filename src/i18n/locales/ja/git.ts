@@ -307,6 +307,8 @@ const git = {
     "historyPushDialogPushTags": "タグをプッシュ",
     "historyPushDialogRunHooks": "Git フックを実行",
     "historyPushDialogForceWithLease": "Force with lease",
+    "historyPushDialogRecentLabel": "最近のプッシュ",
+    "historyPushDialogRecentGerrit": "Gerrit",
     "historyCreatePr": "PR",
     "historyCreatePrDialogTitle": "プルリクエストを作成",
     "historyCreatePrDialogSubtitle": "パラメータを確認してから、プリチェック、プッシュ、PR 作成、および任意の承認コメントを実行します。",

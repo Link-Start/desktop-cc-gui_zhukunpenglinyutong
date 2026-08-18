@@ -30,6 +30,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import Download from "lucide-react/dist/esm/icons/download";
+import History from "lucide-react/dist/esm/icons/history";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
@@ -243,6 +244,7 @@ import {
   getSpecialBranchBadges,
   type FileTreeItem,
 } from "../utils/gitHistoryPanelSharedUtils";
+import type { GitPushTargetHistoryEntry } from "../utils/pushTargetHistory";
 
 export { getDefaultColumnWidths } from "./GitHistoryPanelImplHelpers";
 
@@ -444,6 +446,7 @@ export type GitHistoryPanelInteractionScope = {
   pushRunHooks: boolean;
   pushTags: boolean;
   pushTargetBranchTrimmed: string;
+  pushTargetHistory: GitPushTargetHistoryEntry[];
   pushToGerrit: boolean;
   pushTopic: string;
   rebaseGitBranch: (
@@ -553,6 +556,7 @@ export type GitHistoryPanelInteractionScope = {
   setPushTargetBranchMenuOpen: Dispatch<SetStateAction<boolean>>;
   setPushTargetBranchMenuPlacement: Dispatch<SetStateAction<"down" | "up">>;
   setPushTargetBranchQuery: Dispatch<SetStateAction<string>>;
+  setPushTargetHistory: Dispatch<SetStateAction<GitPushTargetHistoryEntry[]>>;
   setPushToGerrit: Dispatch<SetStateAction<boolean>>;
   setPushTopic: Dispatch<SetStateAction<string>>;
   setRefreshDialogOpen: Dispatch<SetStateAction<boolean>>;
@@ -684,6 +688,7 @@ export type GitHistoryPanelViewScope = {
   GitMerge: LucideIcon;
   GitPullRequestCreate: LucideIcon;
   HardDrive: LucideIcon;
+  History: LucideIcon;
   LayoutGrid: LucideIcon;
   LoaderCircle: LucideIcon;
   MessageSquareText: LucideIcon;
@@ -875,6 +880,7 @@ export type GitHistoryPanelViewScope = {
   handleSelectPullTargetBranch: GitHistoryPanelInteractionResult["handleSelectPullTargetBranch"];
   handleSelectPushRemote: GitHistoryPanelInteractionResult["handleSelectPushRemote"];
   handleSelectPushTargetBranch: GitHistoryPanelInteractionResult["handleSelectPushTargetBranch"];
+  handleSelectPushHistory: GitHistoryPanelInteractionResult["handleSelectPushHistory"];
   handleSelectWorktreeDiffFile: (
     branch: string,
     compareBranch: string,
@@ -990,6 +996,7 @@ export type GitHistoryPanelViewScope = {
   pushTargetBranchMenuRef: RefObject<HTMLDivElement | null>;
   pushTargetBranchPickerRef: RefObject<HTMLDivElement | null>;
   pushTargetBranchTrimmed: string;
+  pushTargetHistory: GitPushTargetHistoryEntry[];
   pushTargetSummaryBranch: string;
   pushToGerrit: boolean;
   pushTopic: string;
@@ -1656,6 +1663,9 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
   const [pushTopic, setPushTopic] = useState("");
   const [pushReviewers, setPushReviewers] = useState("");
   const [pushCc, setPushCc] = useState("");
+  const [pushTargetHistory, setPushTargetHistory] = useState<
+    GitPushTargetHistoryEntry[]
+  >([]);
   const [pushRemoteMenuOpen, setPushRemoteMenuOpen] = useState(false);
   const [pushRemoteMenuPlacement, setPushRemoteMenuPlacement] = useState<
     "down" | "up"
@@ -3945,6 +3955,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     handleConfirmRefresh,
     handleSelectPushRemote,
     handleSelectPushTargetBranch,
+    handleSelectPushHistory,
     handleOpenPushDialog,
     handleConfirmPush,
     handleDeleteBranch,
@@ -4103,6 +4114,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     pushRunHooks,
     pushTags,
     pushTargetBranchTrimmed,
+    pushTargetHistory,
     pushToGerrit,
     pushTopic,
     rebaseGitBranch,
@@ -4198,6 +4210,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     setPushTargetBranchMenuOpen,
     setPushTargetBranchMenuPlacement,
     setPushTargetBranchQuery,
+    setPushTargetHistory,
     setPushToGerrit,
     setPushTopic,
     setRefreshDialogOpen,
@@ -4524,6 +4537,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     GitMerge,
     GitPullRequestCreate,
     HardDrive,
+    History,
     LayoutGrid,
     LoaderCircle,
     MessageSquareText,
@@ -4686,6 +4700,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     handleSelectPullTargetBranch,
     handleSelectPushRemote,
     handleSelectPushTargetBranch,
+    handleSelectPushHistory,
     handleSelectWorktreeDiffFile,
     handleToggleLocalScope,
     handleToggleRemoteScope,
@@ -4785,6 +4800,7 @@ export const GitHistoryPanel = memo(function GitHistoryPanel({
     pushTargetBranchMenuRef,
     pushTargetBranchPickerRef,
     pushTargetBranchTrimmed,
+    pushTargetHistory,
     pushTargetSummaryBranch,
     pushToGerrit,
     pushTopic,
