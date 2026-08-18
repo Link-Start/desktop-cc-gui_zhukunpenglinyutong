@@ -142,7 +142,6 @@ export function FirstRunFluidBackdrop({
       data-testid="first-run-fluid"
       data-scheme={dark ? "dark" : "light"}
       data-motion={motionId}
-      data-animate={forceAnimate ? "true" : "false"}
       data-attached={attached ? "true" : "false"}
     >
       <canvas ref={canvasRef} className="first-run-fluid-canvas" />

@@ -35,7 +35,6 @@ export function WorkspaceWallpaperHost() {
   const [hydrated, setHydrated] = useState(false);
   const [customFailed, setCustomFailed] = useState(false);
   const [fluidAttached, setFluidAttached] = useState(false);
-  // WebView2-only: Mac already had working frost + reduced-motion + eager chase.
   const windowsFluidCompat = isWindowsPlatform();
 
   useEffect(() => {
@@ -75,9 +74,6 @@ export function WorkspaceWallpaperHost() {
     setCustomFailed(false);
   }, [wallpaper.customImagePath, wallpaper.mode]);
 
-  // The data attribute gates the whole wallpaper CSS sheet. Mac punches
-  // through as soon as mode is fluid. Windows waits for a live canvas so
-  // a black WebGL clear cannot empty the chrome.
   const wallpaperActive =
     mode === "custom" ||
     (mode === "fluid" && (!windowsFluidCompat || fluidAttached));
@@ -120,11 +116,6 @@ export function WorkspaceWallpaperHost() {
       aria-hidden
       data-testid="workspace-wallpaper"
       data-mode={mode}
-      data-motion={
-        mode === "fluid"
-          ? (wallpaper.fluidMotion ?? DEFAULT_WORKSPACE_FLUID_MOTION)
-          : undefined
-      }
     >
       {mode === "fluid" ? (
         <FirstRunFluidBackdrop

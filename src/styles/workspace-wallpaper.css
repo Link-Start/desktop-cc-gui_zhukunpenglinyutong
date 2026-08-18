@@ -44,9 +44,7 @@
     saturate(1.2);
 }
 
-/* WebView2 + backdrop-filter over a WebGL canvas composites to a black
- * slab, which then punches through chrome as "lost styles". Keep the
- * wash; drop the blur on Windows only. */
+/* WebView2: blur over WebGL composites black. */
 :root[data-platform="windows"] .workspace-wallpaper::after {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;

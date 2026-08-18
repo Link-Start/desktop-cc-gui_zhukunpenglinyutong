@@ -92,7 +92,6 @@ describe("FirstRunFluidBackdrop", () => {
       forceAnimate: true,
       deferChase: true,
     });
-    expect(screen.getByTestId("first-run-fluid").dataset.animate).toBe("true");
   });
 
   it("keeps first-run speed and drift unless workspace overrides them", () => {

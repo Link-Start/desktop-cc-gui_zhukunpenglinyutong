@@ -1078,8 +1078,6 @@ export function attachFluidShader(
     setParams: (next: FluidParams) => {
       current = { ...next };
       ensureDisplay(clampFluidMotionMode(next.motionMode));
-      // Chip switches must repaint even when the RAF loop is stopped
-      // (reduced-motion, or a WebView2 loop that died after the first frame).
       previous = 0;
       draw(performance.now());
       startLoop();

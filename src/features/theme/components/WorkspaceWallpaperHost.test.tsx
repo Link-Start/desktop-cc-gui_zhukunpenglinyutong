@@ -105,9 +105,7 @@ describe("WorkspaceWallpaperHost", () => {
     });
     expect(screen.getByTestId("first-run-fluid")).not.toBeNull();
     expect(screen.getByTestId("first-run-fluid").dataset.animate).toBe("false");
-    expect(screen.getByTestId("workspace-wallpaper").dataset.motion).toBe(
-      "drift",
-    );
+    expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe("drift");
     await waitFor(() => {
       expect(document.documentElement.dataset.workspaceWallpaper).toBe("fluid");
     });
@@ -123,11 +121,10 @@ describe("WorkspaceWallpaperHost", () => {
     });
     render(<WorkspaceWallpaperHost />);
     await waitFor(() => {
-      expect(screen.getByTestId("workspace-wallpaper").dataset.motion).toBe(
+      expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe(
         "tornado",
       );
     });
-    expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe("tornado");
   });
 
   it("does not mount a wallpaper layer when mode is none", async () => {
