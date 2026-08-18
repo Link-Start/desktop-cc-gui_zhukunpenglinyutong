@@ -200,3 +200,31 @@ jsonl 打开失败、单行超 cap、扫描行数耗尽尚未 EOF，系统 MUST 
 - **AND** jsonl 打开失败或扫描未到 EOF
 - **WHEN** prune 运行
 - **THEN** 系统 MUST 跳过该行
+
+### Requirement: Sidebar MUST hide placeholder native drafts immediately
+
+侧栏 Session Index 投影 MUST 立即隐藏占位标题的空 native 草稿，不必等 10 分钟 prune。这是列表投影规则，MUST NOT 替代、削弱或绕过磁盘 prune：满 10 分钟后仍按既有三闸门删盘 + tombstone。
+
+隐藏范围与 prune 占位标题对齐：`{engine} session` / `{Engine} Session` / `DeepSeek Harness Session`。用户自定义标题、真实提问标题、Shared、以及 `{engine}-pending-{millis}-{nonce}` 本地乐观草稿 MUST 仍可见。
+
+#### Scenario: In-grace DSH placeholder is hidden from the sidebar
+
+- **GIVEN** 一条 DSH Index 行标题为 `dsh session` 或 `DeepSeek Harness Session`
+- **AND** 没有用户自定义标题
+- **AND** 年龄尚未满 10 分钟
+- **WHEN** 侧栏投影 Session Index
+- **THEN** 该行 MUST NOT 出现在左侧会话列表
+- **AND** 系统 MUST NOT 因此删除磁盘或提前 tombstone
+
+#### Scenario: In-grace Grok / Claude / Codex placeholders are hidden from the sidebar
+
+- **GIVEN** Index 行标题为 `grok session` / `claude session` / `codex session`
+- **AND** 没有用户自定义标题
+- **WHEN** 侧栏投影 Session Index
+- **THEN** 这些行 MUST NOT 出现在左侧会话列表
+
+#### Scenario: Custom-named or real-titled sessions stay visible
+
+- **GIVEN** 用户把标题改成非占位名，或 Index 标题已是真实提问
+- **WHEN** 侧栏投影 Session Index
+- **THEN** 该行 MUST 仍出现在左侧会话列表

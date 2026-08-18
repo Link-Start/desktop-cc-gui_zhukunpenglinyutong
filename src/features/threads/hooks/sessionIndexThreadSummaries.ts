@@ -14,13 +14,45 @@ import {
 } from "../utils/threadSummarySort";
 
 const GENERIC_EMPTY_SESSION_TITLE =
-  /^(?:claude|codex) session(?:\s+[a-f0-9-]{4,40})?$/i;
+  /^(?:(?:claude|codex|gemini|grok|kimi|pi|opencode|dsh) session(?:\s+[a-f0-9-]{4,40})?|deepseek harness session)$/i;
 
-/** Index fallback for empty Claude / Codex transcripts. Live list never emits these titles. */
+const PLACEHOLDER_DRAFT_ENGINES = new Set([
+  "claude",
+  "codex",
+  "gemini",
+  "grok",
+  "kimi",
+  "pi",
+  "opencode",
+  "dsh",
+]);
+
+/** Index fallback for empty native transcripts. Live list never emits these titles. */
 export function isEmptyNativeIndexFallbackTitle(
   value: string | null | undefined,
 ): boolean {
   return GENERIC_EMPTY_SESSION_TITLE.test(String(value ?? "").trim());
+}
+
+export function shouldHidePlaceholderNativeDraftFromSidebar(params: {
+  engine: string | null | undefined;
+  threadId: string;
+  displayName: string;
+  hasCustomName?: boolean;
+}): boolean {
+  const engine = String(params.engine ?? "")
+    .trim()
+    .toLowerCase();
+  if (!PLACEHOLDER_DRAFT_ENGINES.has(engine)) {
+    return false;
+  }
+  if (params.hasCustomName) {
+    return false;
+  }
+  if (isLocalPendingDraftThreadId(engine, params.threadId)) {
+    return false;
+  }
+  return isEmptyNativeIndexFallbackTitle(params.displayName);
 }
 
 export function isEmptyClaudeIndexFallbackTitle(
@@ -156,10 +188,12 @@ export function sessionIndexRowsToThreadSummaries(
       nativeTitle ||
       (title ? previewThreadName(title, fallback) : fallback);
     if (
-      (engine === "claude" || engine === "codex") &&
-      !customName &&
-      isEmptyNativeIndexFallbackTitle(name) &&
-      !isLocalPendingDraftThreadId(engine, id)
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine,
+        threadId: id,
+        displayName: name,
+        hasCustomName: Boolean(customName),
+      })
     ) {
       continue;
     }
@@ -243,7 +277,7 @@ export function mergeSessionIndexRowsIntoSummaries(
   return Array.from(byId.values()).sort(compareThreadSummariesByCreatedAtDesc);
 }
 
-/** last-good / early-paint 不得把 Index 已丢掉的空 Claude / Codex Session 救回来。 */
+/** last-good / early-paint 不得把 Index 已丢掉的空 native Session 救回来。 */
 export function stripEmptyClaudeIndexFallbackSummaries(
   summaries: ThreadSummary[],
 ): ThreadSummary[] {
@@ -256,13 +290,18 @@ export function stripEmptyClaudeIndexFallbackSummaries(
       return true;
     }
     const engine = summary.engineSource;
-    if (engine !== "claude" && engine !== "codex") {
-      return true;
-    }
     if (isLocalPendingDraftThreadId(engine, summary.id)) {
       return true;
     }
-    if (!isEmptyNativeIndexFallbackSummary(summary)) {
+    const hidePlaceholder = shouldHidePlaceholderNativeDraftFromSidebar({
+      engine,
+      threadId: summary.id,
+      displayName: summary.name,
+    });
+    const hideLegacyClaudeCodex =
+      (engine === "claude" || engine === "codex") &&
+      isEmptyNativeIndexFallbackSummary(summary);
+    if (!hidePlaceholder && !hideLegacyClaudeCodex) {
       return true;
     }
     changed = true;

@@ -22,8 +22,7 @@ import {
 import { remapThreadParentsToSharedOwners } from "../../shared-session/runtime/sharedSessionSummaries";
 import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
 import {
-  isEmptyNativeIndexFallbackTitle,
-  isLocalPendingDraftThreadId,
+  shouldHidePlaceholderNativeDraftFromSidebar,
   stripEmptyClaudeIndexFallbackSummaries,
 } from "./sessionIndexThreadSummaries";
 
@@ -1444,9 +1443,11 @@ function mergeNativeCliSessionSummaries(params: {
     hiddenSharedBindingIds,
   } = params;
   // sessions 全被 hide 过滤为空时，仍要清 baseline 泄漏；禁止 early-return 原 base。
-  const baseSummaries = stripHiddenSharedBindingSummaries(
-    params.baseSummaries,
-    hiddenSharedBindingIds ?? new Set(),
+  const baseSummaries = stripEmptyClaudeIndexFallbackSummaries(
+    stripHiddenSharedBindingSummaries(
+      params.baseSummaries,
+      hiddenSharedBindingIds ?? new Set(),
+    ),
   );
   if (sessions.length === 0) {
     return baseSummaries;
@@ -1483,6 +1484,16 @@ function mergeNativeCliSessionSummaries(params: {
     const mappedTitle = mappedTitles[id];
     const customTitle = getCustomName(workspaceId, id);
     const title = previewThreadName(session.firstMessage, fallbackTitle);
+    if (
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: engineSource,
+        threadId: id,
+        displayName: title,
+        hasCustomName: Boolean(customTitle || mappedTitle),
+      })
+    ) {
+      return;
+    }
     // 双闸：clip 后 name 仍 control-plane / SUMMARY / MOSSX 则不入侧栏
     if (isSharedControlPlaneSpawnTitle(title)) {
       return;
@@ -1541,8 +1552,10 @@ function mergeNativeCliSessionSummaries(params: {
       });
     }
   });
-  return Array.from(mergedById.values()).sort(
-    (a, b) => b.updatedAt - a.updatedAt,
+  return stripEmptyClaudeIndexFallbackSummaries(
+    Array.from(mergedById.values()).sort(
+      (a, b) => b.updatedAt - a.updatedAt,
+    ),
   );
 }
 
@@ -1781,16 +1794,18 @@ export function mergeCodexCatalogSessionSummaries(
         ? undefined
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
-    // Index / first-paint already drop empty Claude/Codex Session fallbacks.
+    // Index / first-paint already drop empty native Session fallbacks.
     // Live catalog still emits them from session_meta-only files; skip so
     // hydration cannot resurrect the same pups.
     if (
-      (engineSource === "claude" || engineSource === "codex") &&
       !nativeTitle &&
       !customTitle &&
       !mappedTitle &&
-      isEmptyNativeIndexFallbackTitle(title) &&
-      !isLocalPendingDraftThreadId(engineSource, session.sessionId)
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: engineSource,
+        threadId: session.sessionId,
+        displayName: title,
+      })
     ) {
       return;
     }

@@ -116,6 +116,50 @@ describe("native Session Index projection", () => {
     ]);
   });
 
+  it("first-paint does not resurrect empty DSH Session last-good rows", () => {
+    const painted = buildNativeIndexEarlyPaintSummaries({
+      rows: [
+        {
+          engine: "dsh",
+          sessionId: "user-1",
+          title: "帮我看一下这段代码",
+          updatedAt: 30,
+        },
+      ],
+      workspaceId: "ws-1",
+      getCustomName: () => undefined,
+      hideSet: new Set(),
+      currentThreads: undefined,
+      lastGood: [
+        {
+          id: "dsh:empty-dsh",
+          name: "dsh session",
+          createdAt: 40,
+          updatedAt: 40,
+          engineSource: "dsh",
+        } as ThreadSummary,
+        {
+          id: "dsh:pending",
+          name: "DeepSeek Harness Session",
+          createdAt: 39,
+          updatedAt: 39,
+          engineSource: "dsh",
+        } as ThreadSummary,
+        {
+          id: "dsh:keep",
+          name: "已有真实标题",
+          createdAt: 20,
+          updatedAt: 20,
+          engineSource: "dsh",
+        } as ThreadSummary,
+      ],
+    });
+    expect(painted.map((row) => row.id).sort()).toEqual([
+      "dsh:keep",
+      "dsh:user-1",
+    ]);
+  });
+
   it("first-paint does not resurrect empty Codex Session last-good rows", () => {
     const painted = buildNativeIndexEarlyPaintSummaries({
       rows: [

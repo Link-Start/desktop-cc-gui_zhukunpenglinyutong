@@ -680,7 +680,7 @@ describe("useThreadActions.helpers", () => {
         {
           sessionId: "pi:session-1",
           workspaceId: "workspace-1",
-          title: "PI session",
+          title: "Review the PI runtime",
           updatedAt: 120,
           engine: "pi",
         },
@@ -694,7 +694,7 @@ describe("useThreadActions.helpers", () => {
       expect.objectContaining({
         id: "pi:session-1",
         engineSource: "pi",
-        name: "PI session",
+        name: "Review the PI runtime",
       }),
     );
   });
@@ -1193,6 +1193,52 @@ describe("useThreadActions.helpers", () => {
     ]);
   });
 
+  it("mergeCodexCatalogSessionSummaries drops empty DSH Session pups but keeps pending and real titles", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "dsh:empty-old",
+          name: "dsh session",
+          updatedAt: 5,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "dsh:empty-old",
+          title: "dsh session",
+          updatedAt: 20,
+          engine: "dsh",
+        },
+        {
+          sessionId: "dsh:empty-2",
+          title: "DeepSeek Harness Session",
+          updatedAt: 19,
+          engine: "dsh",
+        },
+        {
+          sessionId: "dsh:dsh-pending-1787016153035-0bittx",
+          title: "dsh session",
+          updatedAt: 18,
+          engine: "dsh",
+        },
+        {
+          sessionId: "dsh:real-1",
+          title: "帮我看一下这段代码",
+          updatedAt: 16,
+          engine: "dsh",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id).sort()).toEqual([
+      "dsh:dsh-pending-1787016153035-0bittx",
+      "dsh:real-1",
+    ]);
+  });
+
   it("mergeCodexCatalogSessionSummaries drops collab MOSSX worker before Agent N rename", () => {
     const multiLine =
       `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
@@ -1354,6 +1400,40 @@ describe("useThreadActions.helpers", () => {
       hidden,
     );
     expect(merged.map((row) => row.id)).toEqual(["kimi:ok"]);
+  });
+
+  it("mergeDsh hides placeholder empty drafts but keeps real first messages", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:old-empty",
+          name: "dsh session",
+          updatedAt: 1,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "empty-a",
+          firstMessage: "",
+          updatedAt: 40,
+        },
+        {
+          sessionId: "empty-b",
+          firstMessage: "dsh session",
+          updatedAt: 30,
+        },
+        {
+          sessionId: "real-a",
+          firstMessage: "帮我看一下这段代码",
+          updatedAt: 20,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["dsh:real-a"]);
   });
 
   it("mergeDsh prefixes native session ids and keeps workspace membership", () => {

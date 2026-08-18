@@ -37,3 +37,4 @@
 - [x] 5.5 前端 `isWeakSessionDisplayTitle` 对齐 `PI session {hex}` / `Warmup`
 - [x] 5.6 `{engine}-pending-{millis}-{nonce}` 视为已确认空草稿：只 tombstone、不走 locator/host；Shared/subagent pending 仍跳过
 - [x] 5.7 last-good / missing-engine merge 不得把已 tombstone 的本地稿补回侧栏；真会话 last-good 仍保留
+- [x] 5.8 侧栏投影立即隐藏 `{engine} session` / `DeepSeek Harness Session` 占位草稿（含 DSH/Grok/Gemini/Kimi/PI）；pending / 自定义标题 / 真实提问仍可见；不改 prune

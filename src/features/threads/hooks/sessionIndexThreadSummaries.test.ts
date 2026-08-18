@@ -288,6 +288,66 @@ describe("sessionIndexThreadSummaries", () => {
     ]);
   });
 
+  it("drops empty DSH / Grok / Gemini placeholder drafts but keeps pending and real titles", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "dsh",
+          sessionId: "empty-dsh",
+          title: "dsh session",
+          updatedAt: 12,
+        },
+        {
+          engine: "dsh",
+          sessionId: "empty-dsh-long",
+          title: "DeepSeek Harness Session",
+          updatedAt: 11,
+        },
+        {
+          engine: "grok",
+          sessionId: "empty-grok",
+          title: "grok session",
+          updatedAt: 10,
+        },
+        {
+          engine: "gemini",
+          sessionId: "empty-gemini",
+          title: "Gemini Session",
+          updatedAt: 9,
+        },
+        {
+          engine: "dsh",
+          sessionId: "dsh-pending-1787016153035-0bittx",
+          title: "dsh session",
+          updatedAt: 8,
+        },
+        {
+          engine: "dsh",
+          sessionId: "named-dsh",
+          title: "dsh session",
+          updatedAt: 7,
+        },
+        {
+          engine: "dsh",
+          sessionId: "real-dsh",
+          title: "帮我看一下这段代码",
+          updatedAt: 6,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: (_workspaceId, threadId) =>
+          threadId === "dsh:named-dsh" ? "我的草稿" : "",
+      },
+    );
+    expect(rows.map((row) => row.id)).toEqual([
+      "dsh:dsh-pending-1787016153035-0bittx",
+      "dsh:named-dsh",
+      "dsh:real-dsh",
+    ]);
+  });
+
   it("last-good strip drops empty Codex Session and helpers but keeps pending drafts", () => {
     const kept = stripEmptyClaudeIndexFallbackSummaries([
       {
@@ -318,6 +378,39 @@ describe("sessionIndexThreadSummaries", () => {
     expect(kept.map((row) => row.id)).toEqual([
       "codex-pending-1786994371985-fv4mt5",
       "user-1",
+    ]);
+  });
+
+  it("last-good strip drops empty DSH / Grok placeholders but keeps pending drafts", () => {
+    const kept = stripEmptyClaudeIndexFallbackSummaries([
+      {
+        id: "dsh:empty-dsh",
+        name: "dsh session",
+        updatedAt: 4,
+        engineSource: "dsh",
+      },
+      {
+        id: "grok:empty-grok",
+        name: "Grok Session",
+        updatedAt: 3,
+        engineSource: "grok",
+      },
+      {
+        id: "dsh:dsh-pending-1787016153035-0bittx",
+        name: "dsh session",
+        updatedAt: 2,
+        engineSource: "dsh",
+      },
+      {
+        id: "dsh:real-dsh",
+        name: "帮我看一下这段代码",
+        updatedAt: 1,
+        engineSource: "dsh",
+      },
+    ] as ThreadSummary[]);
+    expect(kept.map((row) => row.id)).toEqual([
+      "dsh:dsh-pending-1787016153035-0bittx",
+      "dsh:real-dsh",
     ]);
   });
 
