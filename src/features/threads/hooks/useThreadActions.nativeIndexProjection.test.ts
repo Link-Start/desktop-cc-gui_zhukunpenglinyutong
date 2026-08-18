@@ -71,4 +71,89 @@ describe("native Session Index projection", () => {
       "claude:c",
     ]);
   });
+
+  it("first-paint does not resurrect empty Claude Session or MOSSX last-good rows", () => {
+    const painted = buildNativeIndexEarlyPaintSummaries({
+      rows: [
+        {
+          engine: "claude",
+          sessionId: "user-1",
+          title: "分析左侧栏消失问题",
+          updatedAt: 30,
+        },
+      ],
+      workspaceId: "ws-1",
+      getCustomName: () => undefined,
+      hideSet: new Set(),
+      currentThreads: undefined,
+      lastGood: [
+        {
+          id: "claude:empty-uuid",
+          name: "Claude Session",
+          createdAt: 40,
+          updatedAt: 40,
+          engineSource: "claude",
+        } as ThreadSummary,
+        {
+          id: "claude:mossx-1",
+          name: "MOSSX_CONTEXT_PACKAGE:sha25…",
+          createdAt: 39,
+          updatedAt: 39,
+          engineSource: "claude",
+        } as ThreadSummary,
+        {
+          id: "claude:c",
+          name: "C",
+          createdAt: 20,
+          updatedAt: 20,
+          engineSource: "claude",
+        } as ThreadSummary,
+      ],
+    });
+    expect(painted.map((row) => row.id).sort()).toEqual([
+      "claude:c",
+      "claude:user-1",
+    ]);
+  });
+
+  it("first-paint does not resurrect empty Codex Session last-good rows", () => {
+    const painted = buildNativeIndexEarlyPaintSummaries({
+      rows: [
+        {
+          engine: "codex",
+          sessionId: "user-1",
+          title: "分析左侧栏消失问题",
+          updatedAt: 30,
+        },
+      ],
+      workspaceId: "ws-1",
+      getCustomName: () => undefined,
+      hideSet: new Set(),
+      currentThreads: undefined,
+      lastGood: [
+        {
+          id: "empty-uuid",
+          name: "Codex Session",
+          createdAt: 40,
+          updatedAt: 40,
+          engineSource: "codex",
+        } as ThreadSummary,
+        {
+          id: "helper-1",
+          name: "You are generating OpenSpec project context.",
+          createdAt: 39,
+          updatedAt: 39,
+          engineSource: "codex",
+        } as ThreadSummary,
+        {
+          id: "nick-1",
+          name: "Aristotle",
+          createdAt: 20,
+          updatedAt: 20,
+          engineSource: "codex",
+        } as ThreadSummary,
+      ],
+    });
+    expect(painted.map((row) => row.id).sort()).toEqual(["nick-1", "user-1"]);
+  });
 });

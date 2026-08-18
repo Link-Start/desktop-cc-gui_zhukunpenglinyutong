@@ -4,7 +4,10 @@ import type { ThreadSummary } from "../../../types";
 import type { WorkspaceSessionCatalogSourceStatus } from "../../../services/tauri";
 import { hasHealthyThreadSummaries } from "./useThreadActions.helpers";
 import { inferThreadEngineSource } from "./useThreadActions.helpers";
-import { isLocalPendingDraftThreadId } from "./sessionIndexThreadSummaries";
+import {
+  isLocalPendingDraftThreadId,
+  stripEmptyClaudeIndexFallbackSummaries,
+} from "./sessionIndexThreadSummaries";
 import { compareThreadSummariesByCreatedAtDesc } from "../utils/threadSummarySort";
 import { loadSidebarSnapshot } from "../utils/sidebarSnapshot";
 
@@ -213,20 +216,20 @@ export function resolveLastGoodFloorProjection(input: {
     (summary) => summary.id && !excluded.has(summary.id),
   );
   if (input.hasAuthoritativeEmptyCatalog) {
+    const visibleSummaries = stripEmptyClaudeIndexFallbackSummaries(indexSummaries);
     return {
-      visibleSummaries: indexSummaries,
-      rememberCandidates: indexSummaries,
+      visibleSummaries,
+      rememberCandidates: visibleSummaries,
     };
   }
   if (indexSummaries.length === 0) {
     return {
-      visibleSummaries: lastGoodSummaries,
+      visibleSummaries: stripEmptyClaudeIndexFallbackSummaries(lastGoodSummaries),
       rememberCandidates: null,
     };
   }
-  const visibleSummaries = unionIndexWithNewerLastGood(
-    indexSummaries,
-    lastGoodSummaries,
+  const visibleSummaries = stripEmptyClaudeIndexFallbackSummaries(
+    unionIndexWithNewerLastGood(indexSummaries, lastGoodSummaries),
   );
   return {
     visibleSummaries,

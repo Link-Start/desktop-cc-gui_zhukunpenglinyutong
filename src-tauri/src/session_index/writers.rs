@@ -8,9 +8,9 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use super::store::{
-    invalidate_source_freshness, load_backfill_state, mark_source_synced, max_updated_at_for_engine,
-    normalize_path_key, save_backfill_state, source_is_fresh, upsert_rows, BackfillState,
-    SessionIndexRow,
+    delete_engine_session_rows, invalidate_source_freshness, load_backfill_state,
+    mark_source_synced, max_updated_at_for_engine, normalize_path_key, save_backfill_state,
+    source_is_fresh, upsert_rows, BackfillState, SessionIndexRow,
 };
 use crate::engine::claude_history::encode_project_path;
 
@@ -111,11 +111,7 @@ fn list_claude_project_session_files(project_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn claude_index_row_from_file(
-    path: &Path,
-    workspace_path: &Path,
-    titles: &HashMap<String, String>,
-) -> Option<SessionIndexRow> {
+fn claude_session_id_from_path(path: &Path) -> Option<String> {
     let session_id = path
         .file_stem()
         .and_then(|name| name.to_str())
@@ -123,14 +119,110 @@ fn claude_index_row_from_file(
         .trim()
         .to_string();
     if session_id.is_empty() {
+        None
+    } else {
+        Some(session_id)
+    }
+}
+
+fn is_claude_agent_session_id(session_id: &str) -> bool {
+    session_id.starts_with("agent-")
+}
+
+fn is_mossx_program_control_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("MOSSX_")
+}
+
+fn is_generic_claude_session_title(title: &str) -> bool {
+    title.trim().eq_ignore_ascii_case("claude session")
+}
+
+fn is_claude_control_plane_title(title: &str) -> bool {
+    let trimmed = title.trim();
+    if trimmed.is_empty() || is_generic_claude_session_title(trimmed) {
+        return false;
+    }
+    is_mossx_program_control_text(trimmed) || is_claude_control_or_synthetic_user_text(trimmed)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeTranscriptPeek {
+    RealUser,
+    MediaOnly,
+    Empty,
+}
+
+fn peek_claude_transcript_kind(path: &Path) -> ClaudeTranscriptPeek {
+    let Some(file) = File::open(path).ok() else {
+        return ClaudeTranscriptPeek::Empty;
+    };
+    let mut reader = BufReader::new(file);
+    let mut saw_media_only = false;
+    for _ in 0..80 {
+        let line = match read_jsonl_line_capped(&mut reader, 256 * 1024) {
+            Ok(Some(JsonlLine::Text(line))) => line,
+            Ok(Some(JsonlLine::SkippedHuge)) => continue,
+            Ok(None) => break,
+            Err(_) => break,
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if !is_claude_user_or_human_entry(&value) {
+            continue;
+        }
+        if let Some(text) = extract_text_preview(&value) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() && !is_claude_control_or_synthetic_user_text(trimmed) {
+                return ClaudeTranscriptPeek::RealUser;
+            }
+        }
+        if claude_value_has_media_part(&value) {
+            saw_media_only = true;
+        }
+    }
+    if saw_media_only {
+        ClaudeTranscriptPeek::MediaOnly
+    } else {
+        ClaudeTranscriptPeek::Empty
+    }
+}
+
+fn should_omit_claude_index_row(session_id: &str, title: &str, path: &Path) -> bool {
+    if is_claude_agent_session_id(session_id) {
+        return true;
+    }
+    if is_claude_control_plane_title(title) {
+        return true;
+    }
+    if is_generic_claude_session_title(title) {
+        return peek_claude_transcript_kind(path) == ClaudeTranscriptPeek::Empty;
+    }
+    false
+}
+
+fn claude_index_row_from_file(
+    path: &Path,
+    workspace_path: &Path,
+    titles: &HashMap<String, String>,
+) -> Option<SessionIndexRow> {
+    let session_id = claude_session_id_from_path(path)?;
+    if is_claude_agent_session_id(&session_id) {
         return None;
     }
     let updated_at = file_mtime_ms(path);
-    let title_from_history = titles.get(&session_id).cloned();
+    let title_from_history = titles
+        .get(&session_id)
+        .cloned()
+        .filter(|title| !is_claude_control_plane_title(title));
     let title = title_from_history
         .clone()
         .or_else(|| peek_claude_first_user_preview(path))
         .unwrap_or_else(|| "Claude Session".to_string());
+    if should_omit_claude_index_row(&session_id, &title, path) {
+        return None;
+    }
     let size_bytes = fs::metadata(path).ok().map(|metadata| metadata.len());
     let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
     Some(SessionIndexRow {
@@ -150,16 +242,73 @@ fn claude_index_row_from_file(
     })
 }
 
+fn collect_claude_index_rows(
+    files: &[PathBuf],
+    workspace_path: &Path,
+    titles: &HashMap<String, String>,
+    limit: Option<usize>,
+) -> (Vec<SessionIndexRow>, Vec<(String, String)>) {
+    let mut rows = Vec::new();
+    let mut omitted = Vec::new();
+    for path in files {
+        let Some(session_id) = claude_session_id_from_path(path) else {
+            continue;
+        };
+        match claude_index_row_from_file(path, workspace_path, titles) {
+            Some(row) => {
+                rows.push(row);
+                if limit.is_some_and(|max| rows.len() >= max) {
+                    break;
+                }
+            }
+            None => omitted.push(("claude".to_string(), session_id)),
+        }
+    }
+    (rows, omitted)
+}
+
+fn is_generic_codex_session_title(title: &str) -> bool {
+    title.trim().eq_ignore_ascii_case("codex session")
+}
+
+pub(crate) fn should_omit_codex_index_title(title: &str) -> bool {
+    let trimmed = title.trim();
+    if trimmed.is_empty() || is_generic_codex_session_title(trimmed) {
+        return true;
+    }
+    is_mossx_program_control_text(trimmed)
+        || crate::local_usage::is_codex_background_helper_text(trimmed)
+}
+
+fn collect_codex_index_rows(
+    summaries: impl IntoIterator<Item = crate::types::LocalUsageSessionSummary>,
+    workspace_key: &str,
+) -> (Vec<SessionIndexRow>, Vec<(String, String)>) {
+    let mut rows = Vec::new();
+    let mut omitted = Vec::new();
+    for summary in summaries {
+        let session_id = summary.session_id.clone();
+        match codex_summary_to_index_row(summary, workspace_key) {
+            Some(row) => rows.push(row),
+            None => omitted.push(("codex".to_string(), session_id)),
+        }
+    }
+    (rows, omitted)
+}
+
 fn codex_summary_to_index_row(
     summary: crate::types::LocalUsageSessionSummary,
     workspace_key: &str,
-) -> SessionIndexRow {
+) -> Option<SessionIndexRow> {
     let title = summary
         .native_title
         .clone()
         .or(summary.summary.clone())
         .unwrap_or_else(|| "Codex Session".to_string());
-    SessionIndexRow {
+    if should_omit_codex_index_title(&title) {
+        return None;
+    }
+    Some(SessionIndexRow {
         engine: "codex".into(),
         session_id: summary.session_id,
         title: title.clone(),
@@ -179,7 +328,7 @@ fn codex_summary_to_index_row(
         physical_path: summary.physical_path,
         parent_session_id: summary.parent_session_id,
         size_bytes: summary.file_size_bytes,
-    }
+    })
 }
 
 fn kimi_session_index_path() -> Option<PathBuf> {
@@ -319,11 +468,10 @@ pub(crate) fn backfill_claude_for_workspace(
         });
     }
     let end = offset.saturating_add(batch_size).min(files.len());
-    let mut rows = Vec::new();
-    for path in &files[offset..end] {
-        if let Some(row) = claude_index_row_from_file(path, workspace_path, &titles) {
-            rows.push(row);
-        }
+    let (rows, omitted) =
+        collect_claude_index_rows(&files[offset..end], workspace_path, &titles, None);
+    if !omitted.is_empty() {
+        delete_engine_session_rows(connection, &omitted)?;
     }
     let upserted = upsert_rows(connection, &rows)?;
     let complete = end >= files.len();
@@ -380,10 +528,8 @@ pub(crate) fn backfill_codex_for_workspace(
                 Some(workspace_path),
                 files,
             )?;
-            let rows: Vec<SessionIndexRow> = summaries
-                .into_iter()
-                .map(|summary| codex_summary_to_index_row(summary, &workspace_key))
-                .collect();
+            let (rows, omitted) = collect_codex_index_rows(summaries, &workspace_key);
+            delete_engine_session_rows(connection, &omitted)?;
             upserted += upsert_rows(connection, &rows)?;
         }
         plain_done = true;
@@ -430,10 +576,8 @@ pub(crate) fn backfill_codex_for_workspace(
         Some(workspace_path),
         &selected,
     )?;
-    let rows: Vec<SessionIndexRow> = summaries
-        .into_iter()
-        .map(|summary| codex_summary_to_index_row(summary, &workspace_key))
-        .collect();
+    let (rows, omitted) = collect_codex_index_rows(summaries, &workspace_key);
+    delete_engine_session_rows(connection, &omitted)?;
     upserted += upsert_rows(connection, &rows)?;
 
     let oldest = batch_dates.last().cloned().unwrap_or_default();
@@ -563,56 +707,16 @@ pub(crate) fn sync_claude_for_workspace(
 
     let titles = read_claude_history_titles(&history_path, workspace_path);
     let mut rows = Vec::new();
+    let mut omitted = Vec::new();
     if project_dir.is_dir() {
-        let mut files: Vec<PathBuf> = fs::read_dir(&project_dir)
-            .map_err(|error| error.to_string())?
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
-            .collect();
-        files.sort_by(|left, right| {
-            file_mtime_ms(right)
-                .cmp(&file_mtime_ms(left))
-                .then_with(|| left.to_string_lossy().cmp(&right.to_string_lossy()))
-        });
+        let mut files = list_claude_project_session_files(&project_dir);
         files.truncate(limit.saturating_mul(2).max(limit));
-        for path in files {
-            let session_id = path
-                .file_stem()
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            if session_id.is_empty() {
-                continue;
-            }
-            let updated_at = file_mtime_ms(&path);
-            let title_from_history = titles.get(&session_id).cloned();
-            let title = title_from_history
-                .clone()
-                .or_else(|| peek_claude_first_user_preview(&path))
-                .unwrap_or_else(|| "Claude Session".to_string());
-            let size_bytes = fs::metadata(&path).ok().map(|metadata| metadata.len());
-            let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
-            rows.push(SessionIndexRow {
-                engine: "claude".into(),
-                session_id: session_id.clone(),
-                title: title.clone(),
-                native_title: title_from_history,
-                updated_at,
-                created_at: optional_file_created_at_ms(&path),
-                cwd: Some(workspace_key.clone()),
-                workspace_path: Some(workspace_key),
-                physical_path: Some(path.to_string_lossy().to_string()),
-                parent_session_id: super::shared_visibility::extract_claude_parent_session_id(
-                    &session_id,
-                ),
-                size_bytes,
-            });
-            if rows.len() >= limit {
-                break;
-            }
-        }
+        let collected = collect_claude_index_rows(&files, workspace_path, &titles, Some(limit));
+        rows = collected.0;
+        omitted = collected.1;
+    }
+    if !omitted.is_empty() {
+        delete_engine_session_rows(connection, &omitted)?;
     }
 
     let upserted = upsert_rows(connection, &rows)?;
@@ -708,6 +812,9 @@ const CLAUDE_INJECTION_ENVELOPE_TAGS: &[&str] = &[
 pub(crate) fn is_claude_control_or_synthetic_user_text(text: &str) -> bool {
     let trimmed = text.trim();
     if trimmed.is_empty() {
+        return true;
+    }
+    if is_mossx_program_control_text(trimmed) {
         return true;
     }
     if trimmed.contains("Warmup")
@@ -972,37 +1079,8 @@ pub(crate) fn sync_codex_for_workspace(
         limit,
     )?;
     let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
-    let rows: Vec<SessionIndexRow> = summaries
-        .into_iter()
-        .map(|summary| {
-            let title = summary
-                .native_title
-                .clone()
-                .or(summary.summary.clone())
-                .unwrap_or_else(|| "Codex Session".to_string());
-            SessionIndexRow {
-                engine: "codex".into(),
-                session_id: summary.session_id,
-                title: title.clone(),
-                native_title: summary.native_title.or(summary.summary),
-                updated_at: summary.timestamp,
-                created_at: summary
-                    .physical_path
-                    .as_deref()
-                    .map(Path::new)
-                    .and_then(optional_file_created_at_ms),
-                cwd: summary
-                    .cwd
-                    .as_deref()
-                    .map(normalize_path_key)
-                    .or_else(|| Some(workspace_key.clone())),
-                workspace_path: Some(workspace_key.clone()),
-                physical_path: summary.physical_path,
-                parent_session_id: summary.parent_session_id,
-                size_bytes: summary.file_size_bytes,
-            }
-        })
-        .collect();
+    let (rows, omitted) = collect_codex_index_rows(summaries, &workspace_key);
+    delete_engine_session_rows(connection, &omitted)?;
     let upserted = upsert_rows(connection, &rows)?;
     mark_source_synced(connection, &source_key, &fingerprint, rows.len())?;
     Ok(WriterResult {
@@ -1626,7 +1704,12 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).expect("mkdir");
         let path = dir.join("sess-created-at.jsonl");
-        std::fs::write(&path, "{\"type\":\"user\"}\n").expect("write");
+        std::fs::write(
+            &path,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hello created at"}]}}
+"#,
+        )
+        .expect("write");
         let row = claude_index_row_from_file(&path, Path::new("/tmp/ws"), &HashMap::new())
             .expect("row");
         let _ = std::fs::remove_dir_all(&dir);
@@ -1873,5 +1956,139 @@ mod tests {
             "<system-reminder>ctx</system-reminder>\n请帮我看一下列表"
         ));
         assert!(!is_claude_control_or_synthetic_user_text("你好"));
+        assert!(is_claude_control_or_synthetic_user_text(
+            "MOSSX_CONTEXT_PACKAGE:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ));
+        assert!(is_claude_control_or_synthetic_user_text("MOSSX_CONTE"));
+    }
+
+    #[test]
+    fn claude_index_skips_empty_control_plane_and_agent_jsonl() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-omit-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let empty = dir.join("empty-uuid.jsonl");
+        std::fs::write(&empty, "").expect("empty");
+        let control = dir.join("control-uuid.jsonl");
+        std::fs::write(
+            &control,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"MOSSX_CONTEXT_PACKAGE:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}}
+"#,
+        )
+        .expect("control");
+        let agent = dir.join("agent-deadbeef.jsonl");
+        std::fs::write(
+            &agent,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"子代理分析"}]}}
+"#,
+        )
+        .expect("agent");
+        let real = dir.join("real-uuid.jsonl");
+        std::fs::write(
+            &real,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"分析左侧栏消失问题"}]}}
+"#,
+        )
+        .expect("real");
+
+        let ws = Path::new("/tmp/ws");
+        let titles = HashMap::new();
+        assert!(claude_index_row_from_file(&empty, ws, &titles).is_none());
+        assert!(claude_index_row_from_file(&control, ws, &titles).is_none());
+        assert!(claude_index_row_from_file(&agent, ws, &titles).is_none());
+        let imported = claude_index_row_from_file(&real, ws, &titles).expect("real row");
+        assert_eq!(imported.title, "分析左侧栏消失问题");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn claude_index_omits_history_title_that_is_mossx_control_plane() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-omit-history-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("history-control.jsonl");
+        std::fs::write(&path, "{\"type\":\"assistant\"}\n").expect("write");
+        let mut titles = HashMap::new();
+        titles.insert(
+            "history-control".into(),
+            "MOSSX_CONTEXT_PACKAGE:sha25…".into(),
+        );
+        assert!(claude_index_row_from_file(&path, Path::new("/tmp/ws"), &titles).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn sample_codex_summary(
+        session_id: &str,
+        title: Option<&str>,
+    ) -> crate::types::LocalUsageSessionSummary {
+        crate::types::LocalUsageSessionSummary {
+            session_id: session_id.into(),
+            session_id_aliases: vec![],
+            parent_session_id: None,
+            timestamp: 1,
+            cwd: Some("/tmp/ws".into()),
+            model: "gpt-5.1".into(),
+            usage: Default::default(),
+            cost: 0.0,
+            summary: title.map(str::to_string),
+            native_title: None,
+            source: None,
+            provider: None,
+            provider_profile_id: None,
+            provider_profile_source: None,
+            provider_profile_name: None,
+            provider_availability: None,
+            physical_path: None,
+            file_size_bytes: None,
+            modified_lines: 0,
+        }
+    }
+
+    #[test]
+    fn should_omit_codex_index_title_filters_empty_helpers_and_mossx() {
+        assert!(should_omit_codex_index_title(""));
+        assert!(should_omit_codex_index_title("Codex Session"));
+        assert!(should_omit_codex_index_title("codex session"));
+        assert!(should_omit_codex_index_title("MOSSX_CONTEXT_PACKAGE:sha25"));
+        assert!(should_omit_codex_index_title(
+            "Generate a concise title for a coding chat thread from the first user message."
+        ));
+        assert!(should_omit_codex_index_title(
+            "You are generating OpenSpec project context."
+        ));
+        assert!(!should_omit_codex_index_title("分析左侧栏消失问题"));
+        assert!(!should_omit_codex_index_title("Aristotle"));
+    }
+
+    #[test]
+    fn collect_codex_index_rows_omits_empty_helpers_and_keeps_real() {
+        let (rows, omitted) = collect_codex_index_rows(
+            vec![
+                sample_codex_summary("empty", None),
+                sample_codex_summary("generic", Some("Codex Session")),
+                sample_codex_summary("mossx", Some("MOSSX_CONTEXT_PACKAGE:sha25")),
+                sample_codex_summary(
+                    "helper",
+                    Some("You are generating OpenSpec project context."),
+                ),
+                sample_codex_summary("real", Some("分析左侧栏消失问题")),
+                sample_codex_summary("nick", Some("Aristotle")),
+            ],
+            "/tmp/ws",
+        );
+        let kept: Vec<&str> = rows.iter().map(|row| row.session_id.as_str()).collect();
+        assert_eq!(kept, vec!["real", "nick"]);
+        let omitted_ids: Vec<&str> = omitted.iter().map(|(_, id)| id.as_str()).collect();
+        assert_eq!(omitted_ids, vec!["empty", "generic", "mossx", "helper"]);
     }
 }

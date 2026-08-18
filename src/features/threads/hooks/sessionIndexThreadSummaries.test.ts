@@ -4,7 +4,9 @@ import {
   mergeSummariesForMissingEngines,
   sessionIndexRowToThreadId,
   sessionIndexRowsToThreadSummaries,
+  stripEmptyClaudeIndexFallbackSummaries,
 } from "./sessionIndexThreadSummaries";
+import type { ThreadSummary } from "../../../types";
 
 describe("sessionIndexThreadSummaries", () => {
   it("maps claude/codex/kimi rows to thread ids", () => {
@@ -119,7 +121,7 @@ describe("sessionIndexThreadSummaries", () => {
         {
           engine: "claude",
           sessionId: "empty-1",
-          title: "",
+          title: "刚起的草稿",
           updatedAt: 10,
           sizeBytes: 0,
         },
@@ -140,13 +142,13 @@ describe("sessionIndexThreadSummaries", () => {
         {
           engine: "claude",
           sessionId: "owned-1",
-          title: "Claude Session",
+          title: "分析一下接口",
           updatedAt: 10,
         },
         {
           engine: "claude",
           sessionId: "user-1",
-          title: "Claude Session",
+          title: "分析一下接口",
           updatedAt: 9,
         },
       ],
@@ -158,6 +160,165 @@ describe("sessionIndexThreadSummaries", () => {
       },
     );
     expect(rows.map((row) => row.id)).toEqual(["claude:user-1"]);
+  });
+
+  it("drops empty Claude Session fallbacks and MOSSX control-plane titles", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "claude",
+          sessionId: "empty-uuid",
+          title: "Claude Session",
+          updatedAt: 12,
+        },
+        {
+          engine: "claude",
+          sessionId: "mossx-1",
+          title: "MOSSX_CONTEXT_PACKAGE:sha25…",
+          updatedAt: 11,
+        },
+        {
+          engine: "claude",
+          sessionId: "claude-pending-1787016153035-0bittx",
+          title: "Claude Session",
+          updatedAt: 10,
+        },
+        {
+          engine: "claude",
+          sessionId: "user-1",
+          title: "分析左侧栏消失问题",
+          updatedAt: 9,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows.map((row) => row.id)).toEqual([
+      "claude:claude-pending-1787016153035-0bittx",
+      "claude:user-1",
+    ]);
+  });
+
+  it("drops empty Codex Session fallbacks, helpers and MOSSX but keeps pending drafts", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "codex",
+          sessionId: "empty-uuid",
+          title: "Codex Session",
+          updatedAt: 12,
+        },
+        {
+          engine: "codex",
+          sessionId: "mossx-1",
+          title: "MOSSX_CONTEXT_PACKAGE:sha25…",
+          updatedAt: 11,
+        },
+        {
+          engine: "codex",
+          sessionId: "helper-1",
+          title: "You are generating OpenSpec project context.",
+          updatedAt: 10,
+        },
+        {
+          engine: "codex",
+          sessionId: "codex-pending-1786994371985-fv4mt5",
+          title: "Codex Session",
+          updatedAt: 9,
+        },
+        {
+          engine: "codex",
+          sessionId: "user-1",
+          title: "分析左侧栏消失问题",
+          updatedAt: 8,
+        },
+        {
+          engine: "codex",
+          sessionId: "nick-1",
+          title: "Aristotle",
+          updatedAt: 7,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows.map((row) => row.id)).toEqual([
+      "codex-pending-1786994371985-fv4mt5",
+      "user-1",
+      "nick-1",
+    ]);
+  });
+
+  it("last-good strip drops empty Claude Session and MOSSX but keeps pending drafts", () => {
+    const kept = stripEmptyClaudeIndexFallbackSummaries([
+      {
+        id: "claude:empty-uuid",
+        name: "Claude Session",
+        updatedAt: 3,
+        engineSource: "claude",
+      },
+      {
+        id: "claude:mossx-1",
+        name: "MOSSX_CONTEXT_PACKAGE:sha25…",
+        updatedAt: 2,
+        engineSource: "claude",
+      },
+      {
+        id: "claude:claude-pending-1787016153035-0bittx",
+        name: "Claude Session",
+        updatedAt: 1,
+        engineSource: "claude",
+      },
+      {
+        id: "claude:user-1",
+        name: "分析左侧栏消失问题",
+        updatedAt: 0,
+        engineSource: "claude",
+      },
+    ] as ThreadSummary[]);
+    expect(kept.map((row) => row.id)).toEqual([
+      "claude:claude-pending-1787016153035-0bittx",
+      "claude:user-1",
+    ]);
+  });
+
+  it("last-good strip drops empty Codex Session and helpers but keeps pending drafts", () => {
+    const kept = stripEmptyClaudeIndexFallbackSummaries([
+      {
+        id: "empty-uuid",
+        name: "Codex Session",
+        updatedAt: 4,
+        engineSource: "codex",
+      },
+      {
+        id: "helper-1",
+        name: "You are generating OpenSpec project context.",
+        updatedAt: 3,
+        engineSource: "codex",
+      },
+      {
+        id: "codex-pending-1786994371985-fv4mt5",
+        name: "Codex Session",
+        updatedAt: 2,
+        engineSource: "codex",
+      },
+      {
+        id: "user-1",
+        name: "分析左侧栏消失问题",
+        updatedAt: 1,
+        engineSource: "codex",
+      },
+    ] as ThreadSummary[]);
+    expect(kept.map((row) => row.id)).toEqual([
+      "codex-pending-1786994371985-fv4mt5",
+      "user-1",
+    ]);
   });
 
   it("never hides a shared canonical row via the owner predicate", () => {

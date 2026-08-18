@@ -17,7 +17,7 @@ use std::time::Duration;
 use super::store::{list_for_workspace_path, now_ms, SessionIndexRow};
 use super::writers::{
     claude_value_has_media_part, extract_text_preview, is_claude_control_or_synthetic_user_text,
-    is_claude_user_or_human_entry, read_jsonl_line_capped, JsonlLine,
+    is_claude_user_or_human_entry, read_jsonl_line_capped, should_omit_codex_index_title, JsonlLine,
 };
 use crate::claude_home::resolve_effective_claude_home;
 use crate::engine::claude_history::encode_project_path;
@@ -129,7 +129,8 @@ enum UserPromptScan {
 
 fn is_control_plane_placeholder_title(title: &str) -> bool {
     let lower = title.trim().to_ascii_lowercase();
-    lower.starts_with("<command-")
+    lower.starts_with("mossx_")
+        || lower.starts_with("<command-")
         || lower.starts_with("<local-command-")
         || lower.starts_with("<project-memory")
         || lower.starts_with("<user_info")
@@ -273,7 +274,8 @@ fn confirm_disk_empty(row: &SessionIndexRow, workspace_path: &Path) -> DiskEmpty
         "claude" => confirm_claude_empty(row, workspace_path),
         "grok" => confirm_grok_empty(row, workspace_path),
         "pi" => confirm_pi_empty(row, workspace_path),
-        "codex" | "gemini" | "kimi" => confirm_physical_path_empty(row),
+        "codex" => confirm_codex_empty(row),
+        "gemini" | "kimi" => confirm_physical_path_empty(row),
         _ => DiskEmptyVerdict::Unknown,
     }
 }
@@ -516,6 +518,53 @@ fn confirm_physical_path_empty(row: &SessionIndexRow) -> DiskEmptyVerdict {
     DiskEmptyVerdict::Unknown
 }
 
+fn confirm_codex_empty(row: &SessionIndexRow) -> DiskEmptyVerdict {
+    let Some(physical) = row
+        .physical_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return DiskEmptyVerdict::Unknown;
+    };
+    let path = Path::new(physical);
+    if !path.exists() {
+        return DiskEmptyVerdict::Empty {
+            delete_disk: false,
+            confirmed_path: None,
+        };
+    }
+    if !path.is_file() {
+        return DiskEmptyVerdict::Unknown;
+    }
+    let size = match std::fs::metadata(path) {
+        Ok(meta) => meta.len(),
+        Err(_) => return DiskEmptyVerdict::Unknown,
+    };
+    if size == 0 {
+        return DiskEmptyVerdict::Empty {
+            delete_disk: true,
+            confirmed_path: Some(path.to_path_buf()),
+        };
+    }
+    match crate::local_usage::peek_codex_session_titles(path) {
+        Ok(peeked) => {
+            let title = peeked
+                .and_then(|(native, summary)| native.or(summary))
+                .unwrap_or_else(|| "Codex Session".to_string());
+            if should_omit_codex_index_title(&title) {
+                DiskEmptyVerdict::Empty {
+                    delete_disk: false,
+                    confirmed_path: Some(path.to_path_buf()),
+                }
+            } else {
+                DiskEmptyVerdict::HasContent
+            }
+        }
+        Err(_) => DiskEmptyVerdict::Unknown,
+    }
+}
+
 pub(crate) async fn prune_stale_empty_native_sessions(
     workspace_path: &str,
     state: Option<&AppState>,
@@ -554,6 +603,7 @@ pub(crate) async fn prune_stale_empty_native_sessions(
 
     let workspace = PathBuf::from(workspace_path);
     let mut tombstones = Vec::new();
+    let mut hard_deletes = Vec::new();
     for target in targets {
         if !still_empty_before_delete(&target) {
             continue;
@@ -563,30 +613,44 @@ pub(crate) async fn prune_stale_empty_native_sessions(
         } else {
             true
         };
-        if deleted {
+        if !deleted {
+            continue;
+        }
+        // Codex session_meta-only files stay on disk. Tombstone would block a
+        // later upsert when the same session grows a real user prompt.
+        if target.engine == "codex" {
+            hard_deletes.push((target.engine, target.session_id));
+        } else {
             tombstones.push((target.engine, target.session_id));
         }
     }
-    if tombstones.is_empty() {
+    if tombstones.is_empty() && hard_deletes.is_empty() {
         return;
     }
     let tombstone_count = tombstones.len();
+    let hard_delete_count = hard_deletes.len();
     match tokio::task::spawn_blocking(move || {
         let connection = super::store::open_connection()?;
-        super::store::tombstone_engine_sessions(&connection, &tombstones)
+        if !tombstones.is_empty() {
+            super::store::tombstone_engine_sessions(&connection, &tombstones)?;
+        }
+        if !hard_deletes.is_empty() {
+            super::store::delete_engine_session_rows(&connection, &hard_deletes)?;
+        }
+        Ok::<(), String>(())
     })
     .await
     {
-        Ok(Ok(_)) => {
+        Ok(Ok(())) => {
             log::info!(
-                "[session_index.empty_prune] workspace={workspace_path} tombstoned={tombstone_count}"
+                "[session_index.empty_prune] workspace={workspace_path} tombstoned={tombstone_count} hard_deleted={hard_delete_count}"
             );
         }
         Ok(Err(error)) => {
-            log::warn!("[session_index.empty_prune] tombstone failed: {error}");
+            log::warn!("[session_index.empty_prune] index cleanup failed: {error}");
         }
         Err(error) => {
-            log::warn!("[session_index.empty_prune] tombstone join failed: {error}");
+            log::warn!("[session_index.empty_prune] index cleanup join failed: {error}");
         }
     }
 }
@@ -618,7 +682,8 @@ fn still_empty_before_delete(target: &PruneTarget) -> bool {
             ),
             None => false,
         },
-        "codex" | "gemini" | "kimi" => still_zero_byte_or_missing(target),
+        "codex" => still_codex_empty(target),
+        "gemini" | "kimi" => still_zero_byte_or_missing(target),
         _ => false,
     }
 }
@@ -639,6 +704,26 @@ fn still_zero_byte_or_missing(target: &PruneTarget) -> bool {
     match std::fs::metadata(&path) {
         Ok(meta) if meta.is_file() && meta.len() == 0 => true,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        _ => false,
+    }
+}
+
+fn still_codex_empty(target: &PruneTarget) -> bool {
+    let Some(path) = target_physical_path(target) else {
+        return false;
+    };
+    match std::fs::metadata(&path) {
+        Ok(meta) if meta.is_file() && meta.len() == 0 => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+        Ok(meta) if meta.is_file() => match crate::local_usage::peek_codex_session_titles(&path) {
+            Ok(peeked) => {
+                let title = peeked
+                    .and_then(|(native, summary)| native.or(summary))
+                    .unwrap_or_else(|| "Codex Session".to_string());
+                should_omit_codex_index_title(&title)
+            }
+            Err(_) => false,
+        },
         _ => false,
     }
 }
@@ -937,6 +1022,7 @@ mod tests {
     fn placeholder_title_matches_generic_and_session_id() {
         assert!(is_placeholder_session_title("grok session", "abc"));
         assert!(is_placeholder_session_title("Claude Session", "abc"));
+        assert!(is_placeholder_session_title("Codex Session", "abc"));
         assert!(is_placeholder_session_title("DeepSeek Harness Session", "abc"));
         assert!(is_placeholder_session_title(
             "73595715-aaaa-bbbb-cccc-ddddeeeeffff",
@@ -950,6 +1036,11 @@ mod tests {
             "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.",
             "abc"
         ));
+        assert!(is_placeholder_session_title(
+            "MOSSX_CONTEXT_PACKAGE:sha25…",
+            "abc"
+        ));
+        assert!(is_placeholder_session_title("MOSSX_CONTE", "abc"));
         assert!(is_placeholder_session_title(
             "PI session 019fe705",
             "019fe705-27fd-712e-a1be-f972ef3773f3"
@@ -1626,6 +1717,111 @@ mod tests {
         std::fs::write(
             &path,
             r#"{"type":"user","message":{"role":"user","content":"刚打的字"}}
+"#,
+        )
+        .expect("write prompt");
+        assert!(!still_empty_before_delete(&target));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stale_codex_session_meta_only_is_collected_without_deleting_disk() {
+        let dir = std::env::temp_dir().join(format!(
+            "ccgui-empty-prune-codex-meta-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let empty = dir.join("empty.jsonl");
+        std::fs::write(
+            &empty,
+            r#"{"timestamp":"2026-08-18T00:00:00.000Z","type":"session_meta","payload":{"id":"codex-empty-1","cwd":"/tmp/proj"}}
+"#,
+        )
+        .expect("write meta");
+        let filled = dir.join("filled.jsonl");
+        std::fs::write(
+            &filled,
+            r#"{"timestamp":"2026-08-18T00:00:00.000Z","type":"session_meta","payload":{"id":"codex-filled-1","cwd":"/tmp/proj"}}
+{"timestamp":"2026-08-18T00:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"分析左侧栏消失问题"}}
+"#,
+        )
+        .expect("write filled");
+        let zero = dir.join("zero.jsonl");
+        std::fs::write(&zero, "").expect("write zero");
+
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        upsert_rows(
+            &connection,
+            &[
+                sample_row(
+                    "codex",
+                    "codex-empty-1",
+                    "Codex Session",
+                    Some(1),
+                    1,
+                    Some(&empty.to_string_lossy()),
+                ),
+                sample_row(
+                    "codex",
+                    "codex-filled-1",
+                    "分析左侧栏消失问题",
+                    Some(1),
+                    1,
+                    Some(&filled.to_string_lossy()),
+                ),
+                sample_row(
+                    "codex",
+                    "codex-zero-1",
+                    "Codex Session",
+                    Some(1),
+                    1,
+                    Some(&zero.to_string_lossy()),
+                ),
+            ],
+        )
+        .expect("upsert");
+        let targets = collect_confirmed_empty_targets(&connection, "/tmp/proj", 20 * 60 * 1000)
+            .expect("collect");
+        let by_id: std::collections::HashMap<_, _> = targets
+            .iter()
+            .map(|target| (target.session_id.as_str(), target))
+            .collect();
+        assert!(by_id.contains_key("codex-empty-1"));
+        assert_eq!(by_id["codex-empty-1"].delete_disk, false);
+        assert!(by_id.contains_key("codex-zero-1"));
+        assert_eq!(by_id["codex-zero-1"].delete_disk, true);
+        assert!(!by_id.contains_key("codex-filled-1"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reconfirm_skips_codex_file_that_gained_a_user_prompt() {
+        let dir = std::env::temp_dir().join(format!(
+            "ccgui-empty-prune-codex-reconfirm-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("race.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-08-18T00:00:00.000Z","type":"session_meta","payload":{"id":"codex-race-1","cwd":"/tmp/proj"}}
+"#,
+        )
+        .expect("write meta");
+        let target = PruneTarget {
+            engine: "codex".into(),
+            session_id: "codex-race-1".into(),
+            delete_disk: false,
+            physical_path: Some(path.to_string_lossy().into_owned()),
+        };
+        assert!(still_empty_before_delete(&target));
+        std::fs::write(
+            &path,
+            r#"{"timestamp":"2026-08-18T00:00:00.000Z","type":"session_meta","payload":{"id":"codex-race-1","cwd":"/tmp/proj"}}
+{"timestamp":"2026-08-18T00:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"刚打的字"}}
 "#,
         )
         .expect("write prompt");

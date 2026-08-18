@@ -1,8 +1,12 @@
 import type { ThreadSummary } from "../../../types";
 import type { SessionIndexRow } from "../../../services/tauri";
-import { sessionIndexRowsToThreadSummaries } from "./sessionIndexThreadSummaries";
+import {
+  sessionIndexRowsToThreadSummaries,
+  stripEmptyClaudeIndexFallbackSummaries,
+} from "./sessionIndexThreadSummaries";
 import { unionIndexWithNewerLastGood } from "./useThreadActions.lastGoodSnapshots";
 import { mergePreservedSharedThreadsForIndexFirstPaint } from "./sharedNativeVisibility";
+import { stripHiddenSharedBindingSummaries } from "./useThreadActions.helpers";
 
 /**
  * Native `listThreadsForWorkspace` projection extract.
@@ -41,17 +45,22 @@ export function buildNativeIndexEarlyPaintSummaries(params: {
   currentThreads: ThreadSummary[] | undefined;
   lastGood: ThreadSummary[];
 }): ThreadSummary[] {
-  return unionIndexWithNewerLastGood(
-    mergePreservedSharedThreadsForIndexFirstPaint(
-      projectNativeIndexRowsToSummaries(params.rows, {
-        workspaceId: params.workspaceId,
-        mappedTitles: {},
-        getCustomName: params.getCustomName,
-        hiddenSharedBindingIds: params.hideSet,
-      }),
-      params.currentThreads,
-      params.lastGood,
+  return stripEmptyClaudeIndexFallbackSummaries(
+    stripHiddenSharedBindingSummaries(
+      unionIndexWithNewerLastGood(
+        mergePreservedSharedThreadsForIndexFirstPaint(
+          projectNativeIndexRowsToSummaries(params.rows, {
+            workspaceId: params.workspaceId,
+            mappedTitles: {},
+            getCustomName: params.getCustomName,
+            hiddenSharedBindingIds: params.hideSet,
+          }),
+          params.currentThreads,
+          params.lastGood,
+        ),
+        [...(params.currentThreads ?? []), ...params.lastGood],
+      ),
+      params.hideSet,
     ),
-    [...(params.currentThreads ?? []), ...params.lastGood],
   );
 }

@@ -21,6 +21,11 @@ import {
 } from "../../../utils/contextProtocol";
 import { remapThreadParentsToSharedOwners } from "../../shared-session/runtime/sharedSessionSummaries";
 import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
+import {
+  isEmptyNativeIndexFallbackTitle,
+  isLocalPendingDraftThreadId,
+  stripEmptyClaudeIndexFallbackSummaries,
+} from "./sessionIndexThreadSummaries";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1699,9 +1704,11 @@ export function mergeCodexCatalogSessionSummaries(
   hiddenSharedBindingIds: ReadonlySet<string> = new Set(),
 ): ThreadSummary[] {
   // 先清 baseline 泄漏
-  const safeBase = stripHiddenSharedBindingSummaries(
-    baseSummaries,
-    hiddenSharedBindingIds,
+  const safeBase = stripEmptyClaudeIndexFallbackSummaries(
+    stripHiddenSharedBindingSummaries(
+      baseSummaries,
+      hiddenSharedBindingIds,
+    ),
   );
   if (codexSessions.length === 0) {
     return safeBase;
@@ -1774,6 +1781,19 @@ export function mergeCodexCatalogSessionSummaries(
         ? undefined
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
+    // Index / first-paint already drop empty Claude/Codex Session fallbacks.
+    // Live catalog still emits them from session_meta-only files; skip so
+    // hydration cannot resurrect the same pups.
+    if (
+      (engineSource === "claude" || engineSource === "codex") &&
+      !nativeTitle &&
+      !customTitle &&
+      !mappedTitle &&
+      isEmptyNativeIndexFallbackTitle(title) &&
+      !isLocalPendingDraftThreadId(engineSource, session.sessionId)
+    ) {
+      return;
+    }
     const engineFallbackTitle =
       engineSource === "claude"
         ? "Claude Session"
@@ -1860,8 +1880,10 @@ export function mergeCodexCatalogSessionSummaries(
       );
     }
   });
-  return Array.from(mergedById.values()).sort(
-    (a, b) => b.updatedAt - a.updatedAt,
+  return stripEmptyClaudeIndexFallbackSummaries(
+    Array.from(mergedById.values()).sort(
+      (a, b) => b.updatedAt - a.updatedAt,
+    ),
   );
 }
 

@@ -804,6 +804,33 @@ pub(crate) fn tombstone_engine_sessions(
     Ok(updated)
 }
 
+/// Hard-delete Index rows that should never have been imported (empty /
+/// control-plane Claude jsonl). Unlike tombstone, this does not block a later
+/// upsert when the same session grows a real user prompt.
+pub(crate) fn delete_engine_session_rows(
+    connection: &Connection,
+    pairs: &[(String, String)],
+) -> Result<usize, String> {
+    if pairs.is_empty() {
+        return Ok(0);
+    }
+    let mut deleted = 0usize;
+    let mut statement = connection
+        .prepare("DELETE FROM session_index WHERE engine = ?1 AND session_id = ?2")
+        .map_err(|error| error.to_string())?;
+    for (engine, session_id) in pairs {
+        let engine = engine.trim().to_ascii_lowercase();
+        let session_id = session_id.trim();
+        if engine.is_empty() || session_id.is_empty() {
+            continue;
+        }
+        deleted += statement
+            .execute(params![engine, session_id])
+            .map_err(|error| error.to_string())? as usize;
+    }
+    Ok(deleted)
+}
+
 fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionIndexRow> {
     Ok(SessionIndexRow {
         engine: row.get(0)?,

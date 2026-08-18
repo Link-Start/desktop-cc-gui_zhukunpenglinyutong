@@ -1139,6 +1139,60 @@ describe("useThreadActions.helpers", () => {
     ]);
   });
 
+  it("mergeCodexCatalogSessionSummaries drops empty Claude/Codex Session pups but keeps pending and nicknames", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "empty-uuid",
+          name: "Codex Session",
+          updatedAt: 5,
+          engineSource: "codex",
+        },
+      ],
+      [
+        {
+          sessionId: "empty-uuid",
+          title: "Codex Session",
+          updatedAt: 20,
+          engine: "codex",
+        },
+        {
+          sessionId: "claude:empty-2",
+          title: "Claude Session",
+          updatedAt: 19,
+          engine: "claude",
+        },
+        {
+          sessionId: "codex-pending-1786994371985-fv4mt5",
+          title: "Codex Session",
+          updatedAt: 18,
+          engine: "codex",
+        },
+        {
+          sessionId: "nick-1",
+          title: "Aristotle",
+          nativeTitle: "Aristotle",
+          updatedAt: 17,
+          engine: "codex",
+        },
+        {
+          sessionId: "user-1",
+          title: "分析左侧栏消失问题",
+          updatedAt: 16,
+          engine: "codex",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id).sort()).toEqual([
+      "codex-pending-1786994371985-fv4mt5",
+      "nick-1",
+      "user-1",
+    ]);
+  });
+
   it("mergeCodexCatalogSessionSummaries drops collab MOSSX worker before Agent N rename", () => {
     const multiLine =
       `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +

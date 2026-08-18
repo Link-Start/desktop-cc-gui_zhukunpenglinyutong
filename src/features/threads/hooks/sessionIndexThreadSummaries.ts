@@ -2,12 +2,48 @@ import type { ThreadSummary } from "../../../types";
 import type { SessionIndexRow } from "../../../services/tauri";
 import { previewThreadName } from "../../../utils/threadItems";
 import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
-import { isCommitMessageHelperPreview } from "../utils/codexBackgroundHelpers";
+import {
+  isCodexBackgroundHelperPreview,
+  isCommitMessageHelperPreview,
+} from "../utils/codexBackgroundHelpers";
+import { isMossxProgramControlTitle } from "../../../utils/contextProtocol";
 import { shouldExcludeOrdinaryNativeRow } from "./sharedNativeVisibility";
 import {
   compareThreadSummariesByCreatedAtDesc,
   pickStableCreatedAt,
 } from "../utils/threadSummarySort";
+
+const GENERIC_EMPTY_SESSION_TITLE =
+  /^(?:claude|codex) session(?:\s+[a-f0-9-]{4,40})?$/i;
+
+/** Index fallback for empty Claude / Codex transcripts. Live list never emits these titles. */
+export function isEmptyNativeIndexFallbackTitle(
+  value: string | null | undefined,
+): boolean {
+  return GENERIC_EMPTY_SESSION_TITLE.test(String(value ?? "").trim());
+}
+
+export function isEmptyClaudeIndexFallbackTitle(
+  value: string | null | undefined,
+): boolean {
+  return isEmptyNativeIndexFallbackTitle(value);
+}
+
+function isEmptyNativeIndexFallbackSummary(summary: {
+  engineSource?: ThreadSummary["engineSource"];
+  name: string;
+}): boolean {
+  if (isEmptyNativeIndexFallbackTitle(summary.name)) {
+    return true;
+  }
+  if (isMossxProgramControlTitle(summary.name)) {
+    return true;
+  }
+  return (
+    summary.engineSource === "codex" &&
+    isCodexBackgroundHelperPreview(summary.name)
+  );
+}
 
 const ENGINE_PREFIX: Record<string, string> = {
   claude: "claude:",
@@ -79,7 +115,16 @@ export function sessionIndexRowsToThreadSummaries(
     }
     if (
       isCommitMessageHelperPreview(String(row.title ?? "")) ||
-      isCommitMessageHelperPreview(String(row.nativeTitle ?? ""))
+      isCommitMessageHelperPreview(String(row.nativeTitle ?? "")) ||
+      (engine === "codex" &&
+        (isCodexBackgroundHelperPreview(String(row.title ?? "")) ||
+          isCodexBackgroundHelperPreview(String(row.nativeTitle ?? ""))))
+    ) {
+      continue;
+    }
+    if (
+      isMossxProgramControlTitle(row.title) ||
+      isMossxProgramControlTitle(row.nativeTitle)
     ) {
       continue;
     }
@@ -110,6 +155,14 @@ export function sessionIndexRowsToThreadSummaries(
       customName ||
       nativeTitle ||
       (title ? previewThreadName(title, fallback) : fallback);
+    if (
+      (engine === "claude" || engine === "codex") &&
+      !customName &&
+      isEmptyNativeIndexFallbackTitle(name) &&
+      !isLocalPendingDraftThreadId(engine, id)
+    ) {
+      continue;
+    }
     const updatedAt =
       typeof row.updatedAt === "number" && Number.isFinite(row.updatedAt)
         ? Math.max(0, row.updatedAt)
@@ -188,6 +241,34 @@ export function mergeSessionIndexRowsIntoSummaries(
     );
   }
   return Array.from(byId.values()).sort(compareThreadSummariesByCreatedAtDesc);
+}
+
+/** last-good / early-paint 不得把 Index 已丢掉的空 Claude / Codex Session 救回来。 */
+export function stripEmptyClaudeIndexFallbackSummaries(
+  summaries: ThreadSummary[],
+): ThreadSummary[] {
+  if (summaries.length === 0) {
+    return summaries;
+  }
+  let changed = false;
+  const next = summaries.filter((summary) => {
+    if (summary.threadKind === "shared" || summary.id.startsWith("shared:")) {
+      return true;
+    }
+    const engine = summary.engineSource;
+    if (engine !== "claude" && engine !== "codex") {
+      return true;
+    }
+    if (isLocalPendingDraftThreadId(engine, summary.id)) {
+      return true;
+    }
+    if (!isEmptyNativeIndexFallbackSummary(summary)) {
+      return true;
+    }
+    changed = true;
+    return false;
+  });
+  return changed ? next : summaries;
 }
 
 export function filterSessionIndexRowsByEngine(
