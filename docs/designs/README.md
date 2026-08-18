@@ -17,6 +17,7 @@ status: active
 | [`curtain-reveal/index.html`](curtain-reveal/index.html) | 加载幕布拉开：各方向 + Mac/Win 兼容分层 | 浏览器打开，点卡片重播 |
 | [`dsh-vendor-settings/DSH Vendor Settings.html`](dsh-vendor-settings/DSH%20Vendor%20Settings.html) | DSH vendor 连接面板方案 A | 浏览器打开 |
 | [`git-operation-panels/index.html`](git-operation-panels/index.html) | Git 拉取 / 推送 / 同步 / 获取 / 刷新确认框第二轮：03 内容 × 05 外观，A / B 两套 | 浏览器打开 gallery，再点进 A 或 B |
+| [`git-operations-r3/index.html`](git-operations-r3/index.html) | Git 操作弹窗第三轮（含创建 PR）：V1 Inspector / V2 Primer / V3 Command Ledger / V4 IDE Light / V5 Wizard Steps，每稿画全 5 个弹窗 | 浏览器打开 gallery 选款 |
 | [`sidebar-pinned-fold/index.html`](sidebar-pinned-fold/index.html) | 侧栏置顶按 `yyyy-mm-dd` 分组：日期头做最外层，不要今天/昨天/更早 | 浏览器打开，点日期头 |
 | [`fluid-motion-presets/index.html`](fluid-motion-presets/index.html) | 流体背景动势五选：流动 / 太极 / 暴风雨 / 龙卷风 / 游走（配色正交，含深灰白，工作台减速） | 浏览器打开，点卡片或芯片切换 |
 
