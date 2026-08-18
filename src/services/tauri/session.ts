@@ -38,6 +38,7 @@ export interface ClaudeSessionSummaryPayload {
   sessionId: string;
   firstMessage: string;
   nativeTitle?: string | null;
+  createdAt?: number;
   updatedAt: number;
   fileSizeBytes?: number;
   parentSessionId?: string | null;

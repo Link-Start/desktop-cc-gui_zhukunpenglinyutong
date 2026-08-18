@@ -221,7 +221,7 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                     title = excluded.title,
                     native_title = excluded.native_title,
                     updated_at = excluded.updated_at,
-                    created_at = COALESCE(session_index.created_at, excluded.created_at),
+                    created_at = COALESCE(session_index.created_at, excluded.created_at, session_index.updated_at),
                     cwd = COALESCE(excluded.cwd, session_index.cwd),
                     workspace_path = COALESCE(excluded.workspace_path, session_index.workspace_path),
                     physical_path = COALESCE(excluded.physical_path, session_index.physical_path),
@@ -267,7 +267,9 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                         .map(str::trim)
                         .filter(|value| !value.is_empty()),
                     row.updated_at.max(0),
-                    row.created_at.filter(|value| *value > 0),
+                    row.created_at
+                        .filter(|value| *value > 0)
+                        .or(Some(row.updated_at.max(0))),
                     cwd,
                     workspace_path,
                     row.physical_path
@@ -914,6 +916,44 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].created_at, Some(1_000));
         assert_eq!(listed[0].updated_at, 20 * 60 * 1000);
+    }
+
+    #[test]
+    fn upsert_backfills_missing_created_at_from_first_updated_at() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        let first = SessionIndexRow {
+            engine: "claude".into(),
+            session_id: "claude-clock".into(),
+            title: "claude session".into(),
+            native_title: None,
+            updated_at: 1_000,
+            created_at: None,
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        };
+        upsert_rows(&connection, &[first]).expect("insert");
+        let refresh = SessionIndexRow {
+            engine: "claude".into(),
+            session_id: "claude-clock".into(),
+            title: "claude session".into(),
+            native_title: None,
+            updated_at: 9_000,
+            created_at: None,
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        };
+        upsert_rows(&connection, &[refresh]).expect("refresh");
+        let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].created_at, Some(1_000));
+        assert_eq!(listed[0].updated_at, 9_000);
     }
 
     #[test]

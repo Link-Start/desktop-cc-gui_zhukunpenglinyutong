@@ -4,6 +4,10 @@ import {
   isMossxProgramControlTitle,
 } from "../../../utils/contextProtocol";
 import { isDshRuntimeContextText } from "../../../utils/dshRuntimeContext";
+import {
+  compareThreadSummariesByCreatedAtDesc,
+  resolveMergedThreadCreatedAt,
+} from "./threadSummarySort";
 
 const GENERIC_SESSION_TITLE_PATTERN =
   /^(codex session|claude session|gemini session|opencode session|grok session|kimi session|pi session|dsh session|deepseek harness session)(?:\s+[a-f0-9-]{4,40})?$/i;
@@ -173,6 +177,7 @@ export function mergeSessionDisplaySummary(
     autoSession: next.autoSession ?? previous.autoSession ?? null,
     sizeBytes: next.sizeBytes ?? previous.sizeBytes,
     physicalPath: next.physicalPath ?? previous.physicalPath,
+    createdAt: resolveMergedThreadCreatedAt(previous, next),
   };
 }
 
@@ -213,6 +218,6 @@ export function projectSessionDisplaySummaries(params: {
   });
 
   return Array.from(mergedById.values()).sort(
-    (left, right) => right.updatedAt - left.updatedAt,
+    compareThreadSummariesByCreatedAtDesc,
   );
 }

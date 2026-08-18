@@ -4,6 +4,10 @@ import { previewThreadName } from "../../../utils/threadItems";
 import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
 import { isCommitMessageHelperPreview } from "../utils/codexBackgroundHelpers";
 import { shouldExcludeOrdinaryNativeRow } from "./sharedNativeVisibility";
+import {
+  compareThreadSummariesByCreatedAtDesc,
+  pickStableCreatedAt,
+} from "../utils/threadSummarySort";
 
 const ENGINE_PREFIX: Record<string, string> = {
   claude: "claude:",
@@ -110,6 +114,7 @@ export function sessionIndexRowsToThreadSummaries(
       typeof row.updatedAt === "number" && Number.isFinite(row.updatedAt)
         ? Math.max(0, row.updatedAt)
         : 0;
+    const createdAt = pickStableCreatedAt(row.createdAt, updatedAt);
     const sizeBytes =
       typeof row.sizeBytes === "number" && Number.isFinite(row.sizeBytes)
         ? Math.max(0, row.sizeBytes)
@@ -124,6 +129,7 @@ export function sessionIndexRowsToThreadSummaries(
       id,
       name,
       updatedAt,
+      ...(createdAt !== undefined ? { createdAt } : {}),
       ...(sizeBytes !== undefined ? { sizeBytes } : {}),
       ...(row.physicalPath
         ? { physicalPath: String(row.physicalPath) }
@@ -153,25 +159,35 @@ export function mergeSessionIndexRowsIntoSummaries(
   const indexSummaries = sessionIndexRowsToThreadSummaries(indexRows, options);
   for (const summary of indexSummaries) {
     const prev = byId.get(summary.id);
-    if (!prev || summary.updatedAt >= prev.updatedAt) {
-      // Prefer live/catalog identity fields when present.
-      byId.set(
-        summary.id,
-        prev
-          ? {
-              ...summary,
-              name: prev.name || summary.name,
-              folderId: prev.folderId ?? summary.folderId,
-              autoSession: prev.autoSession ?? summary.autoSession,
-              providerProfileId:
-                prev.providerProfileId ?? summary.providerProfileId,
-              parentThreadId: prev.parentThreadId ?? summary.parentThreadId,
-            }
-          : summary,
-      );
+    if (prev && summary.updatedAt < prev.updatedAt) {
+      const createdAt = pickStableCreatedAt(prev.createdAt, summary.createdAt);
+      if (createdAt != null && createdAt !== prev.createdAt) {
+        byId.set(prev.id, { ...prev, createdAt });
+      }
+      continue;
     }
+    // Prefer live/catalog identity fields when present.
+    byId.set(
+      summary.id,
+      prev
+        ? {
+            ...summary,
+            name: prev.name || summary.name,
+            folderId: prev.folderId ?? summary.folderId,
+            autoSession: prev.autoSession ?? summary.autoSession,
+            providerProfileId:
+              prev.providerProfileId ?? summary.providerProfileId,
+            parentThreadId: prev.parentThreadId ?? summary.parentThreadId,
+            createdAt: pickStableCreatedAt(
+              prev.createdAt,
+              summary.createdAt,
+              prev.updatedAt,
+            ),
+          }
+        : summary,
+    );
   }
-  return Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+  return Array.from(byId.values()).sort(compareThreadSummariesByCreatedAtDesc);
 }
 
 export function filterSessionIndexRowsByEngine(
@@ -258,10 +274,5 @@ export function mergeSummariesForMissingEngines(
   if (extras.length === 0) {
     return incoming;
   }
-  return [...incoming, ...extras].sort((left, right) => {
-    if (right.updatedAt !== left.updatedAt) {
-      return right.updatedAt - left.updatedAt;
-    }
-    return left.id.localeCompare(right.id);
-  });
+  return [...incoming, ...extras].sort(compareThreadSummariesByCreatedAtDesc);
 }

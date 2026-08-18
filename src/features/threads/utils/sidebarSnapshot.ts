@@ -141,6 +141,13 @@ function normalizeThreadSummary(value: unknown): ThreadSummary | null {
     name: value.name,
     updatedAt: value.updatedAt,
   };
+  if (
+    typeof value.createdAt === "number" &&
+    Number.isFinite(value.createdAt) &&
+    value.createdAt > 0
+  ) {
+    summary.createdAt = value.createdAt;
+  }
   if (typeof value.sizeBytes === "number" && Number.isFinite(value.sizeBytes)) {
     summary.sizeBytes = value.sizeBytes;
   }

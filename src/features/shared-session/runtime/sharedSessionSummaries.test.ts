@@ -8,6 +8,7 @@ import {
   normalizeSharedSessionSummary,
   remapParentThreadIdToSharedOwner,
   remapThreadParentsToSharedOwners,
+  toSharedThreadSummary,
 } from "./sharedSessionSummaries";
 
 describe("sharedSessionSummaries", () => {
@@ -47,6 +48,22 @@ describe("sharedSessionSummaries", () => {
       "pi:session-6",
       "pi-pending-shared-7",
     ]);
+  });
+
+  it("maps Shared createdAt onto the sidebar summary without using updatedAt", () => {
+    const summary = normalizeSharedSessionSummary({
+      id: "shared-session-created",
+      threadId: "shared:shared-session-created",
+      title: "Shared Session",
+      createdAt: 40,
+      updatedAt: 900,
+      selectedEngine: "claude",
+      nativeThreadIds: [],
+    });
+
+    expect(summary?.createdAt).toBe(40);
+    expect(toSharedThreadSummary(summary!).createdAt).toBe(40);
+    expect(toSharedThreadSummary(summary!).updatedAt).toBe(900);
   });
 
   it("rejects malformed non-shared thread ids from shared summaries", () => {

@@ -46,6 +46,31 @@ describe("useThreadActions.threadList", () => {
     });
   });
 
+  it("keeps catalog createdAt when the source provides it", () => {
+    expect(
+      normalizeProjectCatalogSession({
+        sessionId: "codex:session-created",
+        title: "Created",
+        createdAt: 40,
+        updatedAt: 90,
+      }),
+    ).toMatchObject({
+      sessionId: "codex:session-created",
+      createdAt: 40,
+      updatedAt: 90,
+    });
+    expect(
+      normalizeProjectCatalogSession({
+        sessionId: "codex:session-snake",
+        title: "Created",
+        created_at: 55,
+        updatedAt: 90,
+      }),
+    ).toMatchObject({
+      createdAt: 55,
+    });
+  });
+
   it("keeps provider continuation lineage separate from parentSessionId", () => {
     expect(
       normalizeProjectCatalogSession({

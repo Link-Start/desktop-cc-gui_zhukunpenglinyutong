@@ -17,6 +17,7 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  normalizeGeminiSessionSummaries,
   mergeDshSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   resolveThreadSourceMeta,
@@ -1381,6 +1382,97 @@ describe("useThreadActions.helpers", () => {
       hidden,
     );
     expect(merged.map((row) => row.id)).toEqual(["dsh:ok"]);
+  });
+
+  it("parses native createdAt and freezes it across later updatedAt refreshes", () => {
+    expect(
+      normalizeGeminiSessionSummaries([
+        {
+          sessionId: "s1",
+          firstMessage: "hello",
+          created_at: 20,
+          updated_at: 90,
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        sessionId: "s1",
+        createdAt: 20,
+        updatedAt: 90,
+      }),
+    ]);
+
+    const firstSeen = mergeGeminiSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "s1",
+          firstMessage: "hello",
+          createdAt: 20,
+          updatedAt: 90,
+        },
+        {
+          sessionId: "s2",
+          firstMessage: "later",
+          updatedAt: 70,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(firstSeen.find((row) => row.id === "gemini:s1")?.createdAt).toBe(20);
+    expect(firstSeen.find((row) => row.id === "gemini:s2")?.createdAt).toBe(70);
+
+    const refreshed = mergeGeminiSessionSummaries(
+      [
+        {
+          id: "gemini:s1",
+          name: "hello",
+          createdAt: 20,
+          updatedAt: 90,
+          engineSource: "gemini",
+        },
+      ],
+      [
+        {
+          sessionId: "s1",
+          firstMessage: "hello",
+          updatedAt: 900,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(refreshed.find((row) => row.id === "gemini:s1")?.createdAt).toBe(20);
+    expect(refreshed.find((row) => row.id === "gemini:s1")?.updatedAt).toBe(900);
+  });
+
+  it("keeps catalog createdAt when a later catalog refresh only updates activity", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "codex-1",
+          name: "Old",
+          createdAt: 40,
+          updatedAt: 50,
+          engineSource: "codex",
+        },
+      ],
+      [
+        {
+          sessionId: "codex-1",
+          title: "Old",
+          updatedAt: 900,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.find((row) => row.id === "codex-1")?.createdAt).toBe(40);
+    expect(merged.find((row) => row.id === "codex-1")?.updatedAt).toBe(900);
   });
 
 });

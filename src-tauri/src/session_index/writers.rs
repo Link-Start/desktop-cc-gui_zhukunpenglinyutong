@@ -46,6 +46,36 @@ fn file_mtime_ms(path: &Path) -> i64 {
         .unwrap_or(0)
 }
 
+fn file_created_at_ms(path: &Path) -> i64 {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.created())
+        .ok()
+        .and_then(|created| created.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn optional_file_created_at_ms(path: &Path) -> Option<i64> {
+    let created_at = file_created_at_ms(path);
+    (created_at > 0).then_some(created_at)
+}
+
+fn created_at_from_json_value(value: &Value) -> Option<i64> {
+    value
+        .get("createdAt")
+        .or_else(|| value.get("created_at"))
+        .and_then(|raw| {
+            raw.as_i64()
+                .or_else(|| raw.as_u64().map(|n| n as i64))
+                .or_else(|| {
+                    raw.as_f64()
+                        .filter(|n| n.is_finite() && *n > 0.0)
+                        .map(|n| n as i64)
+                })
+        })
+        .filter(|value| *value > 0)
+}
+
 /// Result of one bounded historical-backfill batch (import daemon tail).
 #[derive(Debug, Default)]
 pub(crate) struct BackfillBatchResult {
@@ -108,7 +138,7 @@ fn claude_index_row_from_file(
         title: title.clone(),
         native_title: title_from_history,
         updated_at,
-        created_at: None,
+        created_at: optional_file_created_at_ms(path),
         cwd: Some(workspace_key.clone()),
         workspace_path: Some(workspace_key),
         physical_path: Some(path.to_string_lossy().to_string()),
@@ -134,7 +164,11 @@ fn codex_summary_to_index_row(
         title: title.clone(),
         native_title: summary.native_title.or(summary.summary),
         updated_at: summary.timestamp,
-        created_at: None,
+        created_at: summary
+            .physical_path
+            .as_deref()
+            .map(Path::new)
+            .and_then(optional_file_created_at_ms),
         cwd: summary
             .cwd
             .as_deref()
@@ -209,7 +243,8 @@ fn parse_kimi_index_line(line: &str, target: &str) -> Option<SessionIndexRow> {
         title,
         native_title: None,
         updated_at,
-        created_at: None,
+        created_at: created_at_from_json_value(&value)
+            .or_else(|| session_dir.as_deref().and_then(optional_file_created_at_ms)),
         cwd: Some(target.to_string()),
         workspace_path: Some(target.to_string()),
         physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
@@ -555,7 +590,7 @@ pub(crate) fn sync_claude_for_workspace(
                 title: title.clone(),
                 native_title: title_from_history,
                 updated_at,
-                created_at: None,
+                created_at: optional_file_created_at_ms(&path),
                 cwd: Some(workspace_key.clone()),
                 workspace_path: Some(workspace_key),
                 physical_path: Some(path.to_string_lossy().to_string()),
@@ -928,7 +963,11 @@ pub(crate) fn sync_codex_for_workspace(
                 title: title.clone(),
                 native_title: summary.native_title.or(summary.summary),
                 updated_at: summary.timestamp,
-                created_at: None,
+                created_at: summary
+                    .physical_path
+                    .as_deref()
+                    .map(Path::new)
+                    .and_then(optional_file_created_at_ms),
                 cwd: summary
                     .cwd
                     .as_deref()
@@ -1046,13 +1085,15 @@ pub(crate) fn sync_kimi_for_workspace(
             .filter(|value| !value.is_empty())
             .map(str::to_string)
             .unwrap_or_else(|| "Kimi Session".to_string());
+        let created_at = created_at_from_json_value(&value)
+            .or_else(|| session_dir.as_deref().and_then(optional_file_created_at_ms));
         rows.push(SessionIndexRow {
             engine: "kimi".into(),
             session_id: session_id.to_string(),
             title,
             native_title: None,
             updated_at,
-            created_at: None,
+            created_at,
             cwd: Some(target.clone()),
             workspace_path: Some(target.clone()),
             physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
@@ -1411,6 +1452,25 @@ pub(crate) fn invalidate_workspace_sources(
 mod tests {
     use super::*;
     use super::super::store::mark_source_synced;
+
+    #[test]
+    fn claude_index_row_writes_file_birthtime_as_created_at() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-created-at-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("sess-created-at.jsonl");
+        std::fs::write(&path, "{\"type\":\"user\"}\n").expect("write");
+        let row = claude_index_row_from_file(&path, Path::new("/tmp/ws"), &HashMap::new())
+            .expect("row");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(row.created_at.unwrap_or(0) > 0);
+        assert!(row.updated_at > 0);
+    }
 
     #[test]
     fn rows_from_pi_summaries_prefix_engine_and_title() {

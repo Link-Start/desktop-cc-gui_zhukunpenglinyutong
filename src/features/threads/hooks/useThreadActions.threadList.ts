@@ -8,6 +8,7 @@ import {
   normalizeVisibleThreadRootCount,
 } from "../../app/constants";
 import type { CodexCatalogSessionSummary } from "./useThreadActions.helpers";
+import { compareThreadSummariesByCreatedAtDesc } from "../utils/threadSummarySort";
 
 /**
  * First-paint / startup hydration: expose N = fetch N.
@@ -103,6 +104,7 @@ export type ProjectCatalogSessionSummary = {
   matchedWorkspaceId?: string | null;
   title: string;
   nativeTitle?: string | null;
+  createdAt?: number;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -290,13 +292,7 @@ export function countCatalogSessionsByEngine(
 export function sortThreadSummariesForDisplay(
   summaries: ThreadSummary[],
 ): ThreadSummary[] {
-  return [...summaries].sort((left, right) => {
-    const updatedAtDelta = right.updatedAt - left.updatedAt;
-    if (updatedAtDelta !== 0) {
-      return updatedAtDelta;
-    }
-    return left.id.localeCompare(right.id);
-  });
+  return [...summaries].sort(compareThreadSummariesByCreatedAtDesc);
 }
 
 function normalizeOptionalCatalogString(value: unknown): string | null {
@@ -334,6 +330,8 @@ export function normalizeProjectCatalogSession(
     nativeTitle?: unknown;
     workspaceId?: unknown;
     matchedWorkspaceId?: unknown;
+    createdAt?: unknown;
+    created_at?: unknown;
     updatedAt?: unknown;
     archivedAt?: unknown;
     sizeBytes?: unknown;
@@ -373,6 +371,16 @@ export function normalizeProjectCatalogSession(
     ),
     title: String(session.title ?? "").trim(),
     nativeTitle: normalizeOptionalCatalogString(session.nativeTitle),
+    createdAt:
+      typeof session.createdAt === "number" &&
+      Number.isFinite(session.createdAt) &&
+      session.createdAt > 0
+        ? session.createdAt
+        : typeof session.created_at === "number" &&
+            Number.isFinite(session.created_at) &&
+            session.created_at > 0
+          ? session.created_at
+          : undefined,
     updatedAt:
       typeof session.updatedAt === "number" &&
       Number.isFinite(session.updatedAt)

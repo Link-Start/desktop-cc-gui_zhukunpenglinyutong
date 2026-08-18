@@ -321,6 +321,46 @@ describe("sessionDisplayProjection", () => {
     expect(mergeSessionDisplaySummary(previous, next).sizeBytes).toBe(0);
   });
 
+  it("keeps the earlier createdAt when a later merge only refreshes updatedAt", () => {
+    const previous: ThreadSummary = {
+      id: "claude:stable",
+      name: "Stable",
+      createdAt: 40,
+      updatedAt: 100,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+    const next: ThreadSummary = {
+      id: "claude:stable",
+      name: "Stable",
+      updatedAt: 900,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+
+    expect(mergeSessionDisplaySummary(previous, next).createdAt).toBe(40);
+    expect(mergeSessionDisplaySummary(previous, next).updatedAt).toBe(900);
+  });
+
+  it("freezes createdAt for an existing row that still lacks one", () => {
+    const previous: ThreadSummary = {
+      id: "claude:legacy",
+      name: "Legacy",
+      updatedAt: 50,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+    const next: ThreadSummary = {
+      id: "claude:legacy",
+      name: "Legacy",
+      updatedAt: 900,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+
+    expect(mergeSessionDisplaySummary(previous, next).createdAt).toBe(50);
+  });
+
   it("projects degraded continuity candidates without resurrecting excluded rows", () => {
     const projected = projectSessionDisplaySummaries({
       baseSummaries: [

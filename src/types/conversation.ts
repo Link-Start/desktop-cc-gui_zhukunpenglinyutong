@@ -241,6 +241,8 @@ export type ThreadSummary = {
   id: string;
   name: string;
   updatedAt: number;
+  /** 会话创建时间。侧栏稳定排序用它；updatedAt 只表示最近活动。 */
+  createdAt?: number;
   archivedAt?: number;
   threadKind?: "native" | "shared";
   sizeBytes?: number;

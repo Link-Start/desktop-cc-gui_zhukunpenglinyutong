@@ -38,41 +38,33 @@ describe("useThreadRows", () => {
     ]);
   });
 
-  it("keeps a recent child session visible by sorting roots by subtree activity", () => {
-    const parent: ThreadSummary = {
-      id: "claude:parent",
-      name: "Older parent",
-      updatedAt: 100,
+  it("sorts roots by createdAt so later activity does not reshuffle the list", () => {
+    const older: ThreadSummary = {
+      id: "claude:older",
+      name: "Older session",
+      createdAt: 100,
+      updatedAt: 9_000,
       engineSource: "claude",
     };
-    const child: ThreadSummary = {
-      id: "claude:child",
-      name: "Recent child",
-      parentThreadId: "claude:parent",
-      updatedAt: 1_000,
-      engineSource: "claude",
-    };
-    const unrelated: ThreadSummary = {
-      id: "codex:unrelated",
-      name: "Middle unrelated",
-      updatedAt: 500,
+    const newer: ThreadSummary = {
+      id: "codex:newer",
+      name: "Newer session",
+      createdAt: 500,
+      updatedAt: 600,
       engineSource: "codex",
     };
 
     const { result } = renderHook(() => useThreadRows({}));
     const rows = result.current.getThreadRows(
-      [parent, child, unrelated],
+      [older, newer],
       false,
       "ws-1",
       getPinTimestamp,
-      1,
     );
 
-    expect(rows.totalRoots).toBe(2);
-    expect(rows.hasMoreRoots).toBe(true);
-    expect(rows.unpinnedRows.map((row) => [row.thread.id, row.depth])).toEqual([
-      ["claude:parent", 0],
-      ["claude:child", 1],
+    expect(rows.unpinnedRows.map((row) => row.thread.id)).toEqual([
+      "codex:newer",
+      "claude:older",
     ]);
   });
 

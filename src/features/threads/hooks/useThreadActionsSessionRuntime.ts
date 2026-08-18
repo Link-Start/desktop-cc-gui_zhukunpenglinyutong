@@ -709,6 +709,11 @@ export function useThreadActionsSessionRuntime({
           engine: forkedEngine,
           ...extractProviderBindingFromStartedThread(response, selectedProviderBinding),
         });
+        writeClientCreatedSessionIndex({
+          engine: forkedEngine,
+          sessionId: forkedThreadId,
+          workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+        });
         if (shouldActivate) {
           dispatch({
             type: "setActiveThreadId",
@@ -939,6 +944,11 @@ export function useThreadActionsSessionRuntime({
             threadId: forkedThreadId,
             engine: "claude",
             ...inheritedProviderBinding,
+          });
+          writeClientCreatedSessionIndex({
+            engine: "claude",
+            sessionId: forkedThreadId,
+            workspacePath: workspacePath,
           });
           const forkThreadName = resolveClaudeForkThreadName({
             workspaceId,
@@ -1229,6 +1239,11 @@ export function useThreadActionsSessionRuntime({
             threadId: forkedThreadId,
             engine: "codex",
             ...extractProviderBindingFromStartedThread(response, selectedProviderBinding),
+          });
+          writeClientCreatedSessionIndex({
+            engine: "codex",
+            sessionId: forkedThreadId,
+            workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
           });
           if (shouldActivate) {
             dispatch({

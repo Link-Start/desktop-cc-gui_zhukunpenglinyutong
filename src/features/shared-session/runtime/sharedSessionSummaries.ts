@@ -25,6 +25,7 @@ type SharedSessionSummary = {
   threadId: string;
   title: string;
   updatedAt: number;
+  createdAt?: number;
   selectedEngine: SharedSessionSupportedEngine;
   nativeThreadIds: string[];
 };
@@ -75,11 +76,14 @@ export function normalizeSharedSessionSummary(value: unknown): SharedSessionSumm
       ? selectedEngineCandidate
       : undefined,
   );
+  const updatedAt = Math.max(0, asNumber(record.updatedAt ?? record.updated_at));
+  const createdAt = Math.max(0, asNumber(record.createdAt ?? record.created_at));
   return {
     id: asString(record.id).trim() || threadId,
     threadId,
     title: asString(record.title).trim() || "Shared Session",
-    updatedAt: Math.max(0, asNumber(record.updatedAt ?? record.updated_at)),
+    updatedAt,
+    ...(createdAt > 0 ? { createdAt } : {}),
     selectedEngine: normalizedSelectedEngine,
     nativeThreadIds: Array.isArray(record.nativeThreadIds ?? record.native_thread_ids)
       ? ((record.nativeThreadIds ?? record.native_thread_ids) as unknown[])
@@ -144,6 +148,7 @@ export function toSharedThreadSummary(summary: SharedSessionSummary): ThreadSumm
     id: summary.threadId,
     name: summary.title,
     updatedAt: summary.updatedAt,
+    createdAt: summary.createdAt ?? summary.updatedAt,
     engineSource: summary.selectedEngine,
     threadKind: "shared",
     selectedEngine: summary.selectedEngine,

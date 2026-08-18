@@ -90,6 +90,50 @@ describe("createStartSharedSessionForWorkspace", () => {
       expect.objectContaining({
         type: "setThreads",
         workspaceId: "ws-1",
+        threads: [
+          expect.objectContaining({
+            id: "shared:thread-a",
+            createdAt: expect.any(Number),
+            updatedAt: 42,
+            threadKind: "shared",
+          }),
+        ],
+      }),
+    );
+    const setThreads = dispatch.mock.calls.find(
+      (call) => call[0]?.type === "setThreads",
+    );
+    expect(setThreads?.[0]?.threads?.[0]?.createdAt).toBeGreaterThan(0);
+  });
+
+  it("uses backend createdAt when Shared start returns it", async () => {
+    vi.mocked(startSharedSession).mockResolvedValue({
+      result: {
+        thread: {
+          id: "shared:thread-c",
+          name: "Shared Session",
+          createdAt: 77,
+          updatedAt: 88,
+          selectedTarget: requestedTarget,
+        },
+      },
+    });
+    const { dispatch, start } = createStartAction("shared:thread-c");
+
+    await expect(
+      start("ws-1", { initialTarget: requestedTarget }),
+    ).resolves.toBe("shared:thread-c");
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setThreads",
+        threads: [
+          expect.objectContaining({
+            id: "shared:thread-c",
+            createdAt: 77,
+            updatedAt: 88,
+          }),
+        ],
       }),
     );
   });

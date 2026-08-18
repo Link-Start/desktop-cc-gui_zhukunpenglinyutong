@@ -63,6 +63,28 @@ describe("sessionIndexThreadSummaries", () => {
     expect(rows[0]?.id).toBe("claude:s1");
     expect(rows[0]?.engineSource).toBe("claude");
     expect(rows[0]?.name).toContain("First");
+    expect(rows[0]?.createdAt).toBe(100);
+  });
+
+  it("maps explicit createdAt and does not let a later updatedAt replace it", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "claude",
+          sessionId: "s1",
+          title: "First prompt",
+          createdAt: 50,
+          updatedAt: 900,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows[0]?.createdAt).toBe(50);
+    expect(rows[0]?.updatedAt).toBe(900);
   });
 
   it("drops commit-message helper rows from the first-paint index", () => {
@@ -193,6 +215,37 @@ describe("sessionIndexThreadSummaries", () => {
     const byId = new Map(merged.map((row) => [row.id, row]));
     expect(byId.get("claude:s1")?.name).toBe("Live name");
     expect(byId.get("c1")?.engineSource).toBe("codex");
+  });
+
+  it("stamps createdAt onto a newer live row without overwriting it", () => {
+    const merged = mergeSessionIndexRowsIntoSummaries(
+      [
+        {
+          id: "claude:s1",
+          name: "Live name",
+          updatedAt: 200,
+          engineSource: "claude",
+          threadKind: "native",
+        },
+      ],
+      [
+        {
+          engine: "claude",
+          sessionId: "s1",
+          title: "Index older",
+          createdAt: 40,
+          updatedAt: 100,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(merged[0]?.createdAt).toBe(40);
+    expect(merged[0]?.updatedAt).toBe(200);
+    expect(merged[0]?.name).toBe("Live name");
   });
 
   it("keeps last-good claude rows when index only returned shared and codex", () => {

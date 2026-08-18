@@ -11,6 +11,7 @@ import {
   setThreadTitle as setThreadTitleService,
 } from "../../../services/tauri";
 import { asNumber, asString } from "../utils/threadNormalize";
+import { pickStableCreatedAt } from "../utils/threadSummarySort";
 import {
   deleteSharedSession as deleteSharedSessionService,
   startSharedSession as startSharedSessionService,
@@ -97,10 +98,17 @@ export function createStartSharedSessionForWorkspace(params: {
       threadId,
       persistedInitialTarget,
     );
+    const now = Date.now();
+    const createdAt =
+      pickStableCreatedAt(
+        asNumber(thread?.createdAt ?? thread?.created_at),
+        now,
+      ) ?? now;
     const summary: ThreadSummary = {
       id: threadId,
       name: asString(thread?.name).trim() || "Shared Session",
-      updatedAt: asNumber(thread?.updatedAt ?? thread?.updated_at) || Date.now(),
+      createdAt,
+      updatedAt: asNumber(thread?.updatedAt ?? thread?.updated_at) || now,
       engineSource: initialEngine,
       threadKind: "shared",
       selectedEngine: initialEngine,

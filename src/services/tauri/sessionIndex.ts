@@ -115,12 +115,14 @@ export function writeClientCreatedSessionIndex(input: {
   if (!sessionId) {
     return;
   }
+  const now = Date.now();
   void upsertSessionIndexRows([
     {
       engine,
       sessionId,
       title: input.title?.trim() || `${engine} session`,
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
       workspacePath,
       cwd: workspacePath,
     },

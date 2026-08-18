@@ -37,6 +37,7 @@ import {
   shouldAcceptReasoningDelta,
 } from "./threadReducerReasoningGuards";
 import { areEquivalentAssistantMessageTexts } from "../assembly/conversationNormalization";
+import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
 import {
   addSummaryBoundary,
   findDuplicateReasoningSnapshotIndex,
@@ -321,6 +322,7 @@ function threadSummaryEqual(left: ThreadSummary, right: ThreadSummary) {
     left.id === right.id &&
     left.name === right.name &&
     left.updatedAt === right.updatedAt &&
+    (left.createdAt ?? null) === (right.createdAt ?? null) &&
     (left.archivedAt ?? null) === (right.archivedAt ?? null) &&
     (left.threadKind ?? null) === (right.threadKind ?? null) &&
     (left.sizeBytes ?? null) === (right.sizeBytes ?? null) &&
@@ -763,11 +765,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ? "Claude Session"
         : `Agent ${list.length + 1}`;
       const parentThreadId = parentThreadIdFromEnsureThreadAction(action);
+      const createdAt = Date.now();
       const thread: ThreadSummary = {
         id: action.threadId,
         name: normalizeEnsureThreadMetadataValue(action.name) ?? fallbackName,
-        // 新建会话以当前时间戳排序，使其出现在列表顶部而非底部（updatedAt: 0 会被排到最旧）
-        updatedAt: Date.now(),
+        // 新建会话用 createdAt 排到顶部；之后只刷新 updatedAt，避免侧栏跳动。
+        createdAt,
+        updatedAt: createdAt,
         engineSource: action.engine,
         folderId: action.folderId ?? null,
         autoSession: action.autoSession ?? null,
@@ -2696,11 +2700,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
                 selectedEngine,
                 nativeThreadIds,
                 autoSession,
+                createdAt: resolveMergedThreadCreatedAt(existing, thread),
               },
               existing,
             );
           }
-          return thread;
+          const createdAt = resolveMergedThreadCreatedAt(undefined, thread);
+          return createdAt === thread.createdAt
+            ? thread
+            : { ...thread, createdAt };
         })
         // fix-shared-session-target-race-and-merge T5 后置矫正：
         // 所有 shared: 前缀 id 的条目 threadKind 强制为 "shared"，

@@ -53,6 +53,7 @@ import {
 import { getCollabWorkerNativeHideIds } from "../../multi-agent/runtime/collabNativeHideRegistry";
 import { asString } from "../utils/threadNormalize";
 import { sanitizeNativeSessionTitle } from "../utils/sessionDisplayProjection";
+import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
 import { clearLiveAssistantText } from "../utils/liveAssistantTextChannel";
 import { clearLiveItemDelta } from "../utils/liveItemDeltaChannel";
 import { resolveCodexSubagentIdentity } from "../utils/codexSubagentIdentity";
@@ -1307,6 +1308,10 @@ export function useThreadActions({
               }
               const prev = mergedById.get(id);
               const updatedAt = session.updatedAt;
+              const createdAt = resolveMergedThreadCreatedAt(prev, {
+                createdAt: session.createdAt,
+                updatedAt,
+              });
               const mappedTitle = mappedTitles[id];
               const customTitle = getCustomName(workspace.id, id);
               const nativeTitle = sanitizeNativeSessionTitle(
@@ -1330,6 +1335,7 @@ export function useThreadActions({
                   nativeTitle ||
                   previewName,
                 updatedAt,
+                ...(createdAt !== undefined ? { createdAt } : {}),
                 sizeBytes: extractThreadSizeBytes(
                   session as Record<string, unknown>,
                 ),
@@ -1436,6 +1442,9 @@ export function useThreadActions({
             if (isSharedControlPlaneSpawnTitle(previewName)) {
               return;
             }
+            const createdAt = resolveMergedThreadCreatedAt(prev, {
+              updatedAt,
+            });
             const next: ThreadSummary = {
               id,
               name:
@@ -1443,6 +1452,7 @@ export function useThreadActions({
                 getCustomName(workspace.id, id) ||
                 previewName,
               updatedAt,
+              ...(createdAt !== undefined ? { createdAt } : {}),
               sizeBytes: extractThreadSizeBytes(
                 session as Record<string, unknown>,
               ),
@@ -1450,7 +1460,13 @@ export function useThreadActions({
               threadKind: "native",
             };
             if (!prev || next.updatedAt >= prev.updatedAt) {
-              mergedById.set(id, next);
+              mergedById.set(
+                id,
+                mergeThreadSummaryPreservingStableIdentity(prev, next, {
+                  mappedTitle: mappedTitles[id],
+                  customTitle: getCustomName(workspace.id, id),
+                }),
+              );
             }
           });
         } else {

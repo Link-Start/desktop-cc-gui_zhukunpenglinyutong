@@ -169,6 +169,35 @@ describe("threadReducer", () => {
     });
   });
 
+  it("stamps createdAt on ensureThread and keeps it when setThreads only refreshes updatedAt", () => {
+    const created = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      engine: "codex",
+    });
+    const createdAt = created.threadsByWorkspace["ws-1"]?.[0]?.createdAt;
+    expect(createdAt).toBeGreaterThan(0);
+
+    const refreshed = threadReducer(created, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: "thread-1",
+          name: "Codex Session",
+          updatedAt: (createdAt ?? 0) + 10_000,
+          engineSource: "codex",
+        },
+      ],
+    });
+
+    expect(refreshed.threadsByWorkspace["ws-1"]?.[0]?.createdAt).toBe(createdAt);
+    expect(refreshed.threadsByWorkspace["ws-1"]?.[0]?.updatedAt).toBe(
+      (createdAt ?? 0) + 10_000,
+    );
+  });
+
   it("drops commit-message helper titles from setThreads even without autoSession", () => {
     const next = threadReducer(initialState, {
       type: "setThreads",

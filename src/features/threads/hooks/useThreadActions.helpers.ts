@@ -20,6 +20,7 @@ import {
   isMossxProgramControlTitle,
 } from "../../../utils/contextProtocol";
 import { remapThreadParentsToSharedOwners } from "../../shared-session/runtime/sharedSessionSummaries";
+import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,6 +62,7 @@ const THREAD_RECOVERY_TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
 export type GeminiSessionSummary = {
   sessionId: string;
   firstMessage: string;
+  createdAt?: number;
   updatedAt: number;
   fileSizeBytes?: number;
 };
@@ -81,6 +83,7 @@ export type CodexCatalogSessionSummary = {
   workspaceId?: string | null;
   title: string;
   nativeTitle?: string | null;
+  createdAt?: number;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -1153,10 +1156,12 @@ function normalizeGeminiSessionSummary(
     return null;
   }
   const fileSizeBytes = extractThreadSizeBytes(record);
+  const createdAt = asNumber(record.createdAt ?? record.created_at);
   return {
     sessionId,
     firstMessage: asString(record.firstMessage ?? record.first_message).trim(),
     updatedAt: asNumber(record.updatedAt ?? record.updated_at),
+    ...(createdAt > 0 ? { createdAt } : {}),
     ...(fileSizeBytes !== undefined ? { fileSizeBytes } : {}),
   };
 }
@@ -1466,6 +1471,10 @@ function mergeNativeCliSessionSummaries(params: {
     const updatedAt = Number.isFinite(session.updatedAt)
       ? Math.max(0, session.updatedAt)
       : 0;
+    const createdAt = resolveMergedThreadCreatedAt(prev, {
+      createdAt: session.createdAt,
+      updatedAt,
+    });
     const mappedTitle = mappedTitles[id];
     const customTitle = getCustomName(workspaceId, id);
     const title = previewThreadName(session.firstMessage, fallbackTitle);
@@ -1496,6 +1505,7 @@ function mergeNativeCliSessionSummaries(params: {
         customTitle,
       }),
       updatedAt,
+      ...(createdAt !== undefined ? { createdAt } : {}),
       sizeBytes: session.fileSizeBytes,
       engineSource,
       ...(parentThreadId ? { parentThreadId } : {}),
@@ -1746,6 +1756,10 @@ export function mergeCodexCatalogSessionSummaries(
     const updatedAt = Number.isFinite(session.updatedAt)
       ? Math.max(0, session.updatedAt)
       : 0;
+    const createdAt = resolveMergedThreadCreatedAt(prev, {
+      createdAt: session.createdAt,
+      updatedAt,
+    });
     const parentThreadId =
       engineSource === "claude" && session.parentSessionId
         ? session.parentSessionId.startsWith("claude:")
@@ -1804,6 +1818,7 @@ export function mergeCodexCatalogSessionSummaries(
         engineSource,
       }),
       updatedAt,
+      ...(createdAt !== undefined ? { createdAt } : {}),
       archivedAt:
         typeof session.archivedAt === "number" &&
         Number.isFinite(session.archivedAt) &&
