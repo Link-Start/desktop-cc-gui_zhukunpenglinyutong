@@ -69,6 +69,7 @@ Mac 保持解禁前就能用的路径，Windows 兜底不得回写到 Mac：
 | 行为 | Mac | Windows / WebView2 |
 |------|-----|-------------------|
 | 毛玻璃 `backdrop-filter` | 保留 | 关掉（发黑） |
+| 工作台 fluid profile | `full`（全分辨率，龙线清晰） | `lite`（半分辨率 / 12fps / 加粗 stroke） |
 | 工作台 `forceAnimate` | 否，继续尊重 reduced-motion | 是（系统 reduce 会误冻循环） |
 | chase 预编译 | 挂载时编齐五档 | 延后到点选，避免丢 context |
 | 打孔 `data-workspace-wallpaper` | mode=fluid 立刻打 | shader `attached` 后再打 |

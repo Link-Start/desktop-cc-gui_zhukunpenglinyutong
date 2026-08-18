@@ -181,7 +181,16 @@ describe("WorkspaceWallpaperHost", () => {
     });
   });
 
-  it("keeps the workspace fluid backdrop on the lite profile", async () => {
+  it("uses the full fluid profile on Mac and lite on Windows", async () => {
+    getAppSettings.mockResolvedValueOnce({
+      workspaceWallpaper: { mode: "fluid", customImagePath: null },
+    });
+    render(<WorkspaceWallpaperHost />);
+    await waitFor(() => {
+      expect(screen.getByTestId("first-run-fluid").dataset.profile).toBe("full");
+    });
+    cleanup();
+    platformMocks.isWindowsPlatform.mockReturnValue(true);
     getAppSettings.mockResolvedValueOnce({
       workspaceWallpaper: { mode: "fluid", customImagePath: null },
     });

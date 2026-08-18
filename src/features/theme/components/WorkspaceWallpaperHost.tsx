@@ -119,7 +119,7 @@ export function WorkspaceWallpaperHost() {
     >
       {mode === "fluid" ? (
         <FirstRunFluidBackdrop
-          profile="lite"
+          profile={windowsFluidCompat ? "lite" : "full"}
           presetId={wallpaper.fluidPreset ?? DEFAULT_WORKSPACE_FLUID_PRESET}
           motionId={wallpaper.fluidMotion ?? DEFAULT_WORKSPACE_FLUID_MOTION}
           speed={WORKSPACE_FLUID_SPEED}

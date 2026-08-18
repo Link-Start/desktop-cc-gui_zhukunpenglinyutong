@@ -42,15 +42,39 @@ describe("buildDisplayFragmentShader", () => {
     expect(tornado).toContain("motionTornado");
     expect(tornado).not.toContain("dragonStroke");
     expect(chase).toContain("dragonStroke");
-    expect(chase).toContain("i <= 26");
+    expect(chase).toContain("i <= 20");
     expect(chase).not.toContain("u_flowmap");
+  });
+
+  it("sends chase dragons across the stage instead of looping in place", () => {
+    const chase = buildDisplayFragmentShader(4);
+    expect(chase).toContain("edgePoint");
+    expect(chase).toContain("tourCtrl");
+    expect(chase).toContain("tourFwd");
+    expect(chase).toContain("float ahead = 0.12");
+    expect(chase).toContain("addSlot(p, t, 1.0");
+    expect(chase).not.toContain("addSlot(p, t, 2.0");
+    expect(chase).not.toContain("addSlot(p, t, 3.0");
+    expect(chase).toContain("mix(0.92, 1.78, roll)");
+    expect(chase).toContain("mix(0.62, 1.48, roll)");
+    expect(chase).not.toContain("mix(1.85, 2.36");
+    expect(chase).toContain("exitSide");
+    expect(chase).toContain("float tail = 0.40");
+    expect(chase).not.toContain("hornLen");
+    expect(chase).not.toContain("float trot");
+    expect(chase).not.toContain("float scales");
+    expect(chase).not.toContain("inkW = 0.0042");
+    expect(chase).not.toContain("mix(fillCol, vec3(0.03");
+    expect(chase).not.toContain("0.26 * sin(t * 0.13");
+    expect(chase).not.toContain("0.55 * sin(t * 0.19");
+    expect(chase).not.toContain("dragonHead");
   });
 
   it("offers a reduced chase variant for ANGLE compile fallback", () => {
     const reduced = buildDisplayFragmentShader(4, { reduced: true });
     expect(reduced).toContain("dragonStroke");
     expect(reduced).toContain("i <= 14");
-    expect(reduced).not.toContain("i <= 26");
+    expect(reduced).not.toContain("i <= 20");
   });
 });
 

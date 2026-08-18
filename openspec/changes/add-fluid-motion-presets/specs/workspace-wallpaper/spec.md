@@ -2,7 +2,7 @@
 
 ### Requirement: Fluid wallpaper SHALL expose orthogonal motion presets
 
-流体模式下系统 MUST 持久化 `workspaceWallpaper.fluidMotion`，取值 MUST 是 `drift` | `taiji` | `storm` | `tornado` | `chase`。缺字段或非法值 MUST sanitize 为 `drift`。动势 MUST 与 `fluidPreset` 正交：换配色 MUST NOT 改动势，换动势 MUST NOT 改配色。系统 MUST 用同一条 WebGL2 shader 的 `u_motionMode` 切换场，MUST NOT 另开第二条 GPU 管线。first-run 向导 MUST 继续使用 `drift`，MUST NOT 读取工作台 `fluidMotion`。`taiji` MUST 保持居中双鱼慢转；`chase` MUST 是两条中国龙各自游走，MUST NOT 钉在画面中心，MUST NOT 复用 `taiji` 的居中双鱼盘。
+流体模式下系统 MUST 持久化 `workspaceWallpaper.fluidMotion`，取值 MUST 是 `drift` | `taiji` | `storm` | `tornado` | `chase`。缺字段或非法值 MUST sanitize 为 `drift`。动势 MUST 与 `fluidPreset` 正交：换配色 MUST NOT 改动势，换动势 MUST NOT 改配色。系统 MUST 用同一条 WebGL2 shader 的 `u_motionMode` 切换场，MUST NOT 另开第二条 GPU 管线。first-run 向导 MUST 继续使用 `drift`，MUST NOT 读取工作台 `fluidMotion`。`taiji` MUST 保持居中双鱼慢转；`chase` MUST 是 1–2 条中国龙走幕布式单向游走（出场边 ≠ 入场边），MUST NOT 钉在画面中心，MUST NOT 在同一位置折返，MUST NOT 复用 `taiji` 的居中双鱼盘。
 
 #### Scenario: Missing motion falls back to drift
 
@@ -26,9 +26,13 @@
 #### Scenario: Chase wanders instead of locking to center
 
 - **WHEN** 用户选择 `chase`
-- **THEN** 主窗口 fluid 层 MUST 渲染两条中国龙
-- **AND** 龙形 MUST 具备可辨识的中国龙特征：鹿角、火焰鬃、后飘长须、四肢龙爪与尾鳍（不允许无毛无爪的蠕虫状）
-- **AND** 两条龙 MUST 走彼此独立的非居中轨迹
+- **THEN** 主窗口 fluid 层 MUST 渲染 1–2 条中国龙（最少 1 条常驻，最多 2 条同屏）
+- **AND** 龙形 MUST 使用原版中国龙 SDF（鹿角、火焰鬃、后飘长须、四肢龙爪、脊刺与尾鳍），MUST NOT 叠加墨线描边 / 鳞片瓦 / 巨型体
+- **AND** 每条龙 MUST 走单向幕布轨迹：从一侧进、从另一侧出，下一次 MUST 从不同边再入场
+- **AND** 新入场的龙大小 MUST 按 generation 随机
+- **AND** 朝向 MUST 沿路径前瞻平滑转向，MUST NOT 在场内原地折返
+- **AND** Mac 工作台 chase MUST 使用 full profile（全分辨率），MUST NOT 把 Windows lite 半分辨率路径套到 Mac
+- **AND** Mac full 的结构化动势（含 chase）MUST 以 display refresh（约 60fps）present，MUST NOT 把 30fps 量化套到游走
 - **AND** MUST NOT 复用 `taiji` 的居中双鱼盘
 
 ### Requirement: Settings appearance SHALL list fluid motions next to palettes
