@@ -23,6 +23,7 @@ import type {
 import { ConfigSelect, ModeSelect, ReasoningSelect } from './selectors';
 import { SessionControlQuotaPane } from './selectors/SessionControlQuotaPane';
 import { useCodingPlanQuota } from '../../../status-panel/hooks/useCodingPlanQuota';
+import { resolveCodingPlanQuotaVendorId } from '../../../status-panel/utils/codingPlanQuotaVendor';
 import { buildSessionOverviewQuota } from '../../../status-panel/utils/sessionOverviewViewModel';
 import type { EngineType } from '../../../../types';
 import type { RateLimitSnapshot, RateLimitWindow } from '../../../../types/planning';
@@ -73,6 +74,8 @@ const ENGINE_TYPES: ReadonlySet<string> = new Set([
   'grok',
   'kimi',
   'opencode',
+  'dsh',
+  'pi',
 ]);
 
 function asEngineType(provider: string | undefined): EngineType | null {
@@ -124,6 +127,7 @@ export const ButtonArea = ({
   isEnhancing = false,
   streamActivityPhase = 'idle',
   permissionMode = 'bypassPermissions',
+  selectedModel = '',
   currentProvider = 'claude',
   currentProviderProfileId = null,
   providerAvailability,
@@ -239,6 +243,11 @@ export const ButtonArea = ({
   }, [isToolDockOpen]);
 
   const engineType = asEngineType(currentProvider);
+  const quotaVendorId = resolveCodingPlanQuotaVendorId({
+    engine: engineType,
+    providerProfileId: currentProviderProfileId,
+    selectedModel,
+  });
 
   // 复用 Status Panel 概览同源 hook：DeepSeek / MiniMax / Kimi / 智谱等 coding plan + 官方 CLI 路由。
   const {
@@ -247,7 +256,7 @@ export const ButtonArea = ({
     refresh: refreshCodingPlanQuota,
   } = useCodingPlanQuota({
     engine: engineType,
-    providerProfileId: currentProviderProfileId,
+    providerProfileId: quotaVendorId,
     enabled: isToolDockOpen && engineType != null,
   });
 

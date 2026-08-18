@@ -1,4 +1,5 @@
 import type { ConversationItem, EngineType } from "../../../types";
+import { resolveCodingPlanQuotaVendorId } from "./codingPlanQuotaVendor";
 
 export type SessionQuotaTarget = {
   /** `${engine}::${providerProfileId ?? "local"}` */
@@ -42,7 +43,8 @@ function isEngineType(value: unknown): value is EngineType {
     value === "grok" ||
     value === "kimi" ||
     value === "opencode" ||
-    value === "pi"
+    value === "pi" ||
+    value === "dsh"
   );
 }
 
@@ -74,11 +76,19 @@ export function collectSessionQuotaTargets(
       if (!engine) {
         continue;
       }
-      const providerProfileId =
-        typeof snap?.providerProfileId === "string" &&
-        snap.providerProfileId.trim().length > 0
-          ? snap.providerProfileId.trim()
+      const model =
+        typeof snap?.model === "string" && snap.model.trim().length > 0
+          ? snap.model.trim()
           : null;
+      const providerProfileId = resolveCodingPlanQuotaVendorId({
+        engine,
+        providerProfileId:
+          typeof snap?.providerProfileId === "string" &&
+          snap.providerProfileId.trim().length > 0
+            ? snap.providerProfileId.trim()
+            : null,
+        selectedModel: model,
+      });
       const key = buildSessionQuotaTargetKey(engine, providerProfileId);
       if (ordered.has(key)) {
         continue;
@@ -88,10 +98,6 @@ export function collectSessionQuotaTargets(
         snap.providerProfileNameSnapshot.trim().length > 0
           ? snap.providerProfileNameSnapshot.trim()
           : null) ?? engine;
-      const model =
-        typeof snap?.model === "string" && snap.model.trim().length > 0
-          ? snap.model.trim()
-          : null;
       ordered.set(key, {
         key,
         engine,
@@ -103,11 +109,19 @@ export function collectSessionQuotaTargets(
   }
 
   if (fallback.engine && isEngineType(fallback.engine)) {
-    const providerProfileId =
-      typeof fallback.providerProfileId === "string" &&
-      fallback.providerProfileId.trim().length > 0
-        ? fallback.providerProfileId.trim()
+    const model =
+      typeof fallback.model === "string" && fallback.model.trim().length > 0
+        ? fallback.model.trim()
         : null;
+    const providerProfileId = resolveCodingPlanQuotaVendorId({
+      engine: fallback.engine,
+      providerProfileId:
+        typeof fallback.providerProfileId === "string" &&
+        fallback.providerProfileId.trim().length > 0
+          ? fallback.providerProfileId.trim()
+          : null,
+      selectedModel: model,
+    });
     const key = buildSessionQuotaTargetKey(fallback.engine, providerProfileId);
     if (!ordered.has(key)) {
       ordered.set(key, {
@@ -119,10 +133,7 @@ export function collectSessionQuotaTargets(
           fallback.providerLabel.trim().length > 0
             ? fallback.providerLabel.trim()
             : null) ?? fallback.engine,
-        model:
-          typeof fallback.model === "string" && fallback.model.trim().length > 0
-            ? fallback.model.trim()
-            : null,
+        model,
       });
     }
   }
@@ -144,7 +155,11 @@ export function formatSessionQuotaTargetTitle(target: SessionQuotaTarget): strin
               ? "OpenCode"
               : target.engine === "gemini"
                 ? "Gemini"
-                : target.engine;
+                : target.engine === "dsh"
+                  ? "DSH"
+                  : target.engine === "pi"
+                    ? "PI"
+                    : target.engine;
   if (
     target.providerLabel &&
     target.providerLabel !== target.engine &&

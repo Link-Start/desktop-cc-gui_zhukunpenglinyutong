@@ -519,3 +519,212 @@ fn pick_base_url_accepts_snake_case() {
     assert_eq!(base, "https://relay.example/v1");
     assert_eq!(key, "sk-relay");
 }
+
+fn write_temp_dir(prefix: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "mossx-{prefix}-{}",
+        uuid::Uuid::new_v4()
+    ));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    dir
+}
+
+fn empty_env(_name: &str) -> Option<String> {
+    None
+}
+
+#[test]
+fn host_cli_vendor_id_ignores_sentinels_and_splits_catalog_id() {
+    assert_eq!(host_cli_vendor_id(None), None);
+    assert_eq!(host_cli_vendor_id(Some("")), None);
+    assert_eq!(host_cli_vendor_id(Some("__dsh_host_catalog__")), None);
+    assert_eq!(host_cli_vendor_id(Some("__local_pi__")), None);
+    assert_eq!(
+        host_cli_vendor_id(Some("deepseek-official/deepseek-v4-flash")).as_deref(),
+        Some("deepseek-official")
+    );
+    assert_eq!(
+        host_cli_vendor_id(Some("deepseek-official")).as_deref(),
+        Some("deepseek-official")
+    );
+}
+
+#[test]
+fn dsh_official_deepseek_reads_credentials_not_default_model() {
+    let home = write_temp_dir("dsh-official");
+    std::fs::write(
+        home.join("settings.yaml"),
+        r#"
+llm-pi-ai:
+  providers:
+    ggggg:
+      baseURL: https://fufei.mossx.ai/v1
+      apiKeyEnv: GGGGG_API_KEY
+agent-default-model:
+  provider: ggggg
+  model: grok-4.6
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join(".credentials.yaml"),
+        "DEEPSEEK_API_KEY: sk-dsh-official\nGGGGG_API_KEY: sk-ggggg\n",
+    )
+    .unwrap();
+
+    let (base, key) = resolve_dsh_base_url_and_key_from_home(
+        &home,
+        Some("deepseek-official"),
+        &empty_env,
+    )
+    .expect("official deepseek");
+    assert_eq!(base, "https://api.deepseek.com");
+    assert_eq!(key, "sk-dsh-official");
+
+    let err = resolve_dsh_base_url_and_key_from_home(
+        &home,
+        Some("__dsh_host_catalog__"),
+        &empty_env,
+    )
+    .expect_err("sentinel must not fall back to ggggg");
+    assert!(err.contains("missing"), "{err}");
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn dsh_custom_vendor_reads_pi_ai_settings() {
+    let home = write_temp_dir("dsh-custom");
+    std::fs::write(
+        home.join("settings.yaml"),
+        r#"
+llm-pi-ai:
+  providers:
+    ggggg:
+      baseURL: https://fufei.mossx.ai/v1
+      apiKeyEnv: GGGGG_API_KEY
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join(".credentials.yaml"),
+        "GGGGG_API_KEY: sk-relay-ggggg\n",
+    )
+    .unwrap();
+
+    let (base, key) =
+        resolve_dsh_base_url_and_key_from_home(&home, Some("ggggg"), &empty_env)
+            .expect("custom vendor");
+    assert_eq!(base, "https://fufei.mossx.ai/v1");
+    assert_eq!(key, "sk-relay-ggggg");
+
+    let (base, key) = resolve_dsh_base_url_and_key_from_home(
+        &home,
+        Some("deepseek-official"),
+        &empty_env,
+    )
+    .expect("official without key still has host");
+    assert_eq!(base, "https://api.deepseek.com");
+    assert!(key.is_empty());
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn dsh_env_overrides_credentials_yaml() {
+    let home = write_temp_dir("dsh-env");
+    std::fs::write(
+        home.join(".credentials.yaml"),
+        "DEEPSEEK_API_KEY: sk-file\n",
+    )
+    .unwrap();
+    let env = |name: &str| match name {
+        "DEEPSEEK_API_KEY" => Some("sk-env".to_string()),
+        "DEEPSEEK_BASE_URL" => Some("https://api.deepseek.com/v1".to_string()),
+        _ => None,
+    };
+    let (base, key) =
+        resolve_dsh_base_url_and_key_from_home(&home, Some("deepseek-official"), &env)
+            .expect("env wins");
+    assert_eq!(base, "https://api.deepseek.com/v1");
+    assert_eq!(key, "sk-env");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn pi_vendor_reads_models_store_and_auth_json() {
+    let home = write_temp_dir("pi-quota");
+    std::fs::write(
+        home.join("models-store.json"),
+        r#"{
+          "deepseek": {
+            "models": [
+              { "id": "deepseek-chat", "baseUrl": "https://api.deepseek.com" }
+            ]
+          },
+          "openai": {
+            "models": [
+              { "id": "gpt-4", "baseUrl": "https://api.openai.com/v1" }
+            ]
+          }
+        }"#,
+    )
+    .unwrap();
+    std::fs::write(
+        home.join("auth.json"),
+        r#"{
+          "deepseek": { "type": "api_key", "key": "sk-pi-deepseek" },
+          "openai": { "type": "api_key", "key": "" },
+          "kimi-coding": { "type": "api_key", "key": "!echo secret" }
+        }"#,
+    )
+    .unwrap();
+
+    let (base, key) =
+        resolve_pi_base_url_and_key_from_home(&home, Some("deepseek"), &empty_env)
+            .expect("pi deepseek");
+    assert_eq!(base, "https://api.deepseek.com");
+    assert_eq!(key, "sk-pi-deepseek");
+
+    let (base, key) =
+        resolve_pi_base_url_and_key_from_home(&home, Some("openai"), &empty_env)
+            .expect("official openai host");
+    assert_eq!(base, "https://api.openai.com/v1");
+    assert!(key.is_empty());
+
+    let (base, key) =
+        resolve_pi_base_url_and_key_from_home(&home, Some("kimi-coding"), &empty_env)
+            .expect("command key must not execute");
+    assert_eq!(base, "https://api.kimi.com/coding");
+    assert!(key.is_empty());
+
+    let err = resolve_pi_base_url_and_key_from_home(
+        &home,
+        Some("__local_pi__"),
+        &empty_env,
+    )
+    .expect_err("sentinel has no vendor");
+    assert!(err.contains("missing"), "{err}");
+
+    let _ = std::fs::remove_dir_all(&home);
+}
+
+#[test]
+fn pi_env_ref_key_resolves_without_executing_commands() {
+    let home = write_temp_dir("pi-envref");
+    std::fs::write(
+        home.join("auth.json"),
+        r#"{ "deepseek": { "type": "api_key", "key": "$DEEPSEEK_API_KEY" } }"#,
+    )
+    .unwrap();
+    let env = |name: &str| match name {
+        "DEEPSEEK_API_KEY" => Some("sk-from-env".to_string()),
+        _ => None,
+    };
+    let (base, key) =
+        resolve_pi_base_url_and_key_from_home(&home, Some("deepseek"), &env)
+            .expect("env ref");
+    assert_eq!(base, "https://api.deepseek.com");
+    assert_eq!(key, "sk-from-env");
+    let _ = std::fs::remove_dir_all(&home);
+}

@@ -495,6 +495,8 @@ pub(crate) fn resolve_engine_base_url_and_key(
             }
         }
         "grok" => resolve_grok_base_url_and_key(profile_id),
+        "dsh" => super::host_cli::resolve_dsh_base_url_and_key(profile_id),
+        "pi" => super::host_cli::resolve_pi_base_url_and_key(profile_id),
         "opencode" => {
             let root = read_app_config_root();
             let providers = root
@@ -552,6 +554,38 @@ pub(crate) fn resolve_quota_route(engine: &str, provider_profile_id: Option<&str
 
     // Grok：官方 local / x.ai → 无 Sub2API；自定义中转 base+key → Sub2API
     if engine == "grok" {
+        if is_official_grok_base(&base_url) {
+            return QuotaRoute::None {
+                reason: "official_grok_no_coding_plan".into(),
+            };
+        }
+        if api_key.trim().is_empty() {
+            return QuotaRoute::None {
+                reason: relay_user_error("empty_key"),
+            };
+        }
+        return QuotaRoute::CodingPlanApi { base_url, api_key };
+    }
+
+    // DSH / PI：官方 Anthropic / OpenAI / xAI 无 coding-plan HTTP；
+    // 其余已知 host 或自定义中转走现有 query_by_base_url_and_key。
+    // 空 URL 必须先判，因为 is_official_* 把空串当成官方 host。
+    if engine == "dsh" || engine == "pi" {
+        if base_url.trim().is_empty() {
+            return QuotaRoute::None {
+                reason: relay_user_error("empty_base"),
+            };
+        }
+        if is_official_anthropic_base(&base_url) {
+            return QuotaRoute::None {
+                reason: "official_anthropic_no_coding_plan".into(),
+            };
+        }
+        if is_official_openai_base(&base_url) {
+            return QuotaRoute::None {
+                reason: "official_openai_no_coding_plan".into(),
+            };
+        }
         if is_official_grok_base(&base_url) {
             return QuotaRoute::None {
                 reason: "official_grok_no_coding_plan".into(),

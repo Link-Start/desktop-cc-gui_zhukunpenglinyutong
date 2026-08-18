@@ -43,6 +43,7 @@ pub(crate) async fn get_coding_plan_quota_for_session(
         QuotaRoute::None { reason } => {
             // 官方 Claude / Grok 无 plan：用 none 而非 unsupported，UI 可隐藏
             if reason == "official_anthropic_no_coding_plan"
+                || reason == "official_openai_no_coding_plan"
                 || reason == "official_grok_no_coding_plan"
             {
                 return CodingPlanQuotaSnapshot {

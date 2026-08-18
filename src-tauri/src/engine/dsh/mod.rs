@@ -585,7 +585,7 @@ pub fn flatten_llm_models_with_describe(
     models
 }
 
-fn dsh_home_dir() -> Option<PathBuf> {
+pub(crate) fn dsh_home_dir() -> Option<PathBuf> {
     std::env::var_os("DSH_HOME")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".dsh")))
