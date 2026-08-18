@@ -1,6 +1,6 @@
 # OpenSpec Main Specs 索引
 
-`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **492** 个 capability，并按 capability id 首字母分组。
+`openspec/specs/*/spec.md` 是已经同步进入 mainline 的 capability behavior truth。当前索引覆盖 **493** 个 capability，并按 capability id 首字母分组。
 
 ## 使用边界
 
@@ -214,6 +214,7 @@
 - [detached-file-explorer](./detached-file-explorer/spec.md)
 - [detached-spec-hub-window](./detached-spec-hub-window/spec.md)
 - [diagnostics-storage-agent-config](./diagnostics-storage-agent-config/spec.md)
+- [dsh-followup-model-ledger](./dsh-followup-model-ledger/spec.md)
 - [dual-surface-file-explorer](./dual-surface-file-explorer/spec.md)
 - [dynamic-project-governance-evidence](./dynamic-project-governance-evidence/spec.md)
 

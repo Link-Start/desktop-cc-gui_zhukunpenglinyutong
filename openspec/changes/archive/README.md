@@ -2,13 +2,17 @@
 
 本页为 `mossx` 已归档 OpenSpec proposal 的完整可点击索引。目录名中的日期是 archive date，不代表 proposal 首次创建时间。
 
-- Updated At: `2026-08-08`
-- Indexed proposals: `849+`
+- Updated At: `2026-08-18`
+- Indexed proposals: `850+`
 - Source of truth: `openspec/changes/archive/<archive-date>-<change-id>/proposal.md`
 - Back to current changes: [`../README.md`](../README.md)
 - Back to workspace overview: [`../../project.md`](../../project.md)
 
 ## 2026-08
+
+### 2026-08-18
+
+- [`2026-08-18-fix-dsh-followup-ccgui-provider-leak`](2026-08-18-fix-dsh-followup-ccgui-provider-leak/proposal.md) — verified implementation，已同步 `dsh-followup-model-ledger`；DSH 续聊不得把 mossx reserved provider `ccgui` 送给 `session.selectModel`；thread ownership skip 外国 ledger；`dsh-pending-*` 才回退 dsh pref
 
 ### 2026-08-08
 

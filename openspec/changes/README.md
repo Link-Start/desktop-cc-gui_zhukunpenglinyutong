@@ -4,8 +4,8 @@
 
 - Updated At: `2026-08-18`
 - Active proposals: `5+`（以磁盘 `openspec/changes/*` 为准）
-- Archived proposals: `848+`
-- Main capability specs: `492`
+- Archived proposals: `849+`
+- Main capability specs: `493`
 
 ## Active Proposals
 
@@ -57,6 +57,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **已归档** `fix-dsh-followup-ccgui-provider-leak` → `archive/2026-08-18-fix-dsh-followup-ccgui-provider-leak`：DSH 续聊拒收 mossx reserved provider `ccgui`；skip 轴用 thread ownership；`dsh-pending-*` 才回退 dsh pref；main spec 已同步 `dsh-followup-model-ledger`。
 - **落地** `fold-sidebar-pinned-by-calendar-day`（2026-08-18）：全局置顶区按本地 `yyyy-mm-dd` 做最外层分组；无「已固定」段头、无折叠 chevron；默认只开最新日；组内保持 pin 序。focused vitest + Sidebar 62 绿。**待侧栏目视，不 archive。**
 - **落地并手测通过** `fix-native-followup-engine-collision`（2026-08-18）：DSH 复杂第一轮后续聊误开 native CLI（现场 grok，合同覆盖全 CLI）。本 catalog `id`/`.model` 优先；续聊 stay-on-thread，除非显式点引擎组；DSH 闭合态 `provider / lastSegment`。**用户手测通过，待 archive。**
 - **落地** `restore-sidebar-background-scan-sqlite`（2026-08-18）：last-good 改 floor 并集；importer `IMPORT_INITIAL_DELAY=3s` 强制首拍；freshness 增加磁盘 mtime vs 账本闸；`session-index-imported` 仅 `upserted>0` 重读 Index。vitest 34 + Rust `session_index` 57 绿。**5.3 Windows 手测未勾，不 archive。**
