@@ -72,7 +72,6 @@ import {
   fluidPresetToneColors,
 } from "../../../../onboarding/utils/fluidTones";
 import {
-  isWorkspaceFluidWallpaperSupported,
   MAX_WORKSPACE_WALLPAPER_VEIL_OPACITY,
   MIN_WORKSPACE_WALLPAPER_VEIL_OPACITY,
   sanitizeWorkspaceWallpaper,
@@ -346,7 +345,6 @@ export function BasicAppearanceSection({
   const selectedOpenAppIconSrc = resolveSelectedOpenAppIconSrc(appSettings);
   const selectedDockIconId = sanitizeDockIconId(appSettings.dockIconId);
   const wallpaper = sanitizeWorkspaceWallpaper(appSettings.workspaceWallpaper);
-  const showWorkspaceWallpaper = isWorkspaceFluidWallpaperSupported();
 
   // Local draft for the frost slider: onChange only moves the draft, the
   // (expensive) full-settings persist runs once on release. Committing per
@@ -507,15 +505,14 @@ export function BasicAppearanceSection({
           </div>
         </div>
 
-        {showWorkspaceWallpaper ? (
-          <div
-            className={`settings-pref-row settings-pref-row--stack${
-              wallpaper.mode === "custom" || wallpaper.mode === "fluid"
-                ? " is-expanded"
-                : ""
-            }`}
-            data-testid="settings-workspace-wallpaper"
-          >
+        <div
+          className={`settings-pref-row settings-pref-row--stack${
+            wallpaper.mode === "custom" || wallpaper.mode === "fluid"
+              ? " is-expanded"
+              : ""
+          }`}
+          data-testid="settings-workspace-wallpaper"
+        >
             <div className="settings-pref-row-main">
               <div className="settings-pref-meta">
                 <div className="settings-pref-title">
@@ -682,7 +679,6 @@ export function BasicAppearanceSection({
               </div>
             ) : null}
           </div>
-        ) : null}
 
         {appSettings.theme === "custom" ? (
           <div className="settings-pref-row">

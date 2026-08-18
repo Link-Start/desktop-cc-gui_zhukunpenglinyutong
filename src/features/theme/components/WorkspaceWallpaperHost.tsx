@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getAppSettings } from "../../../services/tauri";
+import { isWindowsPlatform } from "../../../utils/platform";
 import { FirstRunFluidBackdrop } from "../../onboarding/components/FirstRunFluidBackdrop";
 import {
   DEFAULT_WORKSPACE_FLUID_MOTION,
@@ -8,7 +9,6 @@ import {
 } from "../../onboarding/utils/fluidTones";
 import {
   WORKSPACE_FLUID_SPEED,
-  isWorkspaceFluidWallpaperSupported,
   resolveWorkspaceWallpaperMode,
   sanitizeWorkspaceWallpaperVeilOpacity,
 } from "../utils/workspaceWallpaper";
@@ -34,6 +34,9 @@ export function WorkspaceWallpaperHost() {
   );
   const [hydrated, setHydrated] = useState(false);
   const [customFailed, setCustomFailed] = useState(false);
+  const [fluidAttached, setFluidAttached] = useState(false);
+  // WebView2-only: Mac already had working frost + reduced-motion + eager chase.
+  const windowsFluidCompat = isWindowsPlatform();
 
   useEffect(() => {
     // useAppSettings publishes the wallpaper snapshot when it finishes loading
@@ -62,11 +65,7 @@ export function WorkspaceWallpaperHost() {
   }, []);
   const requestedMode = resolveWorkspaceWallpaperMode(wallpaper);
   const mode =
-    requestedMode === "custom" && customFailed
-      ? isWorkspaceFluidWallpaperSupported()
-        ? "fluid"
-        : "none"
-      : requestedMode;
+    requestedMode === "custom" && customFailed ? "fluid" : requestedMode;
   const customSrc =
     mode === "custom" && wallpaper.customImagePath
       ? toAssetUrl(wallpaper.customImagePath)
@@ -76,15 +75,18 @@ export function WorkspaceWallpaperHost() {
     setCustomFailed(false);
   }, [wallpaper.customImagePath, wallpaper.mode]);
 
-  // The data attribute gates the whole wallpaper CSS sheet; keep it in its own
-  // effect keyed only on `mode` so a frost-only change never tears down and
-  // re-applies the veil/backdrop-filter rules across every chrome pane.
+  // The data attribute gates the whole wallpaper CSS sheet. Mac punches
+  // through as soon as mode is fluid. Windows waits for a live canvas so
+  // a black WebGL clear cannot empty the chrome.
+  const wallpaperActive =
+    mode === "custom" ||
+    (mode === "fluid" && (!windowsFluidCompat || fluidAttached));
   useEffect(() => {
     if (typeof document === "undefined") {
       return undefined;
     }
     const root = document.documentElement;
-    if (mode === "none") {
+    if (!wallpaperActive) {
       delete root.dataset.workspaceWallpaper;
       return undefined;
     }
@@ -92,7 +94,7 @@ export function WorkspaceWallpaperHost() {
     return () => {
       delete root.dataset.workspaceWallpaper;
     };
-  }, [mode]);
+  }, [mode, wallpaperActive]);
 
   useEffect(() => {
     if (typeof document === "undefined" || mode === "none") {
@@ -118,6 +120,11 @@ export function WorkspaceWallpaperHost() {
       aria-hidden
       data-testid="workspace-wallpaper"
       data-mode={mode}
+      data-motion={
+        mode === "fluid"
+          ? (wallpaper.fluidMotion ?? DEFAULT_WORKSPACE_FLUID_MOTION)
+          : undefined
+      }
     >
       {mode === "fluid" ? (
         <FirstRunFluidBackdrop
@@ -125,6 +132,11 @@ export function WorkspaceWallpaperHost() {
           presetId={wallpaper.fluidPreset ?? DEFAULT_WORKSPACE_FLUID_PRESET}
           motionId={wallpaper.fluidMotion ?? DEFAULT_WORKSPACE_FLUID_MOTION}
           speed={WORKSPACE_FLUID_SPEED}
+          forceAnimate={windowsFluidCompat}
+          deferChase={windowsFluidCompat}
+          onAttachChange={
+            windowsFluidCompat ? setFluidAttached : undefined
+          }
         />
       ) : null}
       {mode === "custom" && customSrc ? (

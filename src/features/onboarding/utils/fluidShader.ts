@@ -5,10 +5,25 @@
  * (`src/client/fluid-shader.ts`), MIT License, Copyright (c) 2026 John Wu.
  * https://github.com/WYH66666666/DSH-Transparent-UI-Plugin
  *
- * WebGL2 two-pass fluid: quarter-res flow field + full-res domain-warped
- * noise. Reduced-motion paints one static frame. WebGL2 failure is a silent
- * CSS fallback — this must never block first-run setup.
+ * WebGL2 fluid backdrop. Drift is a two-pass domain warp (quarter-res
+ * flow + full-res noise). Structured motions (taiji / storm / tornado /
+ * chase) are separate display programs so WebView2 / ANGLE does not have
+ * to compile one mega-shader or honor an early-return branch. Reduced-motion
+ * paints one static frame. WebGL2 / compile failure is a silent CSS
+ * fallback — this must never block first-run setup.
  */
+
+export type FluidMotionMode = 0 | 1 | 2 | 3 | 4;
+
+export function clampFluidMotionMode(
+  mode: number | undefined,
+): FluidMotionMode {
+  const rounded = Math.round(mode ?? 0);
+  if (rounded === 1 || rounded === 2 || rounded === 3 || rounded === 4) {
+    return rounded;
+  }
+  return 0;
+}
 
 export interface FluidParams {
   mouseRadius: number;
@@ -104,15 +119,34 @@ void main() {
 }
 `;
 
-const DISPLAY_SHADER = `#version 300 es
+const DISPLAY_COMMON = `#version 300 es
 precision mediump float;
 in vec2 vUv;
 uniform float u_time;
-uniform float u_pixelRatio;
 uniform vec2 u_resolution;
+uniform vec4 u_color1, u_color2, u_color3;
+out vec4 fragColor;
+
+#define TWO_PI 6.28318530718
+#define PI 3.14159265358979323846
+
+vec2 rotate(vec2 uv, float th) { return mat2(cos(th), sin(th), -sin(th), cos(th)) * uv; }
+`;
+
+const DISPLAY_NOISE = `
+float random(vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123); }
+float noise(vec2 st) {
+  vec2 i = floor(st); vec2 f = fract(st);
+  float a = random(i), b = random(i + vec2(1,0)), c = random(i + vec2(0,1)), d = random(i + vec2(1,1));
+  vec2 u = f*f*(3.0-2.0*f);
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+`;
+
+const DRIFT_DISPLAY_SHADER = `${DISPLAY_COMMON}
+uniform float u_pixelRatio;
 uniform float u_scale;
 uniform float u_rotation;
-uniform vec4 u_color1, u_color2, u_color3;
 uniform float u_colorCount;
 uniform float u_proportion;
 uniform float u_softness;
@@ -126,21 +160,7 @@ uniform sampler2D u_flowmap;
 uniform float u_distortBoost;
 uniform float u_noiseBoost;
 uniform float u_swirlBoost;
-uniform float u_motionMode;
-out vec4 fragColor;
-
-#define TWO_PI 6.28318530718
-#define PI 3.14159265358979323846
-
-vec2 rotate(vec2 uv, float th) { return mat2(cos(th), sin(th), -sin(th), cos(th)) * uv; }
-float random(vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123); }
-float noise(vec2 st) {
-  vec2 i = floor(st); vec2 f = fract(st);
-  float a = random(i), b = random(i + vec2(1,0)), c = random(i + vec2(0,1)), d = random(i + vec2(1,1));
-  vec2 u = f*f*(3.0-2.0*f);
-  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
-}
-
+${DISPLAY_NOISE}
 vec3 blend_multi(float mixer, float softness) {
   float edge = 1.0 - softness;
   vec3 col = u_color1.rgb;
@@ -149,6 +169,50 @@ vec3 blend_multi(float mixer, float softness) {
   return col;
 }
 
+void main() {
+  vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+  float t = .5 * u_time;
+  float ns = .0005 + .006 * u_scale;
+  uv -= .5; uv *= (ns * u_resolution); uv = rotate(uv, u_rotation * .5 * PI);
+  uv /= u_pixelRatio; uv += .5; uv += u_offset;
+
+  vec2 fragUV = gl_FragCoord.xy / u_resolution.xy;
+  vec4 flow = texture(u_flowmap, fragUV);
+  float influence = flow.r;
+  vec2 flowDir = (flow.gb - 0.5) * 2.0;
+
+  float n1 = noise(uv + t), n2 = noise(uv*2. - t);
+  float angle = n1 * TWO_PI;
+
+  float totalDistortion = u_distortion + influence * u_distortBoost;
+  uv.x += 4. * totalDistortion * n2 * cos(angle);
+  uv.y += 4. * totalDistortion * n2 * sin(angle);
+
+  uv += flowDir * influence * 0.15;
+
+  if (influence > 0.001) {
+    float localNoise = noise(uv * 2.0 + t * 1.5);
+    uv += influence * u_noiseBoost * vec2(cos(localNoise * TWO_PI), sin(localNoise * TWO_PI));
+  }
+
+  float iters = ceil(clamp(u_swirlIterations, 1., 30.));
+  float swirlAmt = clamp(u_swirl, 0., 2.) + influence * u_swirlBoost;
+  for (float i = 1.; i <= 30.0; i++) {
+    if (i > iters) break;
+    uv.x += swirlAmt / i * cos(t + i*1.5*uv.y);
+    uv.y += swirlAmt / i * cos(t + i*1.*uv.x);
+  }
+
+  float proportion = clamp(u_proportion, 0., 1.);
+  vec2 cuv = uv * (.5 + 3.5 * u_shapeScale);
+  float shape = .5 + .5 * sin(cuv.x) * cos(cuv.y);
+  float mixer = shape + .48 * sign(proportion - .5) * pow(abs(proportion - .5), .5);
+  vec3 col = blend_multi(mixer, clamp(u_softness, 0., 1.));
+  fragColor = vec4(col, 1.0);
+}
+`;
+
+const TAIJI_DISPLAY_SHADER = `${DISPLAY_COMMON}
 vec3 motionTaiji(vec2 uv, float t) {
   vec2 p = uv - 0.5;
   p.x *= u_resolution.x / u_resolution.y;
@@ -166,12 +230,21 @@ vec3 motionTaiji(vec2 uv, float t) {
   return mix(wash, fish, disk);
 }
 
+void main() {
+  fragColor = vec4(motionTaiji(vUv, u_time * 7.0), 1.0);
+}
+`;
+
+const STORM_DISPLAY_SHADER = `${DISPLAY_COMMON}
+${DISPLAY_NOISE}
 vec3 motionStorm(vec2 uv, float t) {
   vec2 p = uv;
   p.x += t * 0.06;
   float clouds = noise(p * vec2(2.2, 1.4) + t * 0.12);
   clouds = mix(clouds, noise(p * 5.0 - t * 0.2), 0.35);
   float rain = 0.0;
+  // Float induction matches the working prototype. ANGLE/D3D can reject
+  // or miscompile small integer loops in otherwise valid ES 3.00 sources.
   for (float i = 1.0; i <= 4.0; i++) {
     vec2 q = p * vec2(14.0 * i, 64.0 * i);
     q.x += q.y * 0.42;
@@ -187,6 +260,13 @@ vec3 motionStorm(vec2 uv, float t) {
   return col;
 }
 
+void main() {
+  fragColor = vec4(motionStorm(vUv, u_time * 7.0), 1.0);
+}
+`;
+
+const TORNADO_DISPLAY_SHADER = `${DISPLAY_COMMON}
+${DISPLAY_NOISE}
 vec3 motionTornado(vec2 uv, float t) {
   vec2 p = uv - vec2(0.5, 0.46);
   p.x *= u_resolution.x / u_resolution.y;
@@ -206,6 +286,16 @@ vec3 motionTornado(vec2 uv, float t) {
   return mix(u_color3.rgb, col, mask);
 }
 
+void main() {
+  fragColor = vec4(motionTornado(vUv, u_time * 7.0), 1.0);
+}
+`;
+
+function chaseDisplayShader(spine: number, legCount: number): string {
+  const alongStep = (0.64 / Math.max(legCount, 1)).toFixed(2);
+  return `${DISPLAY_COMMON}
+uniform float u_strokeScale;
+${DISPLAY_NOISE}
 float sdSegment(vec2 p, vec2 a, vec2 b) {
   vec2 pa = p - a;
   vec2 ba = b - a;
@@ -268,13 +358,15 @@ vec2 dragonSpine(float t, float seed, float aspect, float along) {
 vec3 dragonStroke(vec2 p, float t, float seed, float aspect) {
   // Resolution-aware AA: one world unit spans the canvas height, so a
   // fixed edge width goes blurry on the half-res lite profile.
-  float aa = 1.5 / max(u_resolution.y, 1.0);
+  float sc = max(u_strokeScale, 1.0);
+  float aa = 1.5 * sc / max(u_resolution.y, 1.0);
+  float pad = 0.0035 * (sc - 1.0);
 
   vec2 prev = dragonSpine(t, seed, aspect, 0.0);
   float body = 1e5;
   float ridge = 1e5;
-  for (int i = 1; i <= 26; i++) {
-    float along = float(i) / 26.0;
+  for (int i = 1; i <= ${spine}; i++) {
+    float along = float(i) / ${spine.toFixed(1)};
     vec2 next = dragonSpine(t, seed, aspect, along);
     float thick = mix(0.024, 0.0040, pow(along, 0.8));
     thick *= 1.0 + 0.10 * sin(along * 40.0 + seed);
@@ -342,8 +434,8 @@ vec3 dragonStroke(vec2 p, float t, float seed, float aspect) {
   // Four legs: thigh -> knee -> ankle, then a paw of three sharp claws
   // fanning forward. A gentle per-leg phase keeps them paddling.
   float legs = 1e5;
-  for (int li = 0; li < 4; li++) {
-    float la = 0.15 + float(li) * 0.16;
+  for (int li = 0; li < ${legCount}; li++) {
+    float la = 0.15 + float(li) * ${alongStep};
     float sgn = (li == 0 || li == 2) ? 1.0 : -1.0;
     float paddle = sin(t * 1.9 + float(li) * 1.7 + seed) * 0.10;
     vec2 root = dragonSpine(t, seed, aspect, la);
@@ -387,14 +479,14 @@ vec3 dragonStroke(vec2 p, float t, float seed, float aspect) {
   vec2 browDir = rotate(fwd, 0.55);
   float brow = sdSegT(p, eyePos - browDir * 0.010, eyePos + browDir * 0.011, 0.0026, 0.0009);
 
-  float fill = 1.0 - smoothstep(-aa, aa, body);
-  fill = max(fill, 1.0 - smoothstep(-aa, aa, min(headSd, mane)));
-  fill = max(fill, 1.0 - smoothstep(-aa, aa, legs));
-  float accent = 1.0 - smoothstep(-aa, aa, horn);
-  accent = max(accent, 1.0 - smoothstep(-aa, aa, whisk));
-  accent = max(accent, 1.0 - smoothstep(-aa, aa, tailFin));
-  accent = max(accent, 1.0 - smoothstep(-aa, aa, brow));
-  accent = max(accent, (1.0 - smoothstep(-aa, aa, ridge)) * 0.40);
+  float fill = 1.0 - smoothstep(-aa, aa, body - pad);
+  fill = max(fill, 1.0 - smoothstep(-aa, aa, min(headSd, mane) - pad));
+  fill = max(fill, 1.0 - smoothstep(-aa, aa, legs - pad));
+  float accent = 1.0 - smoothstep(-aa, aa, horn - pad);
+  accent = max(accent, 1.0 - smoothstep(-aa, aa, whisk - pad));
+  accent = max(accent, 1.0 - smoothstep(-aa, aa, tailFin - pad));
+  accent = max(accent, 1.0 - smoothstep(-aa, aa, brow - pad));
+  accent = max(accent, (1.0 - smoothstep(-aa, aa, ridge - pad)) * 0.40);
   float eyeMask = 1.0 - smoothstep(-aa * 0.6, aa * 0.6, eye);
   return vec3(fill, accent, eyeMask);
 }
@@ -427,58 +519,30 @@ vec3 motionChase(vec2 uv, float t) {
 }
 
 void main() {
-  if (u_motionMode > 0.5) {
-    float structuredTime = u_time * 7.0;
-    vec3 structured;
-    if (u_motionMode < 1.5) structured = motionTaiji(vUv, structuredTime);
-    else if (u_motionMode < 2.5) structured = motionStorm(vUv, structuredTime);
-    else if (u_motionMode < 3.5) structured = motionTornado(vUv, structuredTime);
-    else structured = motionChase(vUv, structuredTime);
-    fragColor = vec4(structured, 1.0);
-    return;
-  }
-
-  vec2 uv = gl_FragCoord.xy / u_resolution.xy;
-  float t = .5 * u_time;
-  float ns = .0005 + .006 * u_scale;
-  uv -= .5; uv *= (ns * u_resolution); uv = rotate(uv, u_rotation * .5 * PI);
-  uv /= u_pixelRatio; uv += .5; uv += u_offset;
-
-  vec2 fragUV = gl_FragCoord.xy / u_resolution.xy;
-  vec4 flow = texture(u_flowmap, fragUV);
-  float influence = flow.r;
-  vec2 flowDir = (flow.gb - 0.5) * 2.0;
-
-  float n1 = noise(uv + t), n2 = noise(uv*2. - t);
-  float angle = n1 * TWO_PI;
-
-  float totalDistortion = u_distortion + influence * u_distortBoost;
-  uv.x += 4. * totalDistortion * n2 * cos(angle);
-  uv.y += 4. * totalDistortion * n2 * sin(angle);
-
-  uv += flowDir * influence * 0.15;
-
-  if (influence > 0.001) {
-    float localNoise = noise(uv * 2.0 + t * 1.5);
-    uv += influence * u_noiseBoost * vec2(cos(localNoise * TWO_PI), sin(localNoise * TWO_PI));
-  }
-
-  float iters = ceil(clamp(u_swirlIterations, 1., 30.));
-  float swirlAmt = clamp(u_swirl, 0., 2.) + influence * u_swirlBoost;
-  for (float i = 1.; i <= 30.0; i++) {
-    if (i > iters) break;
-    uv.x += swirlAmt / i * cos(t + i*1.5*uv.y);
-    uv.y += swirlAmt / i * cos(t + i*1.*uv.x);
-  }
-
-  float proportion = clamp(u_proportion, 0., 1.);
-  vec2 cuv = uv * (.5 + 3.5 * u_shapeScale);
-  float shape = .5 + .5 * sin(cuv.x) * cos(cuv.y);
-  float mixer = shape + .48 * sign(proportion - .5) * pow(abs(proportion - .5), .5);
-  vec3 col = blend_multi(mixer, clamp(u_softness, 0., 1.));
-  fragColor = vec4(col, 1.0);
+  fragColor = vec4(motionChase(vUv, u_time * 7.0), 1.0);
 }
 `;
+}
+
+export function buildDisplayFragmentShader(
+  mode: number,
+  options: { reduced?: boolean } = {},
+): string {
+  switch (clampFluidMotionMode(mode)) {
+    case 1:
+      return TAIJI_DISPLAY_SHADER;
+    case 2:
+      return STORM_DISPLAY_SHADER;
+    case 3:
+      return TORNADO_DISPLAY_SHADER;
+    case 4:
+      return options.reduced
+        ? chaseDisplayShader(14, 2)
+        : chaseDisplayShader(26, 4);
+    default:
+      return DRIFT_DISPLAY_SHADER;
+  }
+}
 
 function hexToRgb(value: string): [number, number, number] {
   const hex = value.replace("#", "");
@@ -491,7 +555,21 @@ function hexToRgb(value: string): [number, number, number] {
 
 export type FluidShaderProfile = "full" | "lite";
 
+export type FluidShaderAttachOptions = {
+  /**
+   * Windows / WebView2 only. Mac keeps OS reduced-motion (static frame).
+   * WebView2 can report reduce even when the user opted into fluid.
+   */
+  forceAnimate?: boolean;
+  /**
+   * Windows / WebView2 only. Skip compiling chase until it is selected.
+   * Mac precompiles all five fields the way the working Metal path did.
+   */
+  deferChase?: boolean;
+};
+
 export interface FluidShaderHandle {
+  readonly attached: boolean;
   setParams: (params: FluidParams) => void;
   stir: (x: number, y: number, vx: number, vy: number) => void;
   pause: () => void;
@@ -501,6 +579,7 @@ export interface FluidShaderHandle {
 
 function noopHandle(): FluidShaderHandle {
   return {
+    attached: false,
     setParams: () => undefined,
     stir: () => undefined,
     pause: () => undefined,
@@ -517,6 +596,61 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+const WEBGL2_CONTEXT_ATTEMPTS: WebGLContextAttributes[] = [
+  // Same flags as the working design prototype. `desynchronized` is unused
+  // here (mouse stir is a no-op) and WebView2 / ANGLE may reject it.
+  {
+    alpha: false,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    powerPreference: "low-power",
+  },
+  {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    premultipliedAlpha: true,
+    powerPreference: "low-power",
+  },
+  {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    premultipliedAlpha: false,
+    powerPreference: "default",
+  },
+];
+
+function getWebGL2Context(
+  canvas: HTMLCanvasElement,
+): WebGL2RenderingContext | null {
+  for (const attrs of WEBGL2_CONTEXT_ATTEMPTS) {
+    try {
+      const gl = canvas.getContext("webgl2", attrs);
+      if (gl) {
+        return gl;
+      }
+    } catch {
+      // WebView2 / ANGLE can throw on unsupported context flags.
+    }
+  }
+  try {
+    return canvas.getContext("webgl2");
+  } catch {
+    return null;
+  }
+}
+
+function warnFluidShader(stage: string, detail: string | null): void {
+  if (typeof console === "undefined" || typeof console.warn !== "function") {
+    return;
+  }
+  console.warn(`[fluidShader] ${stage} failed`, detail ?? "");
+}
+
 /**
  * Mount the fluid simulation on a canvas and run it until disposed.
  * Missing WebGL2 / compile failure returns a no-op handle.
@@ -525,87 +659,180 @@ export function attachFluidShader(
   canvas: HTMLCanvasElement,
   params: FluidParams,
   profile: FluidShaderProfile = "full",
+  options: FluidShaderAttachOptions = {},
 ): FluidShaderHandle {
   const lite = profile === "lite";
-  const gl = canvas.getContext("webgl2", {
-    alpha: true,
-    antialias: false,
-    depth: false,
-    stencil: false,
-    desynchronized: true,
-    premultipliedAlpha: false,
-    powerPreference: "low-power",
-  });
+  const forceAnimate = options.forceAnimate === true;
+  const deferChase = options.deferChase === true;
+  const gl = getWebGL2Context(canvas);
   if (gl === null) {
+    warnFluidShader("webgl2 context", "getContext returned null");
     return noopHandle();
   }
 
   const compile = (type: number, source: string): WebGLShader | null => {
-    const shader = gl.createShader(type);
-    if (shader === null) return null;
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      gl.deleteShader(shader);
+    try {
+      const shader = gl.createShader(type);
+      if (shader === null) return null;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        warnFluidShader(
+          type === gl.VERTEX_SHADER ? "vertex compile" : "fragment compile",
+          gl.getShaderInfoLog(shader),
+        );
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    } catch (error) {
+      warnFluidShader(
+        type === gl.VERTEX_SHADER ? "vertex compile" : "fragment compile",
+        error instanceof Error ? error.message : String(error),
+      );
       return null;
     }
-    return shader;
   };
 
   const link = (fragment: string): WebGLProgram | null => {
-    const vertex = compile(gl.VERTEX_SHADER, VERTEX_SHADER);
-    const frag = compile(gl.FRAGMENT_SHADER, fragment);
-    if (vertex === null || frag === null) return null;
-    const program = gl.createProgram();
-    if (program === null) return null;
-    gl.attachShader(program, vertex);
-    gl.attachShader(program, frag);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      gl.deleteProgram(program);
+    try {
+      const vertex = compile(gl.VERTEX_SHADER, VERTEX_SHADER);
+      const frag = compile(gl.FRAGMENT_SHADER, fragment);
+      if (vertex === null || frag === null) return null;
+      const program = gl.createProgram();
+      if (program === null) return null;
+      gl.attachShader(program, vertex);
+      gl.attachShader(program, frag);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        warnFluidShader("program link", gl.getProgramInfoLog(program));
+        gl.deleteProgram(program);
+        return null;
+      }
+      return program;
+    } catch (error) {
+      warnFluidShader(
+        "program link",
+        error instanceof Error ? error.message : String(error),
+      );
       return null;
     }
-    return program;
   };
 
   const flowProgram = link(FLOW_SHADER);
-  const displayProgram = link(DISPLAY_SHADER);
-  if (flowProgram === null || displayProgram === null) {
+  if (flowProgram === null) {
+    warnFluidShader("flow program", "compile or link failed");
+  }
+
+  interface DisplayLocs {
+    time: WebGLUniformLocation | null;
+    pixelRatio: WebGLUniformLocation | null;
+    resolution: WebGLUniformLocation | null;
+    scale: WebGLUniformLocation | null;
+    rotation: WebGLUniformLocation | null;
+    offset: WebGLUniformLocation | null;
+    color1: WebGLUniformLocation | null;
+    color2: WebGLUniformLocation | null;
+    color3: WebGLUniformLocation | null;
+    colorCount: WebGLUniformLocation | null;
+    proportion: WebGLUniformLocation | null;
+    softness: WebGLUniformLocation | null;
+    shape: WebGLUniformLocation | null;
+    shapeScale: WebGLUniformLocation | null;
+    distortion: WebGLUniformLocation | null;
+    swirl: WebGLUniformLocation | null;
+    swirlIterations: WebGLUniformLocation | null;
+    flowmap: WebGLUniformLocation | null;
+    distortBoost: WebGLUniformLocation | null;
+    noiseBoost: WebGLUniformLocation | null;
+    swirlBoost: WebGLUniformLocation | null;
+    strokeScale: WebGLUniformLocation | null;
+  }
+  interface DisplayBinding {
+    program: WebGLProgram;
+    locs: DisplayLocs;
+  }
+
+  const locateDisplay = (program: WebGLProgram): DisplayLocs => ({
+    time: gl.getUniformLocation(program, "u_time"),
+    pixelRatio: gl.getUniformLocation(program, "u_pixelRatio"),
+    resolution: gl.getUniformLocation(program, "u_resolution"),
+    scale: gl.getUniformLocation(program, "u_scale"),
+    rotation: gl.getUniformLocation(program, "u_rotation"),
+    offset: gl.getUniformLocation(program, "u_offset"),
+    color1: gl.getUniformLocation(program, "u_color1"),
+    color2: gl.getUniformLocation(program, "u_color2"),
+    color3: gl.getUniformLocation(program, "u_color3"),
+    colorCount: gl.getUniformLocation(program, "u_colorCount"),
+    proportion: gl.getUniformLocation(program, "u_proportion"),
+    softness: gl.getUniformLocation(program, "u_softness"),
+    shape: gl.getUniformLocation(program, "u_shape"),
+    shapeScale: gl.getUniformLocation(program, "u_shapeScale"),
+    distortion: gl.getUniformLocation(program, "u_distortion"),
+    swirl: gl.getUniformLocation(program, "u_swirl"),
+    swirlIterations: gl.getUniformLocation(program, "u_swirlIterations"),
+    flowmap: gl.getUniformLocation(program, "u_flowmap"),
+    distortBoost: gl.getUniformLocation(program, "u_distortBoost"),
+    noiseBoost: gl.getUniformLocation(program, "u_noiseBoost"),
+    swirlBoost: gl.getUniformLocation(program, "u_swirlBoost"),
+    strokeScale: gl.getUniformLocation(program, "u_strokeScale"),
+  });
+
+  const displayCache = new Map<string, DisplayBinding | null>();
+  const compileDisplay = (
+    mode: FluidMotionMode,
+    reduced = false,
+  ): DisplayBinding | null => {
+    const key = reduced ? `${mode}-reduced` : String(mode);
+    const cached = displayCache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const program = link(buildDisplayFragmentShader(mode, { reduced }));
+    if (program === null) {
+      warnFluidShader(
+        `display mode ${mode}${reduced ? " reduced" : ""}`,
+        "compile or link failed",
+      );
+      displayCache.set(key, null);
+      return null;
+    }
+    const binding = { program, locs: locateDisplay(program) };
+    displayCache.set(key, binding);
+    return binding;
+  };
+  const ensureDisplay = (mode: FluidMotionMode): DisplayBinding | null => {
+    const primary = compileDisplay(mode);
+    if (primary) {
+      return primary;
+    }
+    return mode === 4 ? compileDisplay(4, true) : null;
+  };
+
+  // Mac compiles every field up front (chase included). WebView2 / ANGLE
+  // can lose the context if chase is baked before the first present.
+  const eagerModes: FluidMotionMode[] = deferChase
+    ? [0, 1, 2, 3]
+    : [0, 1, 2, 3, 4];
+  for (const mode of eagerModes) {
+    ensureDisplay(mode);
+  }
+  const initialDisplay = ensureDisplay(clampFluidMotionMode(params.motionMode));
+  if (initialDisplay === null) {
     return noopHandle();
   }
 
-  const flow = {
-    prev: gl.getUniformLocation(flowProgram, "u_prev"),
-    mouse: gl.getUniformLocation(flowProgram, "u_mouse"),
-    velocity: gl.getUniformLocation(flowProgram, "u_velocity"),
-    brushRadius: gl.getUniformLocation(flowProgram, "u_brushRadius"),
-    brushStrength: gl.getUniformLocation(flowProgram, "u_brushStrength"),
-    decay: gl.getUniformLocation(flowProgram, "u_decay"),
-  };
-  const display = {
-    time: gl.getUniformLocation(displayProgram, "u_time"),
-    pixelRatio: gl.getUniformLocation(displayProgram, "u_pixelRatio"),
-    resolution: gl.getUniformLocation(displayProgram, "u_resolution"),
-    scale: gl.getUniformLocation(displayProgram, "u_scale"),
-    rotation: gl.getUniformLocation(displayProgram, "u_rotation"),
-    offset: gl.getUniformLocation(displayProgram, "u_offset"),
-    color1: gl.getUniformLocation(displayProgram, "u_color1"),
-    color2: gl.getUniformLocation(displayProgram, "u_color2"),
-    color3: gl.getUniformLocation(displayProgram, "u_color3"),
-    colorCount: gl.getUniformLocation(displayProgram, "u_colorCount"),
-    proportion: gl.getUniformLocation(displayProgram, "u_proportion"),
-    softness: gl.getUniformLocation(displayProgram, "u_softness"),
-    shape: gl.getUniformLocation(displayProgram, "u_shape"),
-    shapeScale: gl.getUniformLocation(displayProgram, "u_shapeScale"),
-    distortion: gl.getUniformLocation(displayProgram, "u_distortion"),
-    swirl: gl.getUniformLocation(displayProgram, "u_swirl"),
-    swirlIterations: gl.getUniformLocation(displayProgram, "u_swirlIterations"),
-    flowmap: gl.getUniformLocation(displayProgram, "u_flowmap"),
-    distortBoost: gl.getUniformLocation(displayProgram, "u_distortBoost"),
-    noiseBoost: gl.getUniformLocation(displayProgram, "u_noiseBoost"),
-    swirlBoost: gl.getUniformLocation(displayProgram, "u_swirlBoost"),
-    motionMode: gl.getUniformLocation(displayProgram, "u_motionMode"),
-  };
+  const flow =
+    flowProgram === null
+      ? null
+      : {
+          prev: gl.getUniformLocation(flowProgram, "u_prev"),
+          mouse: gl.getUniformLocation(flowProgram, "u_mouse"),
+          velocity: gl.getUniformLocation(flowProgram, "u_velocity"),
+          brushRadius: gl.getUniformLocation(flowProgram, "u_brushRadius"),
+          brushStrength: gl.getUniformLocation(flowProgram, "u_brushStrength"),
+          decay: gl.getUniformLocation(flowProgram, "u_decay"),
+        };
 
   const quadBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
@@ -711,9 +938,11 @@ export function attachFluidShader(
   }
   const targetA = makeTarget(flowWidth, flowHeight, initial);
   const targetB = makeTarget(flowWidth, flowHeight, initial);
-  if (targetA === null || targetB === null) {
-    return noopHandle();
-  }
+  const flowReady =
+    flowProgram !== null &&
+    flow !== null &&
+    targetA !== null &&
+    targetB !== null;
 
   const start = performance.now();
   let raf = 0;
@@ -733,6 +962,83 @@ export function attachFluidShader(
     canvas.height = height;
   };
 
+  const shouldAnimate = (): boolean => forceAnimate || !prefersReducedMotion();
+
+  const draw = (now: number): void => {
+    const p = current;
+    const mode = clampFluidMotionMode(p.motionMode);
+    const display = ensureDisplay(mode);
+    if (display === null) {
+      const fallback = hexToRgb(p.color3 || "#FFFFFF");
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, width, height);
+      gl.clearColor(fallback[0], fallback[1], fallback[2], 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      return;
+    }
+
+    if (mode === 0 && flowReady && targetA && targetB && flow && flowProgram) {
+      const read = flip ? targetA : targetB;
+      const write = flip ? targetB : targetA;
+      flip = !flip;
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, write.fbo);
+      gl.viewport(0, 0, flowWidth, flowHeight);
+      gl.useProgram(flowProgram);
+      bindQuad(flowProgram);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, read.tex);
+      gl.uniform1i(flow.prev, 0);
+      gl.uniform2f(flow.mouse, 0.5, 0.5);
+      gl.uniform2f(flow.velocity, 0, 0);
+      gl.uniform1f(flow.brushRadius, p.mouseRadius);
+      gl.uniform1f(flow.brushStrength, p.mouseStrength);
+      gl.uniform1f(flow.decay, p.decay);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, write.tex);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    const locs = display.locs;
+    gl.viewport(0, 0, width, height);
+    gl.useProgram(display.program);
+    bindQuad(display.program);
+    const time = (performance.now() - start) * 0.001 * (p.speed / 100);
+    gl.uniform1f(locs.time, time);
+    gl.uniform1f(locs.pixelRatio, window.devicePixelRatio || 1);
+    gl.uniform2f(locs.resolution, width, height);
+    gl.uniform1f(locs.scale, p.scale);
+    gl.uniform1f(locs.rotation, p.rotation / 90);
+    gl.uniform2f(locs.offset, p.offsetX / 100, p.offsetY / 100);
+    const c1 = hexToRgb(p.color1 || "#2E58A4");
+    const c2 = hexToRgb(p.color2 || "#D2E2EE");
+    const c3 = hexToRgb(p.color3 || "#FFFFFF");
+    gl.uniform4f(locs.color1, c1[0], c1[1], c1[2], 1);
+    gl.uniform4f(locs.color2, c2[0], c2[1], c2[2], 1);
+    gl.uniform4f(locs.color3, c3[0], c3[1], c3[2], 1);
+    gl.uniform1f(locs.colorCount, 3);
+    gl.uniform1f(locs.proportion, p.proportion / 100);
+    gl.uniform1f(locs.softness, p.softness / 100);
+    gl.uniform1f(locs.shape, 0);
+    gl.uniform1f(locs.shapeScale, p.shapeScale / 100);
+    gl.uniform1f(locs.distortion, p.distortion / 100);
+    gl.uniform1f(locs.swirl, p.swirl / 50);
+    gl.uniform1f(
+      locs.swirlIterations,
+      lite ? Math.min(p.swirlIterations, 4) : p.swirlIterations,
+    );
+    gl.uniform1i(locs.flowmap, 0);
+    gl.uniform1f(locs.distortBoost, p.distortBoost);
+    gl.uniform1f(locs.noiseBoost, p.noiseBoost);
+    gl.uniform1f(locs.swirlBoost, p.swirlBoost);
+    gl.uniform1f(locs.strokeScale, lite ? 2.4 : 1.0);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+
   const frame = (now: number): void => {
     if (disposed || paused) {
       raf = 0;
@@ -741,63 +1047,7 @@ export function attachFluidShader(
     raf = requestAnimationFrame(frame);
     if (now - previous < step) return;
     previous = now - ((now - previous) % step);
-
-    const p = current;
-
-    const read = flip ? targetA : targetB;
-    const write = flip ? targetB : targetA;
-    flip = !flip;
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, write.fbo);
-    gl.viewport(0, 0, flowWidth, flowHeight);
-    gl.useProgram(flowProgram);
-    bindQuad(flowProgram);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, read.tex);
-    gl.uniform1i(flow.prev, 0);
-    gl.uniform2f(flow.mouse, 0.5, 0.5);
-    gl.uniform2f(flow.velocity, 0, 0);
-    gl.uniform1f(flow.brushRadius, p.mouseRadius);
-    gl.uniform1f(flow.brushStrength, p.mouseStrength);
-    gl.uniform1f(flow.decay, p.decay);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-    gl.viewport(0, 0, width, height);
-    gl.useProgram(displayProgram);
-    bindQuad(displayProgram);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, write.tex);
-    gl.uniform1i(display.flowmap, 0);
-    const time = (performance.now() - start) * 0.001 * (p.speed / 100);
-    gl.uniform1f(display.time, time);
-    gl.uniform1f(display.pixelRatio, window.devicePixelRatio || 1);
-    gl.uniform2f(display.resolution, width, height);
-    gl.uniform1f(display.scale, p.scale);
-    gl.uniform1f(display.rotation, p.rotation / 90);
-    gl.uniform2f(display.offset, p.offsetX / 100, p.offsetY / 100);
-    const c1 = hexToRgb(p.color1 || "#2E58A4");
-    const c2 = hexToRgb(p.color2 || "#D2E2EE");
-    const c3 = hexToRgb(p.color3 || "#FFFFFF");
-    gl.uniform4f(display.color1, c1[0], c1[1], c1[2], 1);
-    gl.uniform4f(display.color2, c2[0], c2[1], c2[2], 1);
-    gl.uniform4f(display.color3, c3[0], c3[1], c3[2], 1);
-    gl.uniform1f(display.colorCount, 3);
-    gl.uniform1f(display.proportion, p.proportion / 100);
-    gl.uniform1f(display.softness, p.softness / 100);
-    gl.uniform1f(display.shape, 0);
-    gl.uniform1f(display.shapeScale, p.shapeScale / 100);
-    gl.uniform1f(display.distortion, p.distortion / 100);
-    gl.uniform1f(display.swirl, p.swirl / 50);
-    gl.uniform1f(
-      display.swirlIterations,
-      lite ? Math.min(p.swirlIterations, 4) : p.swirlIterations,
-    );
-    gl.uniform1f(display.distortBoost, p.distortBoost);
-    gl.uniform1f(display.noiseBoost, p.noiseBoost);
-    gl.uniform1f(display.swirlBoost, p.swirlBoost);
-    gl.uniform1f(display.motionMode, p.motionMode ?? 0);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    draw(now);
   };
 
   const stopLoop = (): void => {
@@ -808,7 +1058,7 @@ export function attachFluidShader(
   };
 
   const startLoop = (): void => {
-    if (disposed || paused || prefersReducedMotion() || raf !== 0) {
+    if (disposed || paused || !shouldAnimate() || raf !== 0) {
       return;
     }
     previous = 0;
@@ -824,8 +1074,15 @@ export function attachFluidShader(
   };
 
   const handle: FluidShaderHandle = {
+    attached: true,
     setParams: (next: FluidParams) => {
       current = { ...next };
+      ensureDisplay(clampFluidMotionMode(next.motionMode));
+      // Chip switches must repaint even when the RAF loop is stopped
+      // (reduced-motion, or a WebView2 loop that died after the first frame).
+      previous = 0;
+      draw(performance.now());
+      startLoop();
     },
     stir: () => undefined,
     pause: () => {
@@ -859,12 +1116,7 @@ export function attachFluidShader(
         });
   resizeObserver?.observe(canvas);
 
-  if (prefersReducedMotion()) {
-    frame(performance.now());
-    stopLoop();
-    return handle;
-  }
-
+  draw(performance.now());
   startLoop();
   return handle;
 }

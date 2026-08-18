@@ -123,6 +123,12 @@
 - 硬红线：① 禁止用固定 timeout 当冷启动修复；② 禁止用第一次 pointerdown/keydown 启动 deferred stores / i18n / updater / Markdown compile / ComposerImpl；③ 禁止假设 StartupGateOverlay 默认在挡用户；④ 禁止 Light 层泄漏可点 ModelSelect / atomic catalog。
 - 分析与入口表见 `docs/analysis/windows-cold-start-click-freeze-release-notes-and-composer-2026-08-14.md`。只修用户点到的那一个按钮不算修完。
 
+### WebView Animation Compat Gate（2026-08-19 流体背景 Win 兼容沉淀）
+
+- 改 WebGL / canvas 全屏动效、workspace wallpaper、`backdrop-filter` 盖动态层、或 `prefers-reduced-motion` 停 RAF 前，必读 `dev-guidelines/guides/webview-animation-compat-pitfall.md`。
+- 硬红线：① 禁止用平台隐藏当兼容性修复；② 禁止把 Windows / ANGLE 兜底写进 Mac 默认路径；③ 禁止一条 mega-shader 靠 uniform 分支切完全不同的场；④ 禁止 `backdrop-filter` 盖 WebGL 而不做 Win 验收；⑤ 禁止 canvas 未 attach 就打透明孔；⑥ 禁止 RAF 停了还不重画。
+- Mac 已正确的 frost / reduced-motion / chase 预编译不得被 Win 现场改掉。验收用 isolated 开发者客户端，禁止 kill 当前会话窗。
+
 ## 仓库卫生
 
 - `.omx/**`、`.ccgui/**`、client-local state 等本地 state 属于 runtime artifact 或 local-only state。

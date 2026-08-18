@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WORKSPACE_WALLPAPER,
-  isWorkspaceFluidWallpaperSupported,
   resolveWorkspaceWallpaperMode,
   sanitizeCustomWallpaperPath,
   sanitizeWorkspaceWallpaper,
@@ -151,42 +150,39 @@ describe("workspaceWallpaper", () => {
     );
   });
 
-  it("disables fluid wallpaper on Windows and keeps it elsewhere", () => {
-    expect(isWorkspaceFluidWallpaperSupported(true)).toBe(false);
-    expect(isWorkspaceFluidWallpaperSupported(false)).toBe(true);
+  it("resolves persisted fluid and custom modes without a platform gate", () => {
     expect(
-      resolveWorkspaceWallpaperMode(
-        {
-          mode: "fluid",
-          customImagePath: null,
-          fluidPreset: "mist",
-          veilOpacity: 12,
-        },
-        true,
-      ),
-    ).toBe("none");
-    expect(
-      resolveWorkspaceWallpaperMode(
-        {
-          mode: "custom",
-          customImagePath: "/tmp/wall.png",
-          fluidPreset: "mist",
-          veilOpacity: 12,
-        },
-        true,
-      ),
-    ).toBe("none");
-    expect(
-      resolveWorkspaceWallpaperMode(
-        {
-          mode: "fluid",
-          customImagePath: null,
-          fluidPreset: "mist",
-          veilOpacity: 12,
-        },
-        false,
-      ),
+      resolveWorkspaceWallpaperMode({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
     ).toBe("fluid");
+    expect(
+      resolveWorkspaceWallpaperMode({
+        mode: "custom",
+        customImagePath: "/tmp/wall.png",
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
+    ).toBe("custom");
+    expect(
+      resolveWorkspaceWallpaperMode({
+        mode: "custom",
+        customImagePath: null,
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
+    ).toBe("fluid");
+    expect(
+      resolveWorkspaceWallpaperMode({
+        mode: "none",
+        customImagePath: null,
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
+    ).toBe("none");
   });
 
   it("clamps frost blur to the readable chrome range", () => {
