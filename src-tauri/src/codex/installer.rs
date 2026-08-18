@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -14,9 +14,12 @@ use crate::backend::app_server::{
 use crate::types::AppSettings;
 
 const INSTALL_TIMEOUT_SECS: u64 = 180;
+const DSH_INSTALL_TIMEOUT_SECS: u64 = 420;
 const PREFLIGHT_TIMEOUT_SECS: u64 = 8;
 const OUTPUT_SUMMARY_LIMIT: usize = 4_000;
 const PROGRESS_CHUNK_LIMIT: usize = 1_000;
+const DSH_NPM_SCOPE: &str = "@deepseek-ai";
+const DSH_NPM_PACKAGE: &str = "dsh";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -214,6 +217,82 @@ pub(crate) fn registry_package_name_for_engine(engine: CliInstallEngine) -> &'st
     }
 }
 
+fn should_harden_dsh_npm(engine: CliInstallEngine, action: CliInstallAction) -> bool {
+    engine == CliInstallEngine::Dsh
+        && matches!(
+            action,
+            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest
+        )
+}
+
+fn install_timeout_secs(engine: CliInstallEngine) -> u64 {
+    match engine {
+        CliInstallEngine::Dsh => DSH_INSTALL_TIMEOUT_SECS,
+        _ => INSTALL_TIMEOUT_SECS,
+    }
+}
+
+fn npm_plain_global_install_args(package: &str) -> Vec<String> {
+    vec![
+        "install".to_string(),
+        "-g".to_string(),
+        package.to_string(),
+    ]
+}
+
+fn npm_hardened_global_install_args(package: &str) -> Vec<String> {
+    vec![
+        "install".to_string(),
+        "-g".to_string(),
+        "--maxsockets=1".to_string(),
+        "--fetch-retries=5".to_string(),
+        "--no-audit".to_string(),
+        "--no-fund".to_string(),
+        package.to_string(),
+    ]
+}
+
+fn dsh_npm_install_args() -> Vec<String> {
+    npm_hardened_global_install_args(package_name_for_engine(CliInstallEngine::Dsh))
+}
+
+fn npm_global_package_dir_candidates(prefix: &str, scope: &str, name: &str) -> Vec<PathBuf> {
+    let prefix_path = Path::new(prefix);
+    vec![
+        prefix_path.join("node_modules").join(scope).join(name),
+        prefix_path
+            .join("lib")
+            .join("node_modules")
+            .join(scope)
+            .join(name),
+    ]
+}
+
+fn dsh_global_package_looks_stale(path: &Path) -> bool {
+    path.exists() && !path.join("package.json").is_file()
+}
+
+fn is_npm_extract_race_failure(exit_code: Option<i32>, stdout: &str, stderr: &str) -> bool {
+    if matches!(exit_code, Some(-4058) | Some(4058)) {
+        return true;
+    }
+    let combined = format!("{stdout}\n{stderr}").to_ascii_lowercase();
+    combined.contains("cannot cd into")
+        || combined.contains("seems to be corrupted")
+        || (combined.contains("enoent") && combined.contains("tar"))
+}
+
+fn dsh_install_failure_details(exit_code: Option<i32>, stdout: &str, stderr: &str) -> String {
+    if is_npm_extract_race_failure(exit_code, stdout, stderr) {
+        format!(
+            "DSH npm global install hit a concurrent extract race (ENOENT / corrupted tarball). This is common on Windows and can also happen on macOS. Retry the one-click install, or run: npm cache clean --force && {}",
+            manual_fallback_for(CliInstallEngine::Dsh, CliInstallAction::InstallLatest)
+        )
+    } else {
+        "CLI installer exited with a non-zero status.".to_string()
+    }
+}
+
 fn claude_native_install_preview() -> Vec<String> {
     if cfg!(target_os = "windows") {
         vec![
@@ -303,12 +382,15 @@ fn command_preview_for(engine: CliInstallEngine, action: CliInstallAction) -> Ve
             ],
         },
         CliInstallEngine::OpenCode | CliInstallEngine::Dsh => match action {
-            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => vec![
-                "npm".to_string(),
-                "install".to_string(),
-                "-g".to_string(),
-                package_name_for_engine(engine).to_string(),
-            ],
+            CliInstallAction::InstallLatest | CliInstallAction::UpdateLatest => {
+                let mut preview = vec!["npm".to_string()];
+                preview.extend(if engine == CliInstallEngine::Dsh {
+                    dsh_npm_install_args()
+                } else {
+                    npm_plain_global_install_args(package_name_for_engine(engine))
+                });
+                preview
+            }
             CliInstallAction::Uninstall => vec![
                 "echo".to_string(),
                 if engine == CliInstallEngine::Dsh {
@@ -506,6 +588,46 @@ async fn npm_prefix_blocker(path_env: Option<&String>) -> Option<String> {
     }
 }
 
+fn remove_dir_all_best_effort(path: &Path) -> Result<bool, String> {
+    if !path.exists() {
+        return Ok(false);
+    }
+    if let Err(first) = std::fs::remove_dir_all(path) {
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::remove_dir_all(path).map_err(|second| {
+            format!(
+                "failed to remove leftover {}: {first}; retry: {second}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(true)
+}
+
+async fn cleanup_stale_dsh_npm_global_package(
+    path_env: Option<&String>,
+    force: bool,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    let Ok(Some(prefix)) = resolve_npm_prefix(path_env).await else {
+        return notes;
+    };
+    for candidate in npm_global_package_dir_candidates(&prefix, DSH_NPM_SCOPE, DSH_NPM_PACKAGE) {
+        if !force && !dsh_global_package_looks_stale(&candidate) {
+            continue;
+        }
+        match remove_dir_all_best_effort(&candidate) {
+            Ok(true) => notes.push(format!(
+                "Removed leftover DSH npm global package at {}",
+                candidate.display()
+            )),
+            Ok(false) => {}
+            Err(error) => notes.push(error),
+        }
+    }
+    notes
+}
+
 async fn resolve_installer_command(
     engine: CliInstallEngine,
     action: CliInstallAction,
@@ -616,11 +738,11 @@ async fn resolve_installer_command(
                 .unwrap_or_else(|| "npm".to_string());
             Ok(InstallerCommandSpec {
                 program: npm_path,
-                args: vec![
-                    "install".to_string(),
-                    "-g".to_string(),
-                    package_name_for_engine(engine).to_string(),
-                ],
+                args: if engine == CliInstallEngine::Dsh {
+                    dsh_npm_install_args()
+                } else {
+                    npm_plain_global_install_args(package_name_for_engine(engine))
+                },
                 path_env,
             })
         }
@@ -1083,6 +1205,10 @@ pub(crate) async fn build_cli_install_plan_with_backend(
                     Err(_) => {}
                     Ok(Some(_)) => {}
                 }
+                warnings.push(
+                    "DSH is a large npm package. The installer serializes downloads (--maxsockets=1), removes leftover global files, and uses a longer timeout so Windows/macOS extract races are less likely."
+                        .to_string(),
+                );
             }
         }
         CliInstallStrategy::OfficialNative => {
@@ -1200,6 +1326,143 @@ pub(crate) async fn build_cli_install_plan(
     .await
 }
 
+struct InstallerAttemptOutput {
+    status: std::process::ExitStatus,
+    stdout_text: String,
+    stderr_text: String,
+}
+
+fn should_retry_dsh_extract_race(
+    engine: CliInstallEngine,
+    action: CliInstallAction,
+    attempt: &InstallerAttemptOutput,
+) -> bool {
+    should_harden_dsh_npm(engine, action)
+        && !attempt.status.success()
+        && is_npm_extract_race_failure(
+            attempt.status.code(),
+            &attempt.stdout_text,
+            &attempt.stderr_text,
+        )
+}
+
+fn emit_installer_note(
+    progress_sink: &Option<CliInstallProgressSink>,
+    run_id: &str,
+    engine: CliInstallEngine,
+    action: CliInstallAction,
+    strategy: CliInstallStrategy,
+    started: Instant,
+    message: String,
+) {
+    emit_progress(
+        progress_sink,
+        CliInstallProgressEvent {
+            run_id: run_id.to_string(),
+            engine,
+            action,
+            strategy,
+            backend: CliInstallBackend::Local,
+            phase: CliInstallProgressPhase::Stdout,
+            stream: Some(CliInstallOutputStream::Stdout),
+            message: Some(message),
+            exit_code: None,
+            duration_ms: Some(started.elapsed().as_millis()),
+        },
+    );
+}
+
+async fn run_installer_attempt(
+    command_spec: &InstallerCommandSpec,
+    run_id: &str,
+    engine: CliInstallEngine,
+    action: CliInstallAction,
+    strategy: CliInstallStrategy,
+    progress_sink: &Option<CliInstallProgressSink>,
+    timeout_secs: u64,
+    started: Instant,
+) -> Result<InstallerAttemptOutput, String> {
+    let mut command = build_command_for_binary(&command_spec.program);
+    if let Some(path_env) = &command_spec.path_env {
+        command.env("PATH", path_env);
+    }
+    command.args(&command_spec.args);
+    command.stdout(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
+
+    let mut child = command.spawn().map_err(|error| {
+        let message = format!("failed to start CLI installer: {error}");
+        emit_progress(
+            progress_sink,
+            CliInstallProgressEvent {
+                run_id: run_id.to_string(),
+                engine,
+                action,
+                strategy,
+                backend: CliInstallBackend::Local,
+                phase: CliInstallProgressPhase::Error,
+                stream: None,
+                message: Some(message.clone()),
+                exit_code: None,
+                duration_ms: Some(started.elapsed().as_millis()),
+            },
+        );
+        message
+    })?;
+    let stdout_task = tokio::spawn(read_output_stream(
+        child.stdout.take(),
+        run_id.to_string(),
+        engine,
+        action,
+        strategy,
+        CliInstallOutputStream::Stdout,
+        progress_sink.clone(),
+    ));
+    let stderr_task = tokio::spawn(read_output_stream(
+        child.stderr.take(),
+        run_id.to_string(),
+        engine,
+        action,
+        strategy,
+        CliInstallOutputStream::Stderr,
+        progress_sink.clone(),
+    ));
+
+    let status = timeout(Duration::from_secs(timeout_secs), child.wait())
+        .await
+        .map_err(|_| {
+            let _ = child.start_kill();
+            emit_progress(
+                progress_sink,
+                CliInstallProgressEvent {
+                    run_id: run_id.to_string(),
+                    engine,
+                    action,
+                    strategy,
+                    backend: CliInstallBackend::Local,
+                    phase: CliInstallProgressPhase::Error,
+                    stream: None,
+                    message: Some("CLI installer timed out.".to_string()),
+                    exit_code: None,
+                    duration_ms: Some(started.elapsed().as_millis()),
+                },
+            );
+            "CLI installer timed out.".to_string()
+        })?
+        .map_err(|error| format!("failed to run CLI installer: {error}"))?;
+    let stdout_text = stdout_task
+        .await
+        .map_err(|error| format!("failed to join CLI installer stdout reader: {error}"))??;
+    let stderr_text = stderr_task
+        .await
+        .map_err(|error| format!("failed to join CLI installer stderr reader: {error}"))??;
+    Ok(InstallerAttemptOutput {
+        status,
+        stdout_text,
+        stderr_text,
+    })
+}
+
 pub(crate) async fn run_cli_installer_with_progress(
     engine: CliInstallEngine,
     action: CliInstallAction,
@@ -1245,82 +1508,72 @@ pub(crate) async fn run_cli_installer_with_progress(
     );
 
     let command_spec = resolve_installer_command(engine, action, settings).await?;
-    let mut command = build_command_for_binary(&command_spec.program);
-    if let Some(path_env) = &command_spec.path_env {
-        command.env("PATH", path_env);
-    }
-    command.args(&command_spec.args);
-    command.stdout(std::process::Stdio::piped());
-    command.stderr(std::process::Stdio::piped());
-
-    let mut child = command.spawn().map_err(|error| {
-        let message = format!("failed to start CLI installer: {error}");
-        emit_progress(
-            &progress_sink,
-            CliInstallProgressEvent {
-                run_id: run_id.clone(),
+    let timeout_secs = install_timeout_secs(engine);
+    if should_harden_dsh_npm(engine, action) {
+        for note in
+            cleanup_stale_dsh_npm_global_package(command_spec.path_env.as_ref(), false).await
+        {
+            emit_installer_note(
+                &progress_sink,
+                &run_id,
                 engine,
                 action,
                 strategy,
-                backend: CliInstallBackend::Local,
-                phase: CliInstallProgressPhase::Error,
-                stream: None,
-                message: Some(message.clone()),
-                exit_code: None,
-                duration_ms: Some(started.elapsed().as_millis()),
-            },
-        );
-        message
-    })?;
-    let stdout_task = tokio::spawn(read_output_stream(
-        child.stdout.take(),
-        run_id.clone(),
-        engine,
-        action,
-        strategy,
-        CliInstallOutputStream::Stdout,
-        progress_sink.clone(),
-    ));
-    let stderr_task = tokio::spawn(read_output_stream(
-        child.stderr.take(),
-        run_id.clone(),
-        engine,
-        action,
-        strategy,
-        CliInstallOutputStream::Stderr,
-        progress_sink.clone(),
-    ));
-
-    let status = timeout(Duration::from_secs(INSTALL_TIMEOUT_SECS), child.wait())
-        .await
-        .map_err(|_| {
-            let _ = child.start_kill();
-            emit_progress(
-                &progress_sink,
-                CliInstallProgressEvent {
-                    run_id: run_id.clone(),
-                    engine,
-                    action,
-                    strategy,
-                    backend: CliInstallBackend::Local,
-                    phase: CliInstallProgressPhase::Error,
-                    stream: None,
-                    message: Some("CLI installer timed out.".to_string()),
-                    exit_code: None,
-                    duration_ms: Some(started.elapsed().as_millis()),
-                },
+                started,
+                note,
             );
-            "CLI installer timed out.".to_string()
-        })?
-        .map_err(|error| format!("failed to run CLI installer: {error}"))?;
-    let stdout_text = stdout_task
-        .await
-        .map_err(|error| format!("failed to join CLI installer stdout reader: {error}"))??;
-    let stderr_text = stderr_task
-        .await
-        .map_err(|error| format!("failed to join CLI installer stderr reader: {error}"))??;
+        }
+    }
 
-    let ok = status.success();
+    let mut attempt = run_installer_attempt(
+        &command_spec,
+        &run_id,
+        engine,
+        action,
+        strategy,
+        &progress_sink,
+        timeout_secs,
+        started,
+    )
+    .await?;
+
+    if should_retry_dsh_extract_race(engine, action, &attempt) {
+        emit_installer_note(
+            &progress_sink,
+            &run_id,
+            engine,
+            action,
+            strategy,
+            started,
+            "Retrying DSH npm install after extract-race failure (ENOENT / corrupted tarball)..."
+                .to_string(),
+        );
+        for note in cleanup_stale_dsh_npm_global_package(command_spec.path_env.as_ref(), true).await
+        {
+            emit_installer_note(
+                &progress_sink,
+                &run_id,
+                engine,
+                action,
+                strategy,
+                started,
+                note,
+            );
+        }
+        attempt = run_installer_attempt(
+            &command_spec,
+            &run_id,
+            engine,
+            action,
+            strategy,
+            &progress_sink,
+            timeout_secs,
+            started,
+        )
+        .await?;
+    }
+
+    let ok = attempt.status.success();
     let (doctor_result, doctor_details) = if ok && action != CliInstallAction::Uninstall {
         match run_post_install_doctor(engine, settings).await {
             Ok(result) => (Some(result), None),
@@ -1341,13 +1594,19 @@ pub(crate) async fn run_cli_installer_with_progress(
         action,
         strategy,
         backend: CliInstallBackend::Local,
-        exit_code: status.code(),
-        stdout_summary: summarize_output(&stdout_text),
-        stderr_summary: summarize_output(&stderr_text),
+        exit_code: attempt.status.code(),
+        stdout_summary: summarize_output(&attempt.stdout_text),
+        stderr_summary: summarize_output(&attempt.stderr_text),
         details: if let Some(detail) = doctor_details {
             Some(detail)
         } else if ok {
             None
+        } else if should_harden_dsh_npm(engine, action) {
+            Some(dsh_install_failure_details(
+                attempt.status.code(),
+                &attempt.stdout_text,
+                &attempt.stderr_text,
+            ))
         } else {
             Some("CLI installer exited with a non-zero status.".to_string())
         },
@@ -1609,6 +1868,10 @@ mod tests {
                 "npm".to_string(),
                 "install".to_string(),
                 "-g".to_string(),
+                "--maxsockets=1".to_string(),
+                "--fetch-retries=5".to_string(),
+                "--no-audit".to_string(),
+                "--no-fund".to_string(),
                 "@deepseek-ai/dsh@latest".to_string()
             ]
         );
@@ -1618,6 +1881,10 @@ mod tests {
                 "npm".to_string(),
                 "install".to_string(),
                 "-g".to_string(),
+                "--maxsockets=1".to_string(),
+                "--fetch-retries=5".to_string(),
+                "--no-audit".to_string(),
+                "--no-fund".to_string(),
                 "@deepseek-ai/dsh@latest".to_string()
             ]
         );
@@ -1735,6 +2002,33 @@ mod tests {
             .blockers
             .iter()
             .any(|blocker| blocker.contains("uninstall is intentionally not supported")));
+    }
+
+    #[tokio::test]
+    async fn dsh_install_plan_uses_hardened_npm_and_warns_about_extract_race() {
+        let plan = build_cli_install_plan(
+            CliInstallEngine::Dsh,
+            CliInstallAction::InstallLatest,
+            CliInstallStrategy::NpmGlobal,
+            &AppSettings::default(),
+        )
+        .await;
+
+        assert_eq!(
+            plan.command_preview,
+            command_preview_for(CliInstallEngine::Dsh, CliInstallAction::InstallLatest)
+        );
+        assert!(plan.command_preview.iter().any(|part| part == "--maxsockets=1"));
+        assert!(plan
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("extract races")));
+        assert_eq!(
+            plan.manual_fallback.as_deref(),
+            Some(
+                "npm install -g --maxsockets=1 --fetch-retries=5 --no-audit --no-fund @deepseek-ai/dsh@latest"
+            )
+        );
     }
 
     #[tokio::test]
@@ -1916,6 +2210,105 @@ mod tests {
         );
         assert_eq!(extract_semver("not-a-version"), None);
         assert_eq!(extract_semver(""), None);
+    }
+
+    #[test]
+    fn dsh_npm_install_args_serialize_extract_and_skip_audit() {
+        assert_eq!(
+            dsh_npm_install_args(),
+            vec![
+                "install".to_string(),
+                "-g".to_string(),
+                "--maxsockets=1".to_string(),
+                "--fetch-retries=5".to_string(),
+                "--no-audit".to_string(),
+                "--no-fund".to_string(),
+                "@deepseek-ai/dsh@latest".to_string()
+            ]
+        );
+        assert_eq!(install_timeout_secs(CliInstallEngine::Dsh), 420);
+        assert_eq!(install_timeout_secs(CliInstallEngine::Codex), 180);
+        assert!(should_harden_dsh_npm(
+            CliInstallEngine::Dsh,
+            CliInstallAction::InstallLatest
+        ));
+        assert!(!should_harden_dsh_npm(
+            CliInstallEngine::OpenCode,
+            CliInstallAction::InstallLatest
+        ));
+    }
+
+    #[test]
+    fn npm_global_package_dir_candidates_cover_unix_and_windows_layouts() {
+        let candidates =
+            npm_global_package_dir_candidates("/usr/local", DSH_NPM_SCOPE, DSH_NPM_PACKAGE);
+        assert!(candidates.iter().any(|path| path.ends_with(
+            Path::new("lib")
+                .join("node_modules")
+                .join("@deepseek-ai")
+                .join("dsh")
+        )));
+        let windows_candidates = npm_global_package_dir_candidates(
+            r"C:\Users\CXN\AppData\Roaming\npm",
+            DSH_NPM_SCOPE,
+            DSH_NPM_PACKAGE,
+        );
+        assert!(windows_candidates.iter().any(|path| path.ends_with(
+            Path::new("node_modules")
+                .join("@deepseek-ai")
+                .join("dsh")
+        )));
+    }
+
+    #[test]
+    fn dsh_global_package_without_package_json_is_stale() {
+        let root = std::env::temp_dir().join(format!(
+            "dsh-stale-package-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(root.join("node_modules").join("isexe")).expect("create leftover");
+        assert!(dsh_global_package_looks_stale(&root));
+        std::fs::write(root.join("package.json"), "{\"name\":\"@deepseek-ai/dsh\"}")
+            .expect("write package.json");
+        assert!(!dsh_global_package_looks_stale(&root));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn npm_extract_race_detects_windows_enoent_and_corrupted_tarball() {
+        assert!(is_npm_extract_race_failure(
+            Some(-4058),
+            "",
+            "npm warn tar ENOENT: Cannot cd into 'C:/Users/CXN/AppData/Roaming/npm/node_modules/@deepseek-ai/dsh/node_modules/isexe'"
+        ));
+        assert!(is_npm_extract_race_failure(
+            Some(1),
+            "",
+            "npm warn tarball tarball data for isexe@https://registry.npmjs.org/isexe/-/isexe-2.0.0.tgz seems to be corrupted. Trying again."
+        ));
+        assert!(is_npm_extract_race_failure(
+            Some(1),
+            "",
+            "npm warn tar ENOENT: Cannot cd into '/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/isexe'"
+        ));
+        assert!(!is_npm_extract_race_failure(
+            Some(1),
+            "",
+            "npm ERR! code EACCES\nnpm ERR! permission denied"
+        ));
+        let details = dsh_install_failure_details(
+            Some(-4058),
+            "",
+            "npm warn tar ENOENT: Cannot cd into leftover",
+        );
+        assert!(details.contains("concurrent extract race"));
+        assert!(details.contains(&manual_fallback_for(
+            CliInstallEngine::Dsh,
+            CliInstallAction::InstallLatest
+        )));
     }
 
     #[test]
