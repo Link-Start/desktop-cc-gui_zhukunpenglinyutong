@@ -151,6 +151,7 @@ import {
   findCatalogSourceStatusForEngine,
   hasAuthoritativeCatalogMembershipProof,
   isIncompleteCatalogSourceStatus,
+  resolveLastGoodFloorProjection,
   type ThreadEngineSource,
   type LastGoodThreadSummariesByEngine,
   useThreadActionsLastGoodSnapshots,
@@ -1767,54 +1768,64 @@ export function useThreadActions({
           }
         }
 
-        let visibleSummaries = allSummaries;
-        let lastGoodSnapshotCandidates: ThreadSummary[] | null = allSummaries;
         const hasAuthoritativeEmptyCatalog =
-          visibleSummaries.length === 0 &&
+          allSummaries.length === 0 &&
           !degradedPartialSource &&
           hasAuthoritativeCatalogMembershipProof(
             projectCatalogValue?.sourceStatuses,
           );
         const emptyListFallbackSource =
-          visibleSummaries.length === 0 && !hasAuthoritativeEmptyCatalog
+          allSummaries.length === 0 && !hasAuthoritativeEmptyCatalog
             ? (degradedPartialSource ?? "empty-thread-list")
             : null;
-        if (emptyListFallbackSource) {
-          lastGoodSnapshotCandidates = null;
-          const fallbackThreads = filterRetainableContinuitySummaries(
-            getLastGoodThreadSummariesWithoutDeleted(),
-            hiddenSharedBindingIds,
+        const lastGoodFloor = resolveLastGoodFloorProjection({
+          indexSummaries: allSummaries,
+          lastGoodSummaries: [
+            ...filterRetainableContinuitySummaries(
+              getLastGoodThreadSummariesWithoutDeleted(),
+              hiddenSharedBindingIds,
+            ),
+            ...(options?.mergeExistingThreads
+              ? filterRetainableContinuitySummaries(
+                  existingThreads,
+                  hiddenSharedBindingIds,
+                )
+              : []),
+          ],
+          hasAuthoritativeEmptyCatalog,
+          excludedThreadIds: hiddenSharedBindingIds,
+        });
+        let visibleSummaries = lastGoodFloor.visibleSummaries;
+        let lastGoodSnapshotCandidates = lastGoodFloor.rememberCandidates;
+        if (emptyListFallbackSource && visibleSummaries.length > 0) {
+          visibleSummaries = markThreadSummariesDegraded(
+            visibleSummaries,
+            emptyListFallbackSource,
+            "last-good-fallback",
           );
-          if (fallbackThreads.length > 0) {
-            visibleSummaries = markThreadSummariesDegraded(
-              fallbackThreads,
-              emptyListFallbackSource,
-              "last-good-fallback",
-            );
-            const diagnostic = buildPartialHistoryDiagnostic(
-              `thread list fallback: ${emptyListFallbackSource}`,
-            );
-            onDebug?.({
-              id: `${Date.now()}-client-thread-list-fallback`,
-              timestamp: Date.now(),
-              source: "client",
-              label: "thread/list fallback",
-              payload: buildThreadDebugCorrelation(
-                {
-                  workspaceId: workspace.id,
-                  action: "thread-list-fallback",
-                  engine: "multi",
-                  diagnosticCategory: diagnostic.category,
-                  recoveryState: "degraded",
-                },
-                {
-                  partialSource: emptyListFallbackSource,
-                  fallbackCount: visibleSummaries.length,
-                  diagnosticMessage: diagnostic.rawMessage,
-                },
-              ),
-            });
-          }
+          const diagnostic = buildPartialHistoryDiagnostic(
+            `thread list fallback: ${emptyListFallbackSource}`,
+          );
+          onDebug?.({
+            id: `${Date.now()}-client-thread-list-fallback`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "thread/list fallback",
+            payload: buildThreadDebugCorrelation(
+              {
+                workspaceId: workspace.id,
+                action: "thread-list-fallback",
+                engine: "multi",
+                diagnosticCategory: diagnostic.category,
+                recoveryState: "degraded",
+              },
+              {
+                partialSource: emptyListFallbackSource,
+                fallbackCount: visibleSummaries.length,
+                diagnosticMessage: diagnostic.rawMessage,
+              },
+            ),
+          });
         } else if (degradedPartialSource) {
           if (shouldApplyClaudeSidebarContinuity(degradedPartialSource)) {
             visibleSummaries = mergeDegradedClaudeContinuitySummaries(

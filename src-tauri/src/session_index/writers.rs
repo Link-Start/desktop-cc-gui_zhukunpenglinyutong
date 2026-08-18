@@ -8,8 +8,9 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use super::store::{
-    invalidate_source_freshness, load_backfill_state, mark_source_synced, normalize_path_key,
-    save_backfill_state, source_is_fresh, upsert_rows, BackfillState, SessionIndexRow,
+    invalidate_source_freshness, load_backfill_state, mark_source_synced, max_updated_at_for_engine,
+    normalize_path_key, save_backfill_state, source_is_fresh, upsert_rows, BackfillState,
+    SessionIndexRow,
 };
 use crate::engine::claude_history::encode_project_path;
 
@@ -543,7 +544,16 @@ pub(crate) fn sync_claude_for_workspace(
         mtime_fingerprint(&project_dir),
         mtime_fingerprint(&history_path)
     );
-    if !force && source_is_fresh(connection, &source_key, &fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+    if !force
+        && source_should_skip_as_fresh(
+            connection,
+            &source_key,
+            &fingerprint,
+            "claude",
+            workspace_path,
+            newest_child_mtime_ms(&project_dir, 1),
+        )?
+    {
         return Ok(WriterResult {
             skipped_fresh: true,
             engines: vec!["claude".into()],
@@ -935,7 +945,20 @@ pub(crate) fn sync_codex_for_workspace(
             fingerprint.push_str(&mtime_fingerprint(&index));
         }
     }
-    if !force && source_is_fresh(connection, &source_key, &fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+    let disk_newest = sessions_roots
+        .iter()
+        .filter_map(|root| newest_child_mtime_ms(root, 2))
+        .max();
+    if !force
+        && source_should_skip_as_fresh(
+            connection,
+            &source_key,
+            &fingerprint,
+            "codex",
+            workspace_path,
+            disk_newest,
+        )?
+    {
         return Ok(WriterResult {
             skipped_fresh: true,
             engines: vec!["codex".into()],
@@ -1016,7 +1039,16 @@ pub(crate) fn sync_kimi_for_workspace(
     let index_path = home.join("session_index.jsonl");
     let source_key = format!("kimi:{}", normalize_path_key(&workspace_path.to_string_lossy()));
     let fingerprint = mtime_fingerprint(&index_path);
-    if !force && source_is_fresh(connection, &source_key, &fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+    if !force
+        && source_should_skip_as_fresh(
+            connection,
+            &source_key,
+            &fingerprint,
+            "kimi",
+            workspace_path,
+            newest_child_mtime_ms(index_path.parent().unwrap_or(&home), 2),
+        )?
+    {
         return Ok(WriterResult {
             skipped_fresh: true,
             engines: vec!["kimi".into()],
@@ -1160,6 +1192,115 @@ pub(crate) fn commit_engine_rows(
     })
 }
 
+pub(crate) fn source_should_skip_as_fresh(
+    connection: &Connection,
+    source_key: &str,
+    fingerprint: &str,
+    engine: &str,
+    workspace_path: &Path,
+    disk_newest_mtime: Option<i64>,
+) -> Result<bool, String> {
+    if !source_is_fresh(connection, source_key, fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+        return Ok(false);
+    }
+    let Some(disk_newest) = disk_newest_mtime.filter(|value| *value > 0) else {
+        return Ok(true);
+    };
+    let ledger_max = max_updated_at_for_engine(
+        connection,
+        engine,
+        &workspace_path.to_string_lossy(),
+    )?;
+    match ledger_max {
+        Some(max) if disk_newest <= max => Ok(true),
+        _ => Ok(false),
+    }
+}
+
+fn newest_child_mtime_ms(dir: &Path, extra_depth: usize) -> Option<i64> {
+    if !dir.exists() {
+        return None;
+    }
+    let mut newest = file_mtime_ms(dir);
+    let Ok(entries) = fs::read_dir(dir) else {
+        return (newest > 0).then_some(newest);
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if name.starts_with('.') {
+            continue;
+        }
+        let mtime = file_mtime_ms(&path);
+        if mtime > newest {
+            newest = mtime;
+        }
+        if extra_depth > 0 && path.is_dir() {
+            if let Some(child) = newest_child_mtime_ms(&path, extra_depth.saturating_sub(1)) {
+                if child > newest {
+                    newest = child;
+                }
+            }
+        }
+    }
+    (newest > 0).then_some(newest)
+}
+
+fn peek_engine_disk_newest_mtime(engine: &str, workspace_path: &Path) -> Option<i64> {
+    match engine.trim().to_ascii_lowercase().as_str() {
+        "gemini" => {
+            let home = std::env::var("GEMINI_HOME")
+                .ok()
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".gemini")))
+                .unwrap_or_else(|| PathBuf::from(".gemini"));
+            newest_child_mtime_ms(&home, 2)
+        }
+        "grok" => {
+            let home = std::env::var("GROK_HOME")
+                .ok()
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".grok")))
+                .unwrap_or_else(|| PathBuf::from(".grok"));
+            newest_child_mtime_ms(&home.join("sessions"), 2)
+                .or_else(|| newest_child_mtime_ms(&home, 2))
+        }
+        "pi" => {
+            let sessions = crate::engine::pi_history::resolve_pi_sessions_root(None);
+            newest_child_mtime_ms(&sessions, 2)
+        }
+        "dsh" => {
+            let home = std::env::var_os("DSH_HOME")
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".dsh")))
+                .unwrap_or_else(|| PathBuf::from(".dsh"));
+            newest_child_mtime_ms(&home, 2)
+        }
+        "claude" => {
+            let claude_home = crate::claude_home::resolve_effective_claude_home(None)?;
+            let encoded = encode_project_path(&workspace_path.to_string_lossy());
+            newest_child_mtime_ms(&claude_home.join("projects").join(encoded), 1)
+        }
+        "kimi" => {
+            let home = std::env::var("KIMI_HOME")
+                .ok()
+                .and_then(|value| {
+                    let trimmed = value.trim();
+                    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
+                })
+                .or_else(|| dirs::home_dir().map(|home| home.join(".kimi")))
+                .unwrap_or_else(|| PathBuf::from(".kimi"));
+            newest_child_mtime_ms(&home, 2)
+        }
+        // OpenCode has no durable disk index (15s fingerprint bucket).
+        // Codex writers pass session-root child mtimes directly.
+        _ => None,
+    }
+}
+
 pub(crate) fn engine_source_is_fresh(
     connection: &Connection,
     engine: &str,
@@ -1172,6 +1313,27 @@ pub(crate) fn engine_source_is_fresh(
         normalize_path_key(&workspace_path.to_string_lossy())
     );
     source_is_fresh(connection, &source_key, fingerprint, SOURCE_FRESH_MAX_AGE_MS)
+}
+
+pub(crate) fn engine_source_should_skip(
+    connection: &Connection,
+    engine: &str,
+    workspace_path: &Path,
+    fingerprint: &str,
+) -> Result<bool, String> {
+    let source_key = format!(
+        "{}:{}",
+        engine.trim().to_ascii_lowercase(),
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
+    source_should_skip_as_fresh(
+        connection,
+        &source_key,
+        fingerprint,
+        engine,
+        workspace_path,
+        peek_engine_disk_newest_mtime(engine, workspace_path),
+    )
 }
 
 pub(crate) fn gemini_home_fingerprint() -> String {
@@ -1634,6 +1796,61 @@ mod tests {
         assert!(
             listed.iter().any(|row| row.session_id == "grok-keep"),
             "timeout empty commit must not wipe indexed grok rows: {listed:?}"
+        );
+    }
+
+    #[test]
+    fn root_fresh_but_child_newer_does_not_skip() {
+        let connection = Connection::open_in_memory().expect("db");
+        connection
+            .execute_batch(super::super::store::DDL)
+            .expect("ddl");
+        let workspace = Path::new("/tmp/ccgui-fresh-child");
+        let existing = SessionIndexRow {
+            engine: "grok".into(),
+            session_id: "old".into(),
+            title: "old".into(),
+            native_title: None,
+            updated_at: 100,
+            created_at: None,
+            cwd: Some("/tmp/ccgui-fresh-child".into()),
+            workspace_path: Some("/tmp/ccgui-fresh-child".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+        };
+        upsert_rows(&connection, &[existing]).expect("seed");
+        mark_source_synced(
+            &connection,
+            "grok:/tmp/ccgui-fresh-child",
+            "fp-root",
+            1,
+        )
+        .expect("mark");
+        assert!(engine_source_is_fresh(&connection, "grok", workspace, "fp-root").expect("fp"));
+        assert!(
+            !source_should_skip_as_fresh(
+                &connection,
+                "grok:/tmp/ccgui-fresh-child",
+                "fp-root",
+                "grok",
+                workspace,
+                Some(200),
+            )
+            .expect("child newer"),
+            "root fingerprint fresh + child newer than ledger must not skip"
+        );
+        assert!(
+            source_should_skip_as_fresh(
+                &connection,
+                "grok:/tmp/ccgui-fresh-child",
+                "fp-root",
+                "grok",
+                workspace,
+                Some(50),
+            )
+            .expect("child older"),
+            "child older than ledger may stay skipped"
         );
     }
 

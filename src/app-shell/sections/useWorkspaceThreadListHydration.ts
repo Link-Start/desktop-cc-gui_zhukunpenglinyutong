@@ -1105,6 +1105,9 @@ export function useWorkspaceThreadListHydration({
     void listen<{ workspaceIds?: string[]; upserted?: number }>(
       "session-index-imported",
       (event) => {
+        if ((event.payload?.upserted ?? 0) <= 0) {
+          return;
+        }
         const ids = event.payload?.workspaceIds ?? [];
         ids.forEach((workspaceId) => {
           ensureWorkspaceThreadListLoaded(workspaceId, {

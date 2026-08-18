@@ -1,6 +1,16 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const listenMock = vi.hoisted(() =>
+  vi.fn(async () => {
+    return () => undefined;
+  }),
+);
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (...args: unknown[]) => listenMock(...args),
+}));
 import type { WorkspaceInfo } from "../../types";
 import {
   getStartupTraceSnapshot,
@@ -69,6 +79,10 @@ function installImmediateIdleCallback() {
 
 describe("useWorkspaceThreadListHydration", () => {
   beforeEach(async () => {
+    listenMock.mockClear();
+    listenMock.mockImplementation(async () => {
+      return () => undefined;
+    });
     vi.useRealTimers();
     resetStartupTraceForTests();
     resetFullCatalogAutoRetryForTests();
@@ -1155,6 +1169,100 @@ describe("useWorkspaceThreadListHydration", () => {
           POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS + 2,
         );
       });
+    });
+  });
+
+  describe("session-index-imported rematerialize", () => {
+    type ImportedPayload = { workspaceIds?: string[]; upserted?: number };
+
+    function captureImportedHandler() {
+      let handler:
+        | ((event: { payload: ImportedPayload }) => void)
+        | undefined;
+      listenMock.mockImplementation(async (eventName, nextHandler) => {
+        if (eventName === "session-index-imported") {
+          handler = nextHandler as (event: { payload: ImportedPayload }) => void;
+        }
+        return () => undefined;
+      });
+      return {
+        emit(payload: ImportedPayload) {
+          handler?.({ payload });
+        },
+        hasHandler() {
+          return Boolean(handler);
+        },
+      };
+    }
+
+    it("re-reads active workspace Index after upserted>0 without disk lists", async () => {
+      const imported = captureImportedHandler();
+      const listThreadsForWorkspace = vi.fn(async () => undefined);
+      const workspaces = [createWorkspace("ws-1")];
+      renderHook(() =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: "ws-1",
+          activeWorkspaceProjectionOwnerIds: ["ws-1"],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: new Map(
+            workspaces.map((workspace) => [workspace.id, workspace]),
+          ),
+        }),
+      );
+
+      await waitFor(() => {
+        expect(imported.hasHandler()).toBe(true);
+      });
+      const callsBeforeImport = listThreadsForWorkspace.mock.calls.length;
+      await act(async () => {
+        imported.emit({ workspaceIds: ["ws-1"], upserted: 2 });
+      });
+      await waitFor(() => {
+        expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThan(
+          callsBeforeImport,
+        );
+      });
+      const importedCall = listThreadsForWorkspace.mock.calls.find(
+        (call) => call[1]?.mergeExistingThreads === true,
+      );
+      expect(importedCall?.[0]).toMatchObject({ id: "ws-1" });
+      expect(importedCall?.[1]).toEqual(
+        expect.objectContaining({
+          startupHydrationMode: "first-paint",
+          mergeExistingThreads: true,
+          preserveState: true,
+        }),
+      );
+      expect(importedCall?.[1]?.includeEngineDiskLists).not.toBe(true);
+    });
+
+    it("does not rematerialize or claim empty when upserted is 0", async () => {
+      const imported = captureImportedHandler();
+      const listThreadsForWorkspace = vi.fn(async () => undefined);
+      const workspaces = [createWorkspace("ws-1")];
+      renderHook(() =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: "ws-1",
+          activeWorkspaceProjectionOwnerIds: ["ws-1"],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: new Map(
+            workspaces.map((workspace) => [workspace.id, workspace]),
+          ),
+        }),
+      );
+
+      await waitFor(() => {
+        expect(imported.hasHandler()).toBe(true);
+      });
+      const callsBeforeImport = listThreadsForWorkspace.mock.calls.length;
+      await act(async () => {
+        imported.emit({ workspaceIds: ["ws-1"], upserted: 0 });
+      });
+      expect(listThreadsForWorkspace.mock.calls.length).toBe(callsBeforeImport);
     });
   });
 });

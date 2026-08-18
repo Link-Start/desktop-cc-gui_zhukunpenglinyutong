@@ -12,7 +12,7 @@ use super::store::{
 };
 use super::writers::{
     backfill_claude_for_workspace, backfill_codex_for_workspace, backfill_kimi_for_workspace,
-    commit_engine_rows, dsh_source_fingerprint, engine_source_is_fresh, gemini_home_fingerprint,
+    commit_engine_rows, dsh_source_fingerprint, engine_source_should_skip, gemini_home_fingerprint,
     grok_home_fingerprint, invalidate_workspace_sources, opencode_source_fingerprint,
     pi_home_fingerprint, rows_from_dsh_summaries, rows_from_gemini_summaries,
     rows_from_grok_summaries, rows_from_opencode_entries, rows_from_pi_summaries,
@@ -129,7 +129,7 @@ async fn sync_gemini_engine(
             let fingerprint = fingerprint.clone();
             move || {
                 let connection = open_connection()?;
-                engine_source_is_fresh(&connection, "gemini", &workspace_path, &fingerprint)
+                engine_source_should_skip(&connection, "gemini", &workspace_path, &fingerprint)
             }
         })
         .await
@@ -186,7 +186,7 @@ async fn sync_grok_engine(workspace_path: PathBuf, limit: usize, force: bool) ->
             let fingerprint = fingerprint.clone();
             move || {
                 let connection = open_connection()?;
-                engine_source_is_fresh(&connection, "grok", &workspace_path, &fingerprint)
+                engine_source_should_skip(&connection, "grok", &workspace_path, &fingerprint)
             }
         })
         .await
@@ -243,7 +243,7 @@ async fn sync_pi_engine(workspace_path: PathBuf, limit: usize, force: bool) -> W
             let fingerprint = fingerprint.clone();
             move || {
                 let connection = open_connection()?;
-                engine_source_is_fresh(&connection, "pi", &workspace_path, &fingerprint)
+                engine_source_should_skip(&connection, "pi", &workspace_path, &fingerprint)
             }
         })
         .await
@@ -308,7 +308,7 @@ async fn sync_dsh_engine(
             let fingerprint = fingerprint.clone();
             move || {
                 let connection = open_connection()?;
-                engine_source_is_fresh(&connection, "dsh", &workspace_path, &fingerprint)
+                engine_source_should_skip(&connection, "dsh", &workspace_path, &fingerprint)
             }
         })
         .await
@@ -391,7 +391,7 @@ async fn sync_opencode_engine(
             let fingerprint = fingerprint.clone();
             move || {
                 let connection = open_connection()?;
-                engine_source_is_fresh(&connection, "opencode", &workspace_path, &fingerprint)
+                engine_source_should_skip(&connection, "opencode", &workspace_path, &fingerprint)
             }
         })
         .await

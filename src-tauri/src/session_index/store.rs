@@ -339,6 +339,29 @@ pub(crate) fn source_is_fresh(
     Ok(age <= max_age_ms)
 }
 
+pub(crate) fn max_updated_at_for_engine(
+    connection: &Connection,
+    engine: &str,
+    workspace_path: &str,
+) -> Result<Option<i64>, String> {
+    let key = normalize_path_key(workspace_path);
+    let engine = engine.trim().to_ascii_lowercase();
+    if key.is_empty() || engine.is_empty() {
+        return Ok(None);
+    }
+    let max: Option<i64> = connection
+        .query_row(
+            "SELECT MAX(updated_at) FROM session_index
+             WHERE engine = ?1
+               AND tombstoned_at IS NULL
+               AND (workspace_path = ?2 OR cwd = ?2)",
+            params![engine, key],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(max.filter(|value| *value > 0))
+}
+
 /// True when a send/create marked this workspace's Index sources stale.
 /// Restart first-paint / next non-force list must rescan writers even if
 /// some Claude/Codex rows already exist.
@@ -843,6 +866,15 @@ mod tests {
         let rows = list_for_workspace_path(&connection, "/Users/me/proj/", 10).expect("list");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].session_id, "s1");
+        assert_eq!(
+            max_updated_at_for_engine(&connection, "claude", "/Users/me/proj/")
+                .expect("max"),
+            Some(200)
+        );
+        assert_eq!(
+            max_updated_at_for_engine(&connection, "grok", "/Users/me/proj/").expect("empty"),
+            None
+        );
     }
 
     #[test]

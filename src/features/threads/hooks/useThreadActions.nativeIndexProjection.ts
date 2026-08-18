@@ -1,9 +1,7 @@
 import type { ThreadSummary } from "../../../types";
 import type { SessionIndexRow } from "../../../services/tauri";
-import {
-  mergeSummariesForMissingEngines,
-  sessionIndexRowsToThreadSummaries,
-} from "./sessionIndexThreadSummaries";
+import { sessionIndexRowsToThreadSummaries } from "./sessionIndexThreadSummaries";
+import { unionIndexWithNewerLastGood } from "./useThreadActions.lastGoodSnapshots";
 import { mergePreservedSharedThreadsForIndexFirstPaint } from "./sharedNativeVisibility";
 
 /**
@@ -43,7 +41,7 @@ export function buildNativeIndexEarlyPaintSummaries(params: {
   currentThreads: ThreadSummary[] | undefined;
   lastGood: ThreadSummary[];
 }): ThreadSummary[] {
-  return mergeSummariesForMissingEngines(
+  return unionIndexWithNewerLastGood(
     mergePreservedSharedThreadsForIndexFirstPaint(
       projectNativeIndexRowsToSummaries(params.rows, {
         workspaceId: params.workspaceId,
