@@ -268,7 +268,7 @@ describe("useThreadActions native session bridges", () => {
         scanQuality: "preview",
       },
       cursor: null,
-      limit: 5,
+      limit: 12,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {

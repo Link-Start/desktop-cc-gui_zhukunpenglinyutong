@@ -2,7 +2,7 @@ import Layers from "lucide-react/dist/esm/icons/layers";
 import { useMemo } from "react";
 import type { MouseEvent } from "react";
 
-import { normalizeVisibleThreadRootCount } from "../constants";
+import { resolveVisibleThreadRootLimit } from "../constants";
 import type { ThreadSummary, WorkspaceInfo } from "../../../types";
 import { ThreadList } from "./ThreadList";
 import { ThreadEmptyState } from "./ThreadEmptyState";
@@ -36,7 +36,7 @@ type WorktreeSectionProps = {
   threadListLoadingByWorkspace: Record<string, boolean>;
   threadListPagingByWorkspace: Record<string, boolean>;
   threadListCursorByWorkspace: Record<string, string | null>;
-  expandedWorkspaces: Set<string>;
+  threadListPageByWorkspace: Record<string, number>;
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   systemProxyEnabled?: boolean;
@@ -102,7 +102,7 @@ export function WorktreeSection({
   threadListLoadingByWorkspace,
   threadListPagingByWorkspace,
   threadListCursorByWorkspace,
-  expandedWorkspaces,
+  threadListPageByWorkspace,
   activeWorkspaceId,
   activeThreadId,
   systemProxyEnabled = false,
@@ -159,14 +159,14 @@ export function WorktreeSection({
         rowsByWorktreeId.set(worktree.id, { unpinnedRows: [], totalRoots: 0 });
         return;
       }
-      const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
       const worktreeThreads = threadsByWorkspace[worktree.id] ?? [];
-      const visibleThreadRootCount = normalizeVisibleThreadRootCount(
+      const visibleThreadRootCount = resolveVisibleThreadRootLimit(
         worktree.settings.visibleThreadRootCount,
+        threadListPageByWorkspace[worktree.id],
       );
       const { unpinnedRows, totalRoots } = getThreadRows(
         worktreeThreads,
-        isWorktreeExpanded,
+        false,
         worktree.id,
         getPinTimestamp,
         visibleThreadRootCount,
@@ -175,7 +175,7 @@ export function WorktreeSection({
     });
     return rowsByWorktreeId;
   }, [
-    expandedWorkspaces,
+    threadListPageByWorkspace,
     getPinTimestamp,
     getThreadRows,
     isSectionCollapsed,
@@ -233,7 +233,11 @@ export function WorktreeSection({
             const isWorktreePaging =
               threadListPagingByWorkspace[worktree.id] ?? false;
             const isThreadListRefreshing = threadListLoadingByWorkspace[worktree.id] ?? false;
-            const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
+            const worktreePage = Math.max(
+              1,
+              threadListPageByWorkspace[worktree.id] ?? 1,
+            );
+            const isWorktreeExpanded = worktreePage > 1;
             const hasPrimaryActiveThread =
               worktree.id === activeWorkspaceId && Boolean(activeThreadId);
             const hasRunningSession = worktreeThreads.some(
@@ -244,8 +248,9 @@ export function WorktreeSection({
             const worktreeThreadRows = threadRows?.unpinnedRows ?? [];
             const moveFolderTargets = moveFolderTargetsByWorkspaceId[worktree.id];
             const totalWorktreeRoots = threadRows?.totalRoots ?? 0;
-            const visibleThreadRootCount = normalizeVisibleThreadRootCount(
+            const visibleThreadRootCount = resolveVisibleThreadRootLimit(
               worktree.settings.visibleThreadRootCount,
+              worktreePage,
             );
             const hideExitedSessions = isExitedSessionsHidden(worktree.path);
             const exitedSessionVisibility = getExitedSessionRowVisibility(
@@ -297,7 +302,7 @@ export function WorktreeSection({
                     nextCursor={worktreeNextCursor}
                     isPaging={isWorktreePaging}
                     nested
-                    showLoadOlder={false}
+                    showPagingControls
                     hideExitedSessions={hideExitedSessions}
                     activeWorkspaceId={activeWorkspaceId}
                     activeThreadId={activeThreadId}

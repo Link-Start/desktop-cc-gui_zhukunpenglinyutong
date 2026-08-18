@@ -167,7 +167,7 @@ export function useThreadActionsSessionCatalog({
             scanQuality: "preview",
           },
           cursor: null,
-          // First-paint catalog page matches sidebar initial page (default 5).
+          // First-paint catalog page matches sidebar initial page (default 12).
           limit: SESSION_CATALOG_INITIAL_PAGE_SIZE,
         }),
         CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,

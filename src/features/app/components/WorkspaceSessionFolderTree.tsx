@@ -543,7 +543,7 @@ export function WorkspaceSessionFolderTree({
                 nextCursor={null}
                 isPaging={false}
                 nested
-                showLoadOlder={false}
+                showPagingControls={false}
               />
             ) : null}
           </div>
@@ -591,10 +591,13 @@ export function WorkspaceSessionFolderTree({
           isExpanded={isExpanded}
           nextCursor={threadListProps.nextCursor}
           isPaging={threadListProps.isPaging}
-          showLoadOlder={threadListProps.showLoadOlder}
+          showPagingControls
         />
       ) : null}
-      {rootRows.length === 0 && threadListProps.nextCursor ? (
+      {rootRows.length === 0 &&
+      (Boolean(threadListProps.nextCursor) ||
+        totalThreadRoots > threadListProps.visibleThreadRootCount ||
+        isExpanded) ? (
         <ThreadList
           {...threadListProps}
           workspaceId={workspaceId}
@@ -605,7 +608,7 @@ export function WorkspaceSessionFolderTree({
           isExpanded={isExpanded}
           nextCursor={threadListProps.nextCursor}
           isPaging={threadListProps.isPaging}
-          showLoadOlder={threadListProps.showLoadOlder}
+          showPagingControls
         />
       ) : null}
       {folderMenu && typeof document !== "undefined"

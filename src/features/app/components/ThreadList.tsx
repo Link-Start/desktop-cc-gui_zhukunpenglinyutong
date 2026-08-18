@@ -507,6 +507,9 @@ export type ThreadListProps = {
   nextCursor: string | null;
   isPaging: boolean;
   nested?: boolean;
+  /** When false, hide 更多 / 收起 (folder inner lists, pinned lists). */
+  showPagingControls?: boolean;
+  /** @deprecated Use showPagingControls. */
   showLoadOlder?: boolean;
   showProviderLabels?: boolean;
   moveFolderTargets?: ThreadMoveFolderTarget[];
@@ -550,6 +553,7 @@ export function ThreadList({
   nextCursor,
   isPaging,
   nested,
+  showPagingControls,
   showLoadOlder = true,
   showProviderLabels = false,
   moveFolderTargets = EMPTY_MOVE_FOLDER_TARGETS,
@@ -931,6 +935,44 @@ export function ThreadList({
     );
   };
 
+  const pagingEnabled = showPagingControls ?? showLoadOlder;
+  const canShowMore =
+    pagingEnabled &&
+    (totalThreadRoots > visibleThreadRootCount || Boolean(nextCursor));
+  const canCollapse = pagingEnabled && isExpanded;
+  const pagingControls =
+    canShowMore || canCollapse ? (
+      <>
+        {canShowMore ? (
+          <button
+            className="thread-more"
+            onClick={(event) => {
+              event.stopPropagation();
+              onLoadOlderThreads(workspaceId);
+            }}
+            disabled={isPaging}
+          >
+            {isPaging
+              ? t("threads.loading")
+              : totalThreadRoots === 0
+                ? t("threads.searchOlder")
+                : t("threads.more")}
+          </button>
+        ) : null}
+        {canCollapse ? (
+          <button
+            className="thread-more"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleExpanded(workspaceId);
+            }}
+          >
+            {t("threads.showLess")}
+          </button>
+        ) : null}
+      </>
+    ) : null;
+
   return (
     <ThreadRowStatusProvider threadStatusById={threadStatusById}>
       <div
@@ -979,35 +1021,7 @@ export function ThreadList({
                 })}
               </div>
             )}
-            {totalThreadRoots > visibleThreadRootCount && (
-              <button
-                className="thread-more"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleExpanded(workspaceId);
-                }}
-              >
-                {isExpanded ? t("threads.showLess") : t("threads.more")}
-              </button>
-            )}
-            {showLoadOlder &&
-              nextCursor &&
-              (isExpanded || totalThreadRoots <= visibleThreadRootCount) && (
-                <button
-                  className="thread-more"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onLoadOlderThreads(workspaceId);
-                  }}
-                  disabled={isPaging}
-                >
-                  {isPaging
-                    ? t("threads.loading")
-                    : totalThreadRoots === 0
-                      ? t("threads.searchOlder")
-                      : t("threads.loadOlder")}
-                </button>
-              )}
+            {pagingControls}
           </>
         ) : (
           <>
@@ -1024,35 +1038,7 @@ export function ThreadList({
                 })}
               </div>
             )}
-            {totalThreadRoots > visibleThreadRootCount && (
-              <button
-                className="thread-more"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleExpanded(workspaceId);
-                }}
-              >
-                {isExpanded ? t("threads.showLess") : t("threads.more")}
-              </button>
-            )}
-            {showLoadOlder &&
-              nextCursor &&
-              (isExpanded || totalThreadRoots <= visibleThreadRootCount) && (
-                <button
-                  className="thread-more"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onLoadOlderThreads(workspaceId);
-                  }}
-                  disabled={isPaging}
-                >
-                  {isPaging
-                    ? t("threads.loading")
-                    : totalThreadRoots === 0
-                      ? t("threads.searchOlder")
-                      : t("threads.loadOlder")}
-                </button>
-              )}
+            {pagingControls}
           </>
         )}
       </div>

@@ -141,7 +141,7 @@ export function PinnedThreadList({
           isExpanded
           nextCursor={null}
           isPaging={false}
-          showLoadOlder={false}
+          showPagingControls={false}
           listClassName="pinned-thread-list"
           moveFolderTargets={moveFolderTargetsByWorkspaceId[group.workspaceId]}
           activeWorkspaceId={activeWorkspaceId}

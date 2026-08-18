@@ -27,7 +27,7 @@ use crate::engine::opencode_session_list_core;
 use crate::local_usage::resolve_sessions_roots;
 use crate::state::AppState;
 
-const DEFAULT_SIDEBAR_INDEX_LIMIT: usize = 20;
+const DEFAULT_SIDEBAR_INDEX_LIMIT: usize = 12;
 const ASYNC_ENGINE_LIST_TIMEOUT: Duration = Duration::from_secs(3);
 const OPENCODE_INDEX_TIMEOUT: Duration = Duration::from_secs(2);
 

@@ -44,11 +44,8 @@ import {
 } from "./useThreadActions.helpers";
 import {
   CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,
-  SESSION_CATALOG_PAGE_SIZE,
   SESSION_INDEX_LOAD_OLDER_TIMEOUT_MS,
   SESSION_INDEX_PAGE_SIZE,
-  THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
-  THREAD_LIST_LOAD_OLDER_TARGET_COUNT,
   THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER,
   THREAD_LIST_MAX_FETCH_DURATION_MS,
   THREAD_LIST_MAX_TOTAL_PAGES,
@@ -275,7 +272,7 @@ export function useLoadOlderThreadsForWorkspace({
                   scanQuality: "preview",
                 },
                 cursor: cursorState.cursor,
-                limit: SESSION_CATALOG_PAGE_SIZE,
+                limit: SESSION_INDEX_PAGE_SIZE,
               }),
               CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS,
             );
@@ -293,8 +290,8 @@ export function useLoadOlderThreadsForWorkspace({
           }
         }
         const matchingThreads: Record<string, unknown>[] = [];
-        const targetCount = THREAD_LIST_LOAD_OLDER_TARGET_COUNT;
-        const pageSize = THREAD_LIST_LOAD_OLDER_PAGE_SIZE;
+        const targetCount = SESSION_INDEX_PAGE_SIZE;
+        const pageSize = SESSION_INDEX_PAGE_SIZE;
         const maxPagesWithoutMatch = THREAD_LIST_MAX_EMPTY_PAGES_LOAD_OLDER;
         let pagesFetched = 0;
         const fetchStartedAt = Date.now();

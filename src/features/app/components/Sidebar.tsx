@@ -102,7 +102,11 @@ import {
   getWorkspaceSidebarAlias,
   getWorkspaceSidebarLabel,
 } from "../utils/workspaceSidebarLabel";
-import { normalizeVisibleThreadRootCount } from "../constants";
+import {
+  normalizeVisibleThreadRootCount,
+  planThreadListPageAdvance,
+  resolveVisibleThreadRootLimit,
+} from "../constants";
 import { getExitedSessionRowVisibility } from "../utils/exitedSessionRows";
 import {
   buildWorkspaceSessionFolderMoveTargets,
@@ -412,9 +416,9 @@ function SidebarImpl({
     [globalSearchShortcut, isMac],
   );
 
-  const [expandedWorkspaces, setExpandedWorkspaces] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [threadListPageByWorkspace, setThreadListPageByWorkspace] = useState<
+    Record<string, number>
+  >({});
   const [collapsedWorktreeSections, setCollapsedWorktreeSections] = useState<Set<string>>(
     () => new Set(),
   );
@@ -976,13 +980,13 @@ function SidebarImpl({
   const shouldShowExitedSessionsToggle = useCallback(
     (workspace: WorkspaceInfo) => {
       const threads = getProjectedThreads(workspace.id);
-      const isExpanded = expandedWorkspaces.has(workspace.id);
-      const visibleThreadRootCount = normalizeVisibleThreadRootCount(
+      const visibleThreadRootCount = resolveVisibleThreadRootLimit(
         workspace.settings.visibleThreadRootCount,
+        threadListPageByWorkspace[workspace.id],
       );
       const { unpinnedRows } = getThreadRows(
         threads,
-        isExpanded,
+        false,
         workspace.id,
         getPinTimestamp,
         visibleThreadRootCount,
@@ -998,7 +1002,7 @@ function SidebarImpl({
       return visibility.hasExitedSessions || visibility.hiddenExitedCount > 0;
     },
     [
-      expandedWorkspaces,
+      threadListPageByWorkspace,
       getPinTimestamp,
       getProjectedThreads,
       getThreadRows,
@@ -1278,7 +1282,7 @@ function SidebarImpl({
   const { sidebarBodyRef, scrollFade, updateScrollFade } = useSidebarScrollFade(
     groupedWorkspaces,
     threadsByWorkspace,
-    expandedWorkspaces,
+    threadListPageByWorkspace,
     normalizedQuery,
   );
 
@@ -1342,13 +1346,13 @@ function SidebarImpl({
           return;
         }
         const threads = getProjectedThreads(workspace.id);
-        const isExpanded = expandedWorkspaces.has(workspace.id);
-        const visibleThreadRootCount = normalizeVisibleThreadRootCount(
+        const visibleThreadRootCount = resolveVisibleThreadRootLimit(
           workspace.settings.visibleThreadRootCount,
+          threadListPageByWorkspace[workspace.id],
         );
         const { unpinnedRows, totalRoots } = getThreadRows(
           threads,
-          isExpanded,
+          false,
           workspace.id,
           getPinTimestamp,
           visibleThreadRootCount,
@@ -1359,7 +1363,7 @@ function SidebarImpl({
     return rowsByWorkspace;
   }, [
     collapsedGroups,
-    expandedWorkspaces,
+    threadListPageByWorkspace,
     filteredGroupedWorkspaces,
     getPinTimestamp,
     getThreadRows,
@@ -1476,15 +1480,65 @@ function SidebarImpl({
     return next;
   }, [hasRunningThreadByWorkspaceId, workspaces, worktreesByParent]);
 
-  const handleToggleExpanded = useCallback((workspaceId: string) => {
-    setExpandedWorkspaces((prev) => {
-      const next = new Set(prev);
-      if (next.has(workspaceId)) {
-        next.delete(workspaceId);
-      } else {
-        next.add(workspaceId);
+  const handleShowMoreThreads = useCallback(
+    (workspaceId: string) => {
+      const workspace =
+        workspaces.find((entry) => entry.id === workspaceId) ?? null;
+      const pageSize = normalizeVisibleThreadRootCount(
+        workspace?.settings.visibleThreadRootCount,
+      );
+      const currentPage = Math.max(
+        1,
+        threadListPageByWorkspace[workspaceId] ?? 1,
+      );
+      const currentLimit = resolveVisibleThreadRootLimit(pageSize, currentPage);
+      const isWorktree = (workspace?.kind ?? "main") === "worktree";
+      const threads = isWorktree
+        ? (threadsByWorkspace[workspaceId] ?? [])
+        : getProjectedThreads(workspaceId);
+      const { totalRoots } = getThreadRows(
+        threads,
+        false,
+        workspaceId,
+        getPinTimestamp,
+        currentLimit,
+      );
+      const plan = planThreadListPageAdvance({
+        totalRoots,
+        currentLimit,
+        nextCursor: threadListCursorByWorkspace[workspaceId],
+        isPaging: threadListPagingByWorkspace[workspaceId] ?? false,
+      });
+      if (!plan.advance) {
+        return;
       }
-      return next;
+      setThreadListPageByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: currentPage + 1,
+      }));
+      if (plan.fetch) {
+        onLoadOlderThreads(workspaceId);
+      }
+    },
+    [
+      getPinTimestamp,
+      getProjectedThreads,
+      getThreadRows,
+      onLoadOlderThreads,
+      threadListCursorByWorkspace,
+      threadListPageByWorkspace,
+      threadListPagingByWorkspace,
+      threadsByWorkspace,
+      workspaces,
+    ],
+  );
+
+  const handleCollapseThreadList = useCallback((workspaceId: string) => {
+    setThreadListPageByWorkspace((prev) => {
+      if ((prev[workspaceId] ?? 1) <= 1) {
+        return prev;
+      }
+      return { ...prev, [workspaceId]: 1 };
     });
   }, []);
 
@@ -1871,7 +1925,11 @@ function SidebarImpl({
   ) => {
     const threads = threadsByWorkspace[entry.id] ?? [];
     const isCollapsed = entry.settings.sidebarCollapsed;
-    const isExpanded = expandedWorkspaces.has(entry.id);
+    const threadListPage = Math.max(
+      1,
+      threadListPageByWorkspace[entry.id] ?? 1,
+    );
+    const isExpanded = threadListPage > 1;
     const threadRows = threadRowsByWorkspace.get(entry.id);
     const unpinnedRows = threadRows?.unpinnedRows ?? [];
     const totalThreadRoots = threadRows?.totalRoots ?? 0;
@@ -1905,8 +1963,9 @@ function SidebarImpl({
       entry.id === activeWorkspaceId && Boolean(activeThreadId);
     const hasRunningSession = hasRunningSessionByProjectId.get(entry.id) ?? false;
     const workspaceSidebarAlias = getWorkspaceSidebarAlias(entry);
-    const visibleThreadRootCount = normalizeVisibleThreadRootCount(
+    const visibleThreadRootCount = resolveVisibleThreadRootLimit(
       entry.settings.visibleThreadRootCount,
+      threadListPage,
     );
     const hideExitedSessions = isExitedSessionsHidden(entry.path);
     const sessionFolders = sessionFoldersByWorkspaceId[entry.id] ?? EMPTY_SESSION_FOLDERS;
@@ -1955,7 +2014,7 @@ function SidebarImpl({
             threadListLoadingByWorkspace={_threadListLoadingByWorkspace}
             threadListPagingByWorkspace={threadListPagingByWorkspace}
             threadListCursorByWorkspace={threadListCursorByWorkspace}
-            expandedWorkspaces={expandedWorkspaces}
+            threadListPageByWorkspace={threadListPageByWorkspace}
             activeWorkspaceId={activeWorkspaceId}
             activeThreadId={activeThreadId}
             systemProxyEnabled={systemProxyEnabled}
@@ -1989,8 +2048,8 @@ function SidebarImpl({
             onRenameCancel={onRenameCancel}
             onRenameConfirm={onRenameConfirm}
             onShowWorktreeMenu={showWorktreeMenu}
-            onToggleExpanded={handleToggleExpanded}
-            onLoadOlderThreads={onLoadOlderThreads}
+            onToggleExpanded={handleCollapseThreadList}
+            onLoadOlderThreads={handleShowMoreThreads}
           />
         )}
         {showFolderProjection ? (
@@ -2022,8 +2081,8 @@ function SidebarImpl({
               isThreadPinned,
               isThreadAutoNaming,
               onToggleThreadPin: handleToggleThreadPin,
-              onToggleExpanded: handleToggleExpanded,
-              onLoadOlderThreads,
+              onToggleExpanded: handleCollapseThreadList,
+              onLoadOlderThreads: handleShowMoreThreads,
               onSelectThread,
               onShowThreadMenu: showThreadMenu,
               deleteConfirmThreadId,
@@ -2039,7 +2098,7 @@ function SidebarImpl({
               onRenameConfirm,
               nextCursor,
               isPaging,
-              showLoadOlder: true,
+              showPagingControls: true,
             }}
           />
         ) : null}
@@ -2066,8 +2125,8 @@ function SidebarImpl({
             isThreadPinned={isThreadPinned}
             isThreadAutoNaming={isThreadAutoNaming}
             onToggleThreadPin={handleToggleThreadPin}
-            onToggleExpanded={handleToggleExpanded}
-            onLoadOlderThreads={onLoadOlderThreads}
+            onToggleExpanded={handleCollapseThreadList}
+            onLoadOlderThreads={handleShowMoreThreads}
             onSelectThread={onSelectThread}
             onShowThreadMenu={showThreadMenu}
             deleteConfirmThreadId={deleteConfirmThreadId}
@@ -2107,12 +2166,13 @@ function SidebarImpl({
     onRenameChange,
     onRenameConfirm,
     deletingWorktreeIds,
-    expandedWorkspaces,
+    threadListPageByWorkspace,
     getPinTimestamp,
     getThreadRows,
     getThreadTime,
     handleToggleThreadPin,
-    handleToggleExpanded,
+    handleShowMoreThreads,
+    handleCollapseThreadList,
     handleToggleWorktreeSection,
     handleCreateSessionFolder,
     handleOpenSessionFolderSessionMenu,
@@ -2128,7 +2188,6 @@ function SidebarImpl({
     onCancelDeleteConfirm,
     onConfirmDeleteConfirm,
     onConnectWorkspace,
-    onLoadOlderThreads,
     onOpenWorkspaceHome,
     onSelectWorkspace,
     onSelectThread,

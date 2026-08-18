@@ -99,6 +99,7 @@ vi.mock("react-i18next", () => ({
         "threads.moveToProjectRoot": "Project root",
         "threads.searchFolderTargets": "Search folders...",
         "threads.more": "More...",
+        "threads.showLess": "Show less",
         "threads.loading": "Loading...",
         "threads.searchOlder": "Search older...",
         "threads.loadOlder": "Load older...",
@@ -925,7 +926,7 @@ describe("Sidebar workspace session folders", () => {
     confirmSpy.mockRestore();
   });
 
-  it("keeps load older visible when workspace sessions are grouped by folders", async () => {
+  it("keeps more visible when workspace sessions are grouped by folders", async () => {
     vi.mocked(listWorkspaceSessionFolders).mockResolvedValueOnce({
       workspaceId: "ws-1",
       folders: [
@@ -973,8 +974,9 @@ describe("Sidebar workspace session folders", () => {
     );
 
     expect(await screen.findByText("Planning")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Load older..." })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Load older..." }));
+    expect(screen.getByRole("button", { name: "More..." })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More..." }));
 
     expect(onLoadOlderThreads).toHaveBeenCalledWith("ws-1");
   });
@@ -1015,5 +1017,232 @@ describe("Sidebar workspace session folders", () => {
 
     expect(await screen.findByText("Root session 1")).toBeTruthy();
     expect(screen.getByRole("button", { name: "More..." })).toBeTruthy();
+  });
+
+  it("pages sidebar roots 12 then 24 without dumping in-memory rows", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+      },
+    };
+    const onLoadOlderThreads = vi.fn();
+    const threads = Array.from({ length: 24 }, (_, index) => ({
+      id: `root-session-${index + 1}`,
+      name: `Root session ${index + 1}`,
+      updatedAt: 100 - index,
+    }));
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{ "ws-1": threads }}
+        threadListCursorByWorkspace={{ "ws-1": "session-index::next" }}
+        hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
+        onLoadOlderThreads={onLoadOlderThreads}
+      />,
+    );
+
+    expect(await screen.findByText("Root session 1")).toBeTruthy();
+    expect(screen.getByText("Root session 12")).toBeTruthy();
+    expect(screen.queryByText("Root session 13")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "More..." }));
+
+    expect(onLoadOlderThreads).not.toHaveBeenCalled();
+    expect(screen.getByText("Root session 24")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show less" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "More..." }));
+
+    expect(onLoadOlderThreads).toHaveBeenCalledWith("ws-1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
+
+    expect(screen.getByText("Root session 12")).toBeTruthy();
+    expect(screen.queryByText("Root session 13")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show less" })).toBeNull();
+  });
+
+  it("fetches the next page only after the first 12 in-memory roots are shown", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+      },
+    };
+    const onLoadOlderThreads = vi.fn();
+    const threads = Array.from({ length: 12 }, (_, index) => ({
+      id: `root-session-${index + 1}`,
+      name: `Root session ${index + 1}`,
+      updatedAt: 100 - index,
+    }));
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{ "ws-1": threads }}
+        threadListCursorByWorkspace={{ "ws-1": "session-index::next" }}
+        hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
+        onLoadOlderThreads={onLoadOlderThreads}
+      />,
+    );
+
+    expect(await screen.findByText("Root session 12")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "More..." }));
+
+    expect(onLoadOlderThreads).toHaveBeenCalledTimes(1);
+    expect(onLoadOlderThreads).toHaveBeenCalledWith("ws-1");
+    expect(screen.getByRole("button", { name: "Show less" })).toBeTruthy();
+  });
+
+  it("does not fetch or raise the cap while a page request is in flight", async () => {
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+      },
+    };
+    const onLoadOlderThreads = vi.fn();
+    const threads = Array.from({ length: 12 }, (_, index) => ({
+      id: `root-session-${index + 1}`,
+      name: `Root session ${index + 1}`,
+      updatedAt: 100 - index,
+    }));
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{ "ws-1": threads }}
+        threadListCursorByWorkspace={{ "ws-1": "session-index::next" }}
+        threadListPagingByWorkspace={{ "ws-1": true }}
+        hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
+        onLoadOlderThreads={onLoadOlderThreads}
+      />,
+    );
+
+    expect(await screen.findByText("Root session 12")).toBeTruthy();
+    const moreButton = screen.getByRole("button", { name: "Loading..." });
+    expect((moreButton as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(moreButton);
+
+    expect(onLoadOlderThreads).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Show less" })).toBeNull();
+  });
+
+  it("does not render paging chrome inside a session folder", async () => {
+    vi.mocked(listWorkspaceSessionFolders).mockResolvedValue({
+      workspaceId: "ws-1",
+      folders: [
+        {
+          id: "__system_auto__",
+          workspaceId: "ws-1",
+          parentId: null,
+          name: "system-auto",
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+      },
+    };
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        threadsByWorkspace={{
+          "ws-1": [
+            {
+              id: "root-session-1",
+              name: "Root session 1",
+              updatedAt: 3,
+              folderId: "__system_auto__",
+              autoSession: {
+                sessionPurpose: "pull-request-question",
+                visibility: "system-auto",
+                ownerFeature: "git",
+                autoArchive: false,
+                createdBy: "system",
+              },
+            },
+            {
+              id: "root-session-2",
+              name: "Root session 2",
+              updatedAt: 2,
+              folderId: "__system_auto__",
+              autoSession: {
+                sessionPurpose: "pull-request-question",
+                visibility: "system-auto",
+                ownerFeature: "git",
+                autoArchive: false,
+                createdBy: "system",
+              },
+            },
+          ],
+        }}
+        threadListCursorByWorkspace={{ "ws-1": "session-index::next" }}
+        hydratedThreadListWorkspaceIds={new Set(["ws-1"])}
+      />,
+    );
+
+    expect(await screen.findByText("system-auto")).toBeTruthy();
+    expect(screen.getByText("Root session 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "More..." })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show less" })).toBeNull();
   });
 });
