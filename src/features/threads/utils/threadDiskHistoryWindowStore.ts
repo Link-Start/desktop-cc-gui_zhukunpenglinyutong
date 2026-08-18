@@ -39,13 +39,38 @@ export function getThreadDiskHistoryWindow(
   return windowsByThread.get(threadId);
 }
 
+export function isConsumableDiskHistoryCursor(
+  cursor: string | null | undefined,
+): cursor is string {
+  const trimmed = cursor?.trim() ?? "";
+  return trimmed.length > 0 && trimmed !== "memory";
+}
+
+export function resolveHistoryWindowAfterMemoryDrain(input: {
+  hasMemoryPending: boolean;
+  diskWindow: ThreadDiskHistoryWindow | undefined;
+}): ThreadDiskHistoryWindow {
+  const diskCursor = input.diskWindow?.nextCursor ?? null;
+  if (
+    input.diskWindow?.hasMore === true &&
+    isConsumableDiskHistoryCursor(diskCursor)
+  ) {
+    return { hasMore: true, nextCursor: diskCursor };
+  }
+  if (input.hasMemoryPending) {
+    return { hasMore: true, nextCursor: "memory" };
+  }
+  return {
+    hasMore: input.diskWindow?.hasMore === true,
+    nextCursor: diskCursor,
+  };
+}
+
 export function hasThreadDiskHistoryMore(threadId: string): boolean {
   const window = getThreadDiskHistoryWindow(threadId);
-  if (window?.hasMore !== true) {
-    return false;
-  }
-  const cursor = window.nextCursor?.trim() ?? "";
-  return cursor.length > 0 && cursor !== "memory";
+  return (
+    window?.hasMore === true && isConsumableDiskHistoryCursor(window.nextCursor)
+  );
 }
 
 export function subscribeThreadDiskHistoryWindows(listener: () => void) {

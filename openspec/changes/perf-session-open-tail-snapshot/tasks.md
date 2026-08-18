@@ -24,3 +24,4 @@
 - [x] 4.2 红线：虚拟化仍关；80/300/800 不变；无后台 39 页预取；无 timeout 卸幕布
 - [x] 4.3 既有 focused suites + 本 change 新测；`cargo test` 覆盖 DSH window helper
 - [ ] 4.4 本地 dump `session-817dbcda…` 手测：打开停在第 1 页、幕布可卸、芯片能露出更早 user（手动）
+- [x] 4.5 hydrate / All 不得把 DSH `nextCursor` 写成 `"memory"`：内存余量只活在 pending store；抽干后 chip 必须切到「加载更早的消息」并能继续 host 翻页

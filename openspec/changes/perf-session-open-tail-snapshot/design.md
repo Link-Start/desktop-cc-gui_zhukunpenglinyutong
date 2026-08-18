@@ -103,6 +103,7 @@ host `maxMessages=200` 按 message 对齐。打开只 fold 最新一页；chip �
 ## Risks / Trade-offs
 
 - [Risk] 用户以为「打开就是全部历史」，点芯片才看到更早用户消息 → Mitigation：芯片沿用现有「更早」；打开后 `hasMore` 必须为真时显示。不另做第二套提示。
+- [Risk] first-paint 内存余量把 `nextCursor` 写成 `"memory"`，All 抽干后 disk seq 丢失、芯片消失 → Mitigation：`historyWindowByThread` 只存 host cursor；内存余量只活在 pending store。hydrate / projection / 部分抽干都不得覆盖可消费 disk cursor。事实源：dump `session-817dbcda…`（44663 events / seq 161882）。
 - [Risk] 最新一页全是超长 assistant/tool，看不到最近一条 user → Mitigation：host 页是 200 messages，dump 里 180 user / 77 turn，tail 200 足够覆盖最近多轮。不够再靠芯片。不做自动回翻。
 - [Risk] `nextCursor` 用 event seq，host `beforeSeq` 语义漂移 → Mitigation：复用今天 `load_history_pages` 已验证的 `events.first().seq`；单测锁解析与截断。
 - [Risk] remote 不识新字段 → Mitigation：字段可选；未传时服务端默认 1 页。若旧 daemon 忽略 limit 仍拉 40 页，行为不优于今天，但不更差于今天。

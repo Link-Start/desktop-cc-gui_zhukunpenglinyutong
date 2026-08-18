@@ -4,6 +4,7 @@ import {
   hasThreadDiskHistoryMore,
   publishThreadDiskHistoryWindows,
   resetThreadDiskHistoryWindowsForTests,
+  resolveHistoryWindowAfterMemoryDrain,
   subscribeThreadDiskHistoryWindows,
 } from "./threadDiskHistoryWindowStore";
 
@@ -21,6 +22,39 @@ describe("threadDiskHistoryWindowStore", () => {
       hasMore: true,
       nextCursor: "80",
     });
+  });
+
+  it("keeps a consumable disk cursor while memory remainder is still pending", () => {
+    expect(
+      resolveHistoryWindowAfterMemoryDrain({
+        hasMemoryPending: true,
+        diskWindow: { hasMore: true, nextCursor: "161682" },
+      }),
+    ).toEqual({ hasMore: true, nextCursor: "161682" });
+  });
+
+  it("falls back to a memory cursor only when disk has no consumable page", () => {
+    expect(
+      resolveHistoryWindowAfterMemoryDrain({
+        hasMemoryPending: true,
+        diskWindow: { hasMore: true, nextCursor: "memory" },
+      }),
+    ).toEqual({ hasMore: true, nextCursor: "memory" });
+    expect(
+      resolveHistoryWindowAfterMemoryDrain({
+        hasMemoryPending: true,
+        diskWindow: undefined,
+      }),
+    ).toEqual({ hasMore: true, nextCursor: "memory" });
+  });
+
+  it("restores the disk cursor after memory remainder is drained", () => {
+    expect(
+      resolveHistoryWindowAfterMemoryDrain({
+        hasMemoryPending: false,
+        diskWindow: { hasMore: true, nextCursor: "161682" },
+      }),
+    ).toEqual({ hasMore: true, nextCursor: "161682" });
   });
 
   it("does not treat a memory cursor as disk remainder", () => {

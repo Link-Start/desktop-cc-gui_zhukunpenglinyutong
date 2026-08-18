@@ -13,6 +13,10 @@ import {
   type LoadOlderHistoryPageInput,
   type LoadOlderHistoryPageResult,
 } from "./olderHistoryPage";
+import {
+  isConsumableDiskHistoryCursor,
+  resolveHistoryWindowAfterMemoryDrain,
+} from "./threadDiskHistoryWindowStore";
 
 export type OlderHistoryWindowState = {
   hasMore: boolean;
@@ -57,29 +61,14 @@ export type OlderHistoryRequesterDeps = {
   ) => void;
 };
 
-function isConsumableDiskCursor(cursor: string | null | undefined): cursor is string {
-  const trimmed = cursor?.trim() ?? "";
-  return trimmed.length > 0 && trimmed !== "memory";
-}
-
 function resolveWindowAfterMemoryDrain(
   threadId: string,
   getHistoryWindow: OlderHistoryRequesterDeps["getHistoryWindow"],
 ): OlderHistoryWindowState {
-  if (hasPendingOlderHistory(threadId)) {
-    return { hasMore: true, nextCursor: "memory" };
-  }
-  const diskWindow = getHistoryWindow(threadId);
-  if (diskWindow?.hasMore === true && isConsumableDiskCursor(diskWindow.nextCursor)) {
-    return {
-      hasMore: true,
-      nextCursor: diskWindow.nextCursor,
-    };
-  }
-  return {
-    hasMore: diskWindow?.hasMore === true,
-    nextCursor: diskWindow?.nextCursor ?? null,
-  };
+  return resolveHistoryWindowAfterMemoryDrain({
+    hasMemoryPending: hasPendingOlderHistory(threadId),
+    diskWindow: getHistoryWindow(threadId),
+  });
 }
 
 export function createOlderHistoryRequester(
@@ -132,7 +121,10 @@ export function createOlderHistoryRequester(
     }
 
     const window = deps.getHistoryWindow(threadId);
-    if (window?.hasMore !== true || !isConsumableDiskCursor(window.nextCursor)) {
+    if (
+      window?.hasMore !== true ||
+      !isConsumableDiskHistoryCursor(window.nextCursor)
+    ) {
       return false;
     }
 

@@ -92,7 +92,6 @@ import { dispatchThreadItemsProgressively } from "../utils/dispatchThreadItemsPr
 import {
   clearPendingOlderHistory,
   getPendingOlderHistory,
-  hasPendingOlderHistory,
   rememberFullHistoryForWindow,
   replacePendingOlderHistoryItems,
 } from "../utils/pendingOlderHistory";
@@ -358,12 +357,6 @@ export function useThreadActionsResumeThreadForWorkspace(
             items,
             result.displayedCount,
           );
-          dispatch({
-            type: "setThreadHistoryWindow",
-            threadId: targetThreadId,
-            hasMore: true,
-            nextCursor: "memory",
-          });
         } else {
           clearPendingOlderHistory(targetThreadId);
         }
@@ -582,12 +575,6 @@ export function useThreadActionsResumeThreadForWorkspace(
                     threadId: targetThreadId,
                     items: nextItems.slice(-pending.displayedCount),
                   });
-                  dispatch({
-                    type: "setThreadHistoryWindow",
-                    threadId: targetThreadId,
-                    hasMore: true,
-                    nextCursor: "memory",
-                  });
                   return;
                 }
               }
@@ -701,14 +688,12 @@ export function useThreadActionsResumeThreadForWorkspace(
             threadId: effectiveThreadId,
             timestamp: assembledSnapshot.meta.historyRestoredAtMs,
           });
-          if (!hasPendingOlderHistory(effectiveThreadId)) {
-            dispatch({
-              type: "setThreadHistoryWindow",
-              threadId: effectiveThreadId,
-              hasMore: assembledSnapshot.meta.historyHasMore === true,
-              nextCursor: assembledSnapshot.meta.historyNextCursor ?? null,
-            });
-          }
+          dispatch({
+            type: "setThreadHistoryWindow",
+            threadId: effectiveThreadId,
+            hasMore: assembledSnapshot.meta.historyHasMore === true,
+            nextCursor: assembledSnapshot.meta.historyNextCursor ?? null,
+          });
           if (snapshot.tokenUsage) {
             dispatch({
               type: "setThreadTokenUsage",
@@ -1427,14 +1412,12 @@ export function useThreadActionsResumeThreadForWorkspace(
               threadId,
               timestamp: Date.now(),
             });
-            if (!hasPendingOlderHistory(threadId)) {
-              dispatch({
-                type: "setThreadHistoryWindow",
-                threadId,
-                hasMore: claudeRecord.hasMore === true,
-                nextCursor: claudeRecord.nextCursor ?? null,
-              });
-            }
+            dispatch({
+              type: "setThreadHistoryWindow",
+              threadId,
+              hasMore: claudeRecord.hasMore === true,
+              nextCursor: claudeRecord.nextCursor ?? null,
+            });
 
             // Dispatch usage data if available
             const restoredTokenUsage = extractClaudeHistoryTokenUsage(result);

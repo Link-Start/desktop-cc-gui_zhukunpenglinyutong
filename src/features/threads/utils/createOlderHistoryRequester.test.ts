@@ -167,6 +167,46 @@ describe("createOlderHistoryRequester", () => {
     });
   });
 
+  it("keeps the disk cursor after a partial memory drain", () => {
+    const items = Array.from({ length: 1200 }, (_, index) =>
+      userMessage(`hist-${index}`),
+    );
+    rememberFullHistoryForWindow(THREAD_ID, items, 300);
+    const harness = createHarness({
+      window: { hasMore: true, nextCursor: "161682" },
+    });
+
+    expect(harness.requester(THREAD_ID)).toBe(true);
+    expect(harness.loadPage).not.toHaveBeenCalled();
+    expect(harness.dispatched[1]).toEqual({
+      type: "setThreadHistoryWindow",
+      threadId: THREAD_ID,
+      hasMore: true,
+      nextCursor: "161682",
+    });
+  });
+
+  it("keeps the DSH disk cursor after All drains the first-paint remainder", () => {
+    const dshThreadId = "dsh:session-817dbcda-cd6f-4257-b3b0-0fac706730e4";
+    const items = Array.from({ length: 599 }, (_, index) =>
+      userMessage(`dsh-${index}`),
+    );
+    rememberFullHistoryForWindow(dshThreadId, items, 400);
+    const harness = createHarness({
+      window: { hasMore: true, nextCursor: "161682" },
+    });
+
+    expect(harness.requester(dshThreadId, { drainAll: true })).toBe(true);
+    expect(harness.loadPage).not.toHaveBeenCalled();
+    expect(harness.dispatched[1]).toEqual({
+      type: "setThreadHistoryWindow",
+      threadId: dshThreadId,
+      hasMore: true,
+      nextCursor: "161682",
+    });
+    clearPendingOlderHistory(dshThreadId);
+  });
+
   it("does not start a disk page when All finds no memory remainder", () => {
     const harness = createHarness({
       window: { hasMore: true, nextCursor: "80" },
