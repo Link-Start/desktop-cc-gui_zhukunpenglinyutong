@@ -46,10 +46,17 @@ describe("Messages history loading", () => {
     );
 
     expect(screen.getByRole("status")).toBeTruthy();
+    expect(screen.getByRole("status").getAttribute("data-history-loading-mode")).toBe(
+      "native",
+    );
     expect(screen.getByText("messages.restoringHistory")).toBeTruthy();
     expect(screen.getByText("messages.restoringHistoryHint")).toBeTruthy();
     expect(screen.getByRole("progressbar")).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBeNull();
+    expect(document.querySelector(".messages-history-loading-traveler")).toBeTruthy();
+    expect(document.querySelector(".working-spinner")).toBeNull();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
+    expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeTruthy();
   });
 
   it("shows Shared restore phase copy and determinate progress", () => {
@@ -77,10 +84,16 @@ describe("Messages history loading", () => {
     expect(
       screen.getByText("messages.restoringSharedHistoryProjection"),
     ).toBeTruthy();
+    expect(screen.getByRole("status").getAttribute("data-history-loading-mode")).toBe(
+      "shared",
+    );
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
       "58",
     );
-    expect(screen.getByText("58%")).toBeTruthy();
+    expect(screen.getByText(/58%/)).toBeTruthy();
+    expect(document.querySelectorAll(".messages-history-loading-node")).toHaveLength(4);
+    expect(document.querySelector(".messages-history-loading-node.is-current")).toBeTruthy();
+    expect(document.querySelector(".messages-history-loading-traveler")).toBeNull();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
@@ -120,6 +133,7 @@ describe("Messages history loading", () => {
 
     expect(screen.getByText("messages.emptyThread")).toBeTruthy();
     expect(screen.queryByText("messages.restoringHistory")).toBeNull();
+    expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeNull();
   });
 
   it("shows a bounded retry surface instead of empty-thread after history recovery fails", () => {

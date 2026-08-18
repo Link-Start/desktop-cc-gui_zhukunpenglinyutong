@@ -57,6 +57,7 @@ import {
   isHistoryFoldItemId,
 } from "../../../multi-agent/store/historyFoldRegistry";
 import { isMultiAgentSettledSummaryItemId } from "../../../multi-agent/utils/canvasItems";
+import { HistoryLoadingSurface } from "./HistoryLoadingSurface";
 import { MiddleStepsCollapsedChip } from "./MiddleStepsCollapsedChip";
 import type {
   TimelineRowRendererProps,
@@ -824,43 +825,8 @@ export const TimelineRowRenderer = memo(function TimelineRowRenderer({
     }
     if (row.kind === "emptyState") {
       if (row.state === "historyLoading") {
-        const progress = historyLoadingProgress ?? null;
-        const title = progress
-          ? t(`messages.${progress.titleKey}`, progress.detailParams)
-          : t("messages.restoringHistory");
-        const detail = progress
-          ? t(`messages.${progress.detailKey}`, progress.detailParams)
-          : t("messages.restoringHistoryHint");
-        const percent = progress?.percent ?? null;
         return (
-          <div
-            className="empty messages-empty messages-history-loading"
-            role="status"
-            aria-live="polite"
-            aria-busy="true"
-          >
-            <span className="working-spinner" aria-hidden="true" />
-            <div className="messages-history-loading-copy">
-              <strong>{title}</strong>
-              <span>{detail}</span>
-              <div
-                className={`messages-history-loading-bar${percent == null ? " is-indeterminate" : ""}`}
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={percent ?? undefined}
-                aria-label={title}
-              >
-                <div
-                  className="messages-history-loading-bar-fill"
-                  style={percent == null ? undefined : { width: `${percent}%` }}
-                />
-              </div>
-              {percent != null ? (
-                <span className="messages-history-loading-percent">{percent}%</span>
-              ) : null}
-            </div>
-          </div>
+          <HistoryLoadingSurface progress={historyLoadingProgress ?? null} />
         );
       }
       if (row.state === "hiddenReasoning") {

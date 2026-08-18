@@ -17,12 +17,12 @@ export function shouldShowHistoryLoadingForSelectionThread(
   if (!normalizedThreadId || normalizedThreadId.includes("-pending-")) {
     return false;
   }
-  // Shared 与 Native 一样需要画布 loading，避免空态闪烁；
-  // gemini/opencode/dsh 历史链路较轻，仍保持原排除策略。
+  // Shared 与 Native（含 DSH `loadDshSession`）都需要画布 loading，避免空态闪烁。
+  // gemini/opencode 历史链路较轻，仍保持原排除策略。
+  // DSH 只开布尔幕布，不种 Shared prepare 进度，避免多余 setState。
   return (
     !normalizedThreadId.startsWith("gemini:") &&
-    !normalizedThreadId.startsWith("opencode:") &&
-    !normalizedThreadId.startsWith("dsh:")
+    !normalizedThreadId.startsWith("opencode:")
   );
 }
 

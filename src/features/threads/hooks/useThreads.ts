@@ -2228,7 +2228,8 @@ export function useThreads({
       });
       // Unloaded Native / Shared history still needs a select-frame curtain so
       // the canvas does not flash emptyThread while resume is in flight.
-      // Known never-started / failed / already-loaded surfaces stay curtain-free.
+      // DSH uses the same boolean curtain (async loadDshSession); no Shared
+      // prepare progress. Known never-started / failed / already-loaded stay off.
       const shouldShowHistoryLoading =
         resumeDecision.action === "resume" &&
         !isLoaded &&

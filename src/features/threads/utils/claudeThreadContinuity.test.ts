@@ -12,7 +12,7 @@ describe("claudeThreadContinuity", () => {
     expect(isClaudeThreadId("thread-1")).toBe(false);
   });
 
-  it("shows history loading for Claude and Shared history selections but not pending threads", () => {
+  it("shows history loading for Claude, Shared, and DSH history selections but not pending threads", () => {
     expect(shouldShowHistoryLoadingForSelectionThread("claude:session-1")).toBe(
       true,
     );
@@ -25,12 +25,18 @@ describe("claudeThreadContinuity", () => {
     expect(shouldShowHistoryLoadingForSelectionThread("thread-history")).toBe(
       true,
     );
+    expect(shouldShowHistoryLoadingForSelectionThread("dsh:session-1")).toBe(
+      true,
+    );
+    expect(shouldShowHistoryLoadingForSelectionThread("dsh-pending-1")).toBe(
+      false,
+    );
     expect(shouldShowHistoryLoadingForSelectionThread("gemini:session-1")).toBe(
       false,
     );
-    expect(shouldShowHistoryLoadingForSelectionThread("dsh:session-1")).toBe(
-      false,
-    );
+    expect(
+      shouldShowHistoryLoadingForSelectionThread("opencode:session-1"),
+    ).toBe(false);
   });
 
   it("prefers persisted canonical aliases for Claude continuation", () => {

@@ -543,7 +543,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <div
       ref={floaterContainerRef}
-      className="messages-timeline-root"
+      className={
+        isHistoryLoading
+          ? "messages-timeline-root is-history-loading"
+          : "messages-timeline-root"
+      }
       data-timeline-static-expanded-history={
         shouldUseStaticExpandedHistoryFlow ? "true" : undefined
       }

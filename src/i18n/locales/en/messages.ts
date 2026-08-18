@@ -74,6 +74,10 @@ const messages = {
     restoringSharedHistoryMergeDone:
       "Timeline merge complete ({{count}} items total).",
     restoringSharedHistoryFinalize: "Finishing canvas restore…",
+    restoringHistoryPhasePrepare: "Prepare",
+    restoringHistoryPhaseSession: "Snapshot",
+    restoringHistoryPhaseProjection: "Projection",
+    restoringHistoryPhaseMerge: "Merge",
     generatingResponse: "Generating response...",
     responding: "Responding...",
     codexWaitingForFirstText:

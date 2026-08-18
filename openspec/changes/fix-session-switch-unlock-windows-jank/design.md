@@ -68,7 +68,7 @@ scheduleChrome(default startTransition)
 - `extractThreadSizeBytes` 保留显式 0，缺失字段仍是 `undefined`（禁止 `asNumber` 把缺失变成 0）
 - `mergeSessionDisplaySummary` 用 `next.sizeBytes ?? previous.sizeBytes`，避免后到的 undefined 抹掉 Index 的 0
 
-select 路径对未加载 Native / Shared **必须** `setThreadHistoryLoading(true)`。known never-started / loaded / failed 不拉幕布。真正的 Claude blank curtain 仍走 `scheduleClaudeBlankCurtainRecovery`。
+select 路径对未加载 Native / Shared **必须** `setThreadHistoryLoading(true)`。Native 含 Claude / Codex / DSH（`dsh:*` 走 `loadDshSession`）。known never-started / loaded / failed 不拉幕布。DSH 只开布尔幕布，不种 Shared prepare 进度。真正的 Claude blank curtain 仍走 `scheduleClaudeBlankCurtainRecovery`。
 
 删除已死的 `shouldForceThreadResumeOnCallback`（failed 已在决策层 skip）。
 

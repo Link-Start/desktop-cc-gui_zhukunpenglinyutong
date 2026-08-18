@@ -61,3 +61,10 @@
 - [x] 对照 0.8.9：select 同样立刻换 `activeItems`，并不保留旧幕布
 - [x] 「上方还有 N 条 / 窗口 800」不是根因；群主已否定，数字已恢复 300/800
 - [ ] 已打开会话再切回去仍空约 10s：继续查 select 帧为何先画空，而不是改 chip
+
+## S9 — DSH Native 幕布（本轮）
+
+- [x] `shouldShowHistoryLoadingForSelectionThread` 纳入 `dsh:`；`dsh-pending-*` 仍排除
+- [x] 不给 DSH 种 Shared prepare 进度（避免多余 setState）
+- [x] never-started / loaded / failed / processing 仍走既有 resume gate，不扩 resume
+- [x] continuity + sidebar-cache 单测与 OpenSpec scenario 回写

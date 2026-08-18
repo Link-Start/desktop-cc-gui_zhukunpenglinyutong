@@ -19,7 +19,7 @@
 ## What Changes
 
 - 切会话 identity **只**同步 `selectWorkspace` + `setActiveThreadId`。`setActiveEngine` 进 chrome / `startTransition`。
-- 未加载且可能有历史的 Native / Shared 会话，select 帧必须拉 history-loading 幕布，避免空态闪烁。known never-started / loaded / failed 不拉幕布。`scheduleClaudeBlankCurtainRecovery` 只处理真正的 blank curtain。
+- 未加载且可能有历史的 Native / Shared 会话，select 帧必须拉 history-loading 幕布，避免空态闪烁。Native 含 Claude / Codex / DSH；DSH 只开布尔幕布、不种 Shared 进度。known never-started / loaded / failed 不拉幕布。`scheduleClaudeBlankCurtainRecovery` 只处理真正的 blank curtain。
 - 可判断的 never-started（`*-pending-*`，或 summary 明确 `sizeBytes===0` 且无 `physicalPath`）**跳过 resume**。`items=[] && !isLoaded` 单独不足以 skip——那也是「有历史但未 hydrate」的正常态。
 - 切会话路径 **禁止** `ensureWorkspaceThreadListLoaded({ force })` / full-catalog / disk rescan。不 merge 0.8.9 engine-rail UI。
 - Shared recovery：`recovery-required` 预取 owner；click 先让出一帧 paint。成功空 V0 即 Phase-A。
