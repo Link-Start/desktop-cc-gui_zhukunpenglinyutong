@@ -1,33 +1,20 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { MouseEvent } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { ThreadSummary } from "../../../types";
+import { usePinnedSectionFold } from "../hooks/usePinnedSectionFold";
 import type { ThreadMoveFolderTarget } from "../hooks/useSidebarMenus";
 import type { ThreadStatusMap } from "./threadRowStatusStore";
+import {
+  findPinnedCalendarDateForThread,
+  groupPinnedRowsByCalendarDay,
+  type PinnedThreadCalendarRow,
+} from "./pinnedThreadCalendarGroups";
 import { ThreadList } from "./ThreadList";
 
-type PinnedThreadRow = {
-  thread: ThreadSummary;
-  depth: number;
-  hasChildren?: boolean;
-  workspaceId: string;
-  workspacePath: string;
-};
-
-type PinnedThreadRowGroup = {
-  key: string;
-  workspaceId: string;
-  workspacePath: string;
-  rootCount: number;
-  rows: Array<{
-    thread: ThreadSummary;
-    depth: number;
-    hasChildren?: boolean;
-  }>;
-};
-
 type PinnedThreadListProps = {
-  rows: PinnedThreadRow[];
+  rows: PinnedThreadCalendarRow[];
   activeWorkspaceId: string | null;
   activeThreadId: string | null;
   systemProxyEnabled?: boolean;
@@ -65,37 +52,10 @@ type PinnedThreadListProps = {
   onPinnedThreadRowRender?: (threadId: string) => void;
 };
 
-function groupPinnedThreadRows(rows: PinnedThreadRow[]): PinnedThreadRowGroup[] {
-  const groups: PinnedThreadRowGroup[] = [];
-  let current: PinnedThreadRowGroup | null = null;
-
-  rows.forEach((row) => {
-    if (
-      !current ||
-      current.workspaceId !== row.workspaceId ||
-      current.workspacePath !== row.workspacePath
-    ) {
-      current = {
-        key: `${row.workspaceId}:${row.thread.id}`,
-        workspaceId: row.workspaceId,
-        workspacePath: row.workspacePath,
-        rootCount: 0,
-        rows: [],
-      };
-      groups.push(current);
-    }
-    if (row.depth === 0) {
-      current.rootCount += 1;
-    }
-    current.rows.push({
-      thread: row.thread,
-      depth: row.depth,
-      hasChildren: row.hasChildren,
-    });
-  });
-
-  return groups;
-}
+const EMPTY_MOVE_FOLDER_TARGETS_BY_WORKSPACE: Record<
+  string,
+  ThreadMoveFolderTarget[]
+> = {};
 
 export function PinnedThreadList({
   rows,
@@ -105,7 +65,7 @@ export function PinnedThreadList({
   systemProxyUrl = null,
   showProviderLabels = false,
   threadStatusById,
-  moveFolderTargetsByWorkspaceId = {},
+  moveFolderTargetsByWorkspaceId = EMPTY_MOVE_FOLDER_TARGETS_BY_WORKSPACE,
   getThreadTime,
   isThreadPinned,
   isThreadAutoNaming,
@@ -125,53 +85,110 @@ export function PinnedThreadList({
   onRenameConfirm,
   onPinnedThreadRowRender,
 }: PinnedThreadListProps) {
-  const groups = useMemo(() => groupPinnedThreadRows(rows), [rows]);
+  const { t } = useTranslation();
+  const { isDayExpanded, toggleDay, ensureDayExpanded } = usePinnedSectionFold();
+  const dayGroups = useMemo(() => groupPinnedRowsByCalendarDay(rows), [rows]);
+  const latestDateKey = dayGroups[0]?.dateKey ?? null;
+  const activeDateKey = useMemo(
+    () => findPinnedCalendarDateForThread(dayGroups, activeThreadId),
+    [activeThreadId, dayGroups],
+  );
+
+  useEffect(() => {
+    if (!activeDateKey) {
+      return;
+    }
+    if (!isDayExpanded(activeDateKey, latestDateKey)) {
+      ensureDayExpanded(activeDateKey, latestDateKey);
+    }
+  }, [activeDateKey, ensureDayExpanded, isDayExpanded, latestDateKey]);
+
+  if (dayGroups.length === 0) {
+    return null;
+  }
 
   return (
-    <>
-      {groups.map((group) => (
-        <ThreadList
-          key={group.key}
-          workspaceId={group.workspaceId}
-          workspacePath={group.workspacePath}
-          pinnedRows={group.rows}
-          unpinnedRows={[]}
-          totalThreadRoots={group.rootCount}
-          visibleThreadRootCount={group.rootCount}
-          isExpanded
-          nextCursor={null}
-          isPaging={false}
-          showPagingControls={false}
-          listClassName="pinned-thread-list"
-          moveFolderTargets={moveFolderTargetsByWorkspaceId[group.workspaceId]}
-          activeWorkspaceId={activeWorkspaceId}
-          activeThreadId={activeThreadId}
-          systemProxyEnabled={systemProxyEnabled}
-          systemProxyUrl={systemProxyUrl}
-          showProviderLabels={showProviderLabels}
-          threadStatusById={threadStatusById}
-          getThreadTime={getThreadTime}
-          isThreadPinned={isThreadPinned}
-          isThreadAutoNaming={isThreadAutoNaming}
-          onToggleThreadPin={onToggleThreadPin}
-          onToggleExpanded={() => undefined}
-          onLoadOlderThreads={() => undefined}
-          onSelectThread={onSelectThread}
-          onShowThreadMenu={onShowThreadMenu}
-          deleteConfirmThreadId={deleteConfirmThreadId}
-          deleteConfirmWorkspaceId={deleteConfirmWorkspaceId}
-          deleteConfirmBusy={deleteConfirmBusy}
-          onCancelDeleteConfirm={onCancelDeleteConfirm}
-          onConfirmDeleteConfirm={onConfirmDeleteConfirm}
-          renameThreadId={renameThreadId}
-          renameWorkspaceId={renameWorkspaceId}
-          renameName={renameName}
-          onRenameChange={onRenameChange}
-          onRenameCancel={onRenameCancel}
-          onRenameConfirm={onRenameConfirm}
-          onThreadRowRender={onPinnedThreadRowRender}
-        />
-      ))}
-    </>
+    <div className="sidebar-pinned-list" data-sidebar-pinned-section="">
+      {dayGroups.map((dayGroup) => {
+        const dayOpen = isDayExpanded(dayGroup.dateKey, latestDateKey);
+        return (
+          <div
+            key={dayGroup.dateKey}
+            className="sidebar-pinned-day"
+            data-sidebar-pinned-day={dayGroup.dateKey}
+          >
+            <button
+              type="button"
+              className={`sidebar-section-header sidebar-pinned-day-header${
+                dayOpen ? "" : " is-collapsed"
+              }`}
+              data-sidebar-pinned-day-header={dayGroup.dateKey}
+              aria-expanded={dayOpen}
+              aria-label={
+                dayOpen
+                  ? t("sidebar.collapsePinnedDay", {
+                      date: dayGroup.dateKey,
+                    })
+                  : t("sidebar.expandPinnedDay", {
+                      date: dayGroup.dateKey,
+                    })
+              }
+              onClick={() => toggleDay(dayGroup.dateKey, latestDateKey)}
+            >
+              <span className="sidebar-section-title sidebar-pinned-day-label">
+                {dayGroup.dateKey}
+              </span>
+            </button>
+            {dayOpen
+              ? dayGroup.workspaceRuns.map((run) => (
+                  <ThreadList
+                    key={`${dayGroup.dateKey}:${run.key}`}
+                    workspaceId={run.workspaceId}
+                    workspacePath={run.workspacePath}
+                    pinnedRows={run.rows}
+                    unpinnedRows={[]}
+                    totalThreadRoots={run.rootCount}
+                    visibleThreadRootCount={run.rootCount}
+                    isExpanded
+                    nextCursor={null}
+                    isPaging={false}
+                    showPagingControls={false}
+                    listClassName="pinned-thread-list"
+                    moveFolderTargets={
+                      moveFolderTargetsByWorkspaceId[run.workspaceId]
+                    }
+                    activeWorkspaceId={activeWorkspaceId}
+                    activeThreadId={activeThreadId}
+                    systemProxyEnabled={systemProxyEnabled}
+                    systemProxyUrl={systemProxyUrl}
+                    showProviderLabels={showProviderLabels}
+                    threadStatusById={threadStatusById}
+                    getThreadTime={getThreadTime}
+                    isThreadPinned={isThreadPinned}
+                    isThreadAutoNaming={isThreadAutoNaming}
+                    onToggleThreadPin={onToggleThreadPin}
+                    onToggleExpanded={() => undefined}
+                    onLoadOlderThreads={() => undefined}
+                    onSelectThread={onSelectThread}
+                    onShowThreadMenu={onShowThreadMenu}
+                    deleteConfirmThreadId={deleteConfirmThreadId}
+                    deleteConfirmWorkspaceId={deleteConfirmWorkspaceId}
+                    deleteConfirmBusy={deleteConfirmBusy}
+                    onCancelDeleteConfirm={onCancelDeleteConfirm}
+                    onConfirmDeleteConfirm={onConfirmDeleteConfirm}
+                    renameThreadId={renameThreadId}
+                    renameWorkspaceId={renameWorkspaceId}
+                    renameName={renameName}
+                    onRenameChange={onRenameChange}
+                    onRenameCancel={onRenameCancel}
+                    onRenameConfirm={onRenameConfirm}
+                    onThreadRowRender={onPinnedThreadRowRender}
+                  />
+                ))
+              : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }

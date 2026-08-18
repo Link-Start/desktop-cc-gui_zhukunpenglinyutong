@@ -12,7 +12,10 @@ import {
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
-import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  resetClientStorageForTests,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import { SIDEBAR_SETTINGS_PINNED_ACTIONS_KEY } from "../hooks/useSidebarSettingsPinnedActions";
 import { pushErrorToast } from "../../../services/toasts";
 
@@ -25,6 +28,7 @@ afterEach(() => {
 
 beforeEach(() => {
   resetSidebarTestMocks();
+  resetClientStorageForTests();
 });
 
 function openWorkspaceActionsMenu(workspaceCard: HTMLElement) {

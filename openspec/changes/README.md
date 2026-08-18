@@ -11,6 +11,7 @@
 
 | Change | Progress | Current gate | Artifacts |
 | ------ | -------: | ------------ | --------- |
+| [`fold-sidebar-pinned-by-calendar-day`](fold-sidebar-pinned-by-calendar-day/proposal.md) | implemented / await visual | 全局置顶区按 `yyyy-mm-dd` 做最外层；无「已固定」段头 / 无 chevron；默认只开最新日；focused vitest + Sidebar 62 绿；**待侧栏目视后 archive** | [proposal](fold-sidebar-pinned-by-calendar-day/proposal.md) · [design](fold-sidebar-pinned-by-calendar-day/design.md) · [tasks](fold-sidebar-pinned-by-calendar-day/tasks.md) · [specs](fold-sidebar-pinned-by-calendar-day/specs/) · [原型](../../docs/designs/sidebar-pinned-fold/index.html) |
 | [`fix-native-followup-engine-collision`](fix-native-followup-engine-collision/proposal.md) | implemented / user accepted | DSH/任意 native 续聊不得因同名 runtime 下崽；本 catalog `id`/`.model` 优先；显式切引擎组才 spawn；DSH 闭合态带 provider；**手测通过，待 archive** | [proposal](fix-native-followup-engine-collision/proposal.md) · [design](fix-native-followup-engine-collision/design.md) · [tasks](fix-native-followup-engine-collision/tasks.md) · [specs](fix-native-followup-engine-collision/specs/) |
 | [`restore-sidebar-background-scan-sqlite`](restore-sidebar-background-scan-sqlite/proposal.md) | implemented / await Windows hand-test | last-good 做 floor 并集 + importer 3s 强制首拍 + freshness 比磁盘 mtime 与账本 `max(updated_at)`；`upserted>0` 才重读 Index；**5.3 Windows 手测未勾，不 archive** | [proposal](restore-sidebar-background-scan-sqlite/proposal.md) · [design](restore-sidebar-background-scan-sqlite/design.md) · [tasks](restore-sidebar-background-scan-sqlite/tasks.md) · [specs](restore-sidebar-background-scan-sqlite/specs/) |
 | [`fix-model-picker-send-authority`](fix-model-picker-send-authority/proposal.md) | implemented / await hand-test | picker 提交写 resolver / `selectedNextTarget`；空 catalog 回滚 override；overlay 只做反馈；send 不读 overlay/override；**4.3 手测未勾，不 archive** | [proposal](fix-model-picker-send-authority/proposal.md) · [design](fix-model-picker-send-authority/design.md) · [tasks](fix-model-picker-send-authority/tasks.md) · [specs](fix-model-picker-send-authority/specs/) |
@@ -56,6 +57,7 @@
 
 ## Active backlog notes（2026-08-08）
 
+- **落地** `fold-sidebar-pinned-by-calendar-day`（2026-08-18）：全局置顶区按本地 `yyyy-mm-dd` 做最外层分组；无「已固定」段头、无折叠 chevron；默认只开最新日；组内保持 pin 序。focused vitest + Sidebar 62 绿。**待侧栏目视，不 archive。**
 - **落地并手测通过** `fix-native-followup-engine-collision`（2026-08-18）：DSH 复杂第一轮后续聊误开 native CLI（现场 grok，合同覆盖全 CLI）。本 catalog `id`/`.model` 优先；续聊 stay-on-thread，除非显式点引擎组；DSH 闭合态 `provider / lastSegment`。**用户手测通过，待 archive。**
 - **落地** `restore-sidebar-background-scan-sqlite`（2026-08-18）：last-good 改 floor 并集；importer `IMPORT_INITIAL_DELAY=3s` 强制首拍；freshness 增加磁盘 mtime vs 账本闸；`session-index-imported` 仅 `upserted>0` 重读 Index。vitest 34 + Rust `session_index` 57 绿。**5.3 Windows 手测未勾，不 archive。**
 - **落地** `fix-model-picker-send-authority`（2026-08-18）：点选写 send 账本。Shared `!keptModel` 回滚 override（含同 tick 取消标记）；Native overlay 抽 hook 并听续接取消；resolver 同步写入且 pin 住刚点的 runtime；send 有 resolver 时不再回落全局 model。focused vitest 新用例绿；既有 6 红未扩大。**4.3 手测未勾，不 archive。**

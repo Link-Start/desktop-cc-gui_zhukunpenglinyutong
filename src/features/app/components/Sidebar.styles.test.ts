@@ -73,6 +73,11 @@ describe("Sidebar styles", () => {
     expect(ruleBody(css, ".sidebar-pinned-section")).toMatch(
       /padding:\s*0\s+4px;/,
     );
+    expect(css).not.toMatch(/\.sidebar-pinned-header\s*\{/);
+    expect(css).not.toMatch(/\.sidebar-pinned-day-chevron\s*\{/);
+    expect(ruleBody(css, ".sidebar-pinned-day-header")).toMatch(
+      /cursor:\s*pointer;/,
+    );
   });
 
   it("aligns thread active selection with workspace soft fill", () => {
