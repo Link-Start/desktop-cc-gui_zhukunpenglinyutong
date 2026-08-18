@@ -1,4 +1,5 @@
 import type { ConversationItem } from "../../../types";
+import { resolveHistoryWindowCutIndex } from "../../../utils/historyWindowCut";
 
 /** IO / older-history page size when revealing the pending first-paint tail. */
 export const THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE = 800;
@@ -71,14 +72,20 @@ export async function dispatchThreadItemsProgressively(
     return { displayedCount: items.length, remainingOlderCount: 0 };
   }
 
-  const displayedCount = batchSize;
+  const cut = resolveHistoryWindowCutIndex({
+    items,
+    windowSize: batchSize,
+    revealedItemCount: 0,
+    activeTurnId: null,
+  });
+  const displayedItems = items.slice(cut);
   dispatch({
     type: "setThreadItems",
     threadId,
-    items: items.slice(-displayedCount),
+    items: displayedItems,
   });
   return {
-    displayedCount,
-    remainingOlderCount: items.length - displayedCount,
+    displayedCount: displayedItems.length,
+    remainingOlderCount: cut,
   };
 }

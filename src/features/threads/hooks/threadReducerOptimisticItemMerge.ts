@@ -8,6 +8,7 @@ import {
 import { isProcessingGeneratedImageItem } from "../utils/generatedImagePlaceholder";
 import { shouldPreserveProcessingGeneratedImage } from "../utils/generatedImagePlaceholderMatching";
 import { isOptimisticUserMessageId } from "../utils/queuedHandoffBubble";
+import { insertUnmatchedIncomingByNeighbor } from "./insertUnmatchedIncomingByNeighbor";
 import {
   buildOptimisticUserReplacementMap,
   insertGeneratedImagesAfterAnchors,
@@ -264,14 +265,18 @@ export function mergeThreadItemsPreservingOptimisticUsers(
           emittedIds.add(localItem.id);
         }
       });
+      const leftoverIncoming: ConversationItem[] = [];
       mergedItems.forEach((item) => {
         if (emittedIds.has(item.id)) {
           return;
         }
-        orderedItems.push(item);
-        emittedIds.add(item.id);
+        leftoverIncoming.push(item);
       });
-      mergedItems = orderedItems;
+      mergedItems = insertUnmatchedIncomingByNeighbor(
+        orderedItems,
+        leftoverIncoming,
+        mergedItems,
+      );
     }
   }
 

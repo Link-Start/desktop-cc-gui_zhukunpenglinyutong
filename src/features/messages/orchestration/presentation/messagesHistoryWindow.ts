@@ -1,4 +1,4 @@
-import type { ConversationItem } from "../../../../types";
+export { resolveHistoryWindowCutIndex } from "../../../../utils/historyWindowCut";
 
 /**
  * 历史分页窗口（03 号清单）：会话进行中 DOM 只保留最近一段窗口，
@@ -96,60 +96,4 @@ export function __resetHistoryWindowSizeCacheForTests() {
   cachedWindowSize = null;
 }
 
-/** turnId 只挂在部分 ConversationItem 变体上，统一安全读取。 */
-function turnIdOf(item: ConversationItem | undefined): string | null {
-  if (!item || !("turnId" in item)) {
-    return null;
-  }
-  const turnId = (item as { turnId?: unknown }).turnId;
-  return typeof turnId === "string" && turnId ? turnId : null;
-}
 
-/**
- * 计算历史窗口的裁剪下标（= 收起条数，slice 起点）。
- *
- * pinned 例外（不许裁）：
- * - 当前进行中的 turn（activeTurnId）：切口回退到该 turn 首条；
- * - 任意 turn 不切两半：切口落在同 turnId 段中间时回退到段首（宁可窗口略大）。
- * live 行 / 待审批行天然在最新尾部窗口内；审批行由独立 store 渲染，不经 items。
- *
- * @returns 收起条数；0 = 不裁。
- */
-export function resolveHistoryWindowCutIndex({
-  items,
-  windowSize,
-  revealedItemCount,
-  activeTurnId,
-}: {
-  items: readonly ConversationItem[];
-  windowSize: number;
-  revealedItemCount: number;
-  activeTurnId: string | null;
-}): number {
-  if (windowSize <= 0) {
-    return 0;
-  }
-  const visibleBudget = windowSize + Math.max(0, revealedItemCount);
-  if (items.length <= visibleBudget) {
-    return 0;
-  }
-  let cut = items.length - visibleBudget;
-  if (activeTurnId) {
-    const firstActiveTurnIndex = items.findIndex(
-      (item) => turnIdOf(item) === activeTurnId,
-    );
-    if (firstActiveTurnIndex >= 0 && firstActiveTurnIndex < cut) {
-      cut = firstActiveTurnIndex;
-    }
-  }
-  // 不把同一 turn 切成两半：切口回退到该 turn 段首（段内全保留）。
-  while (cut > 0) {
-    const turnId = turnIdOf(items[cut]);
-    if (turnId && turnIdOf(items[cut - 1]) === turnId) {
-      cut -= 1;
-    } else {
-      break;
-    }
-  }
-  return cut;
-}

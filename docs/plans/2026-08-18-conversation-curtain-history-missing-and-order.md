@@ -14,7 +14,7 @@ updated: 2026-08-18
 > **读者**：接手修复的人或 AI。本文是排查结论 + 实施清单，不是 OpenSpec 行为契约。
 > **日期**：2026-08-18
 > **对照产品**：mossx **v0.9.0**（2026-08-17）及之后的当前 main
-> **状态**：P0 Bug A 已 OpenSpec 化并落地（`fix-claude-history-disk-window-load-more`）；单测 117/117 绿；**尚未**真机 >80 Claude 手滑（T5）；P1 Bug B 未开
+> **状态**：P0 Bug A 已落地（`fix-claude-history-disk-window-load-more`，commit `f2171697a`）；单测 117/117 绿；**尚未**真机 >80 Claude 手滑（T5）。P1 Bug B 已 apply（`fix-canvas-user-bubble-stack-and-merge-order`），单测 8 files / 179 passed；**尚未**手测连堆/迟到尾窗（tasks 6.3）。邻接 Shared D1 Phase-A 另笔提交。
 > **排查方式**：静态代码追踪（2026-08-18）。未打开 App 用 >80 条 Claude 会话复现。
 > **产品行为真相源**：当前代码 + 未来 OpenSpec change。本文不得覆盖更高优先级事实源。
 > **相关 OpenSpec（邻近、不要混进本修复当主因）**：
@@ -56,7 +56,7 @@ updated: 2026-08-18
 | ID | 用户体感 | 当前还在？ | 主因一句话 | 优先级 |
 |----|----------|------------|------------|--------|
 | **A** | 打开历史会话，上面的消息没了；滑到顶部也没有「显示更多」 | **在，Claude Native 最重** | 0.9 给 Claude 加了磁盘尾窗 80，并把 `hasMore` 写进 reducer；幕布芯片/滑顶从不读这个字段，也不打 `loadClaudeSession({ before })` | **P0** |
-| **B** | 整段顺序错乱；用户蓝气泡连续堆叠 | **在，多因叠加** | 空 assistant 被 `prepareThreadItems` 丢掉；optimistic 与 history 文案对不齐；`setThreadItems` merge 把对不上的 incoming append 到末尾 | **P1** |
+| **B** | 整段顺序错乱；用户蓝气泡连续堆叠 | **代码已修，待手测 6.3** | 空 assistant 被 `prepareThreadItems` 丢掉；optimistic 与 history 文案对不齐；`setThreadItems` merge 把对不上的 incoming append 到末尾 | **P1** |
 
 **不是**：时间线虚拟化（已永久关闭）、CSS 堆叠、DOM 800 窗把 80 条裁掉、`hasMore` 字段名 camelCase/snake_case 挂掉。
 
@@ -318,11 +318,11 @@ DOM 800 窗（`resolveHistoryWindowCutIndex`）会把切口回退到同 `turnId`
 
 ### P1 Bug B
 
-- [ ] T6. 另开 OpenSpec change（或同一 change 的 P1 tasks），不要和 T1–T5 搅在一个大 diff
-- [ ] T7. 空 assistant 保留策略 + 测试（live 空壳不被 prepare 丢掉导致 user-user 相邻）
-- [ ] T8. merge leftover 按相对位置插入 + 测试（迟到 80 尾窗不得 append 到最新后面）
-- [ ] T9. 首屏 300 切片复用 turn 回退
-- [ ] T10. optimistic 包装文案对齐（仅在有失败用例时扩）
+- [x] T6. 另开 OpenSpec change（或同一 change 的 P1 tasks），不要和 T1–T5 搅在一个大 diff
+- [x] T7. 空 assistant 保留策略 + 测试（live 空壳不被 prepare 丢掉导致 user-user 相邻）
+- [x] T8. merge leftover 按相对位置插入 + 测试（迟到 80 尾窗不得 append 到最新后面）
+- [x] T9. 首屏 300 切片复用 turn 回退
+- [x] T10. optimistic 包装文案对齐（仅在有失败用例时扩）
 
 ---
 
@@ -394,6 +394,9 @@ UI 原型闸门：**不适用**。本 change 不改视觉语言，只接已有�
 | 2026-08-18 | 代码路径排查；确认 A 为 Claude 80 尾窗与幕布断线；B 为 prepare 丢空壳 + merge append leftover + optimistic 漂移 | 见 §2.4 / §3.2 文件路径 | 未 OpenSpec、未改代码、未真机 >80 Claude 手滑 |
 | 2026-08-18 | 开 OpenSpec P0 change `fix-claude-history-disk-window-load-more`（proposal / design / tasks / 3 spec deltas） | `openspec/changes/fix-claude-history-disk-window-load-more/` | P0 实现未开始；P1 Bug B 另开；真机未测 |
 | 2026-08-18 | 落地 P0：芯片读磁盘 `hasMore`、requester 打 `loadClaudeSession({ before })`、滑顶走同一路径、prepend 复用 expansion snapshot | vitest 13 files / 117 passed（§6.3 P0 + 新文件 + `Messages.history-window` / `Messages.history-loading` / `messagesLiveWindow`） | T5 真机 >80 Claude 手滑未做；P1 Bug B 另开；未 commit |
+| 2026-08-18 | P0 commit `f2171697a` `fix(messages): 接通 Claude 历史磁盘尾窗翻页`（39 files）；开 P1 OpenSpec `fix-canvas-user-bubble-stack-and-merge-order`（proposal / design / tasks / 2 spec deltas） | `openspec/changes/fix-canvas-user-bubble-stack-and-merge-order/`；`openspec status` apply-ready | T5 真机未做；T7–T10 未实现；Bug B 未 apply |
+| 2026-08-18 | 对照 `v0.8.9` 后 apply Bug B。结论：B1 丢空壳 / B3 leftover append / B2 stripper 在 0.8.9 已存在；0.9 真正新引入的是首屏 tail-only 300（B4）以及 live-text 空壳 + 迟到 80 尾窗让旧算法假设失效。修法：B4 下沉并复用 `resolveHistoryWindowCutIndex`（保持 tail-first，不回到 0.8.9 全量前缀）；B3 leftover 改邻居相对插入（含「incoming 全对不上则插到 optimistic 前」）；B1 只留有结构意义的空壳（后接 user / live-text id / liveTurnId），settle 真空间壳仍丢；B2 现有 stripper 已过嵌套包装回归，**未改** `conversationNormalization` | vitest 8 files / 179 passed（基线 136 + 新增；`messagesHistoryWindow` 仍绿；`liveSettlement` 哨兵不更糟） | T5 真机未做；Bug B 手测 6.3 未做 |
+| 2026-08-18 | 收口仍 open 的邻接 bug。live-settle / duplicate P0 已在分支上，本轮只补 `openspec validate`。Shared D1 真洞：V0 已就绪仍等 projection 最多 12s 才卸 curtain。补 `onPhaseAReady`：hydrate 非空 V0 后立刻 `setThreadHistoryLoading(false)`；空 V0 不提前标 loaded，session 失败仍 fail-closed 可重试 | vitest Shared Phase-A + Messages 3.4 + live-settle/duplicate focused 绿；三条 change `openspec validate --strict` 通过 | Shared / live-settle 手测未做；可选 P1 channel bind / span 未做；与 Bug B 分两笔本地 commit |
 
 ---
 

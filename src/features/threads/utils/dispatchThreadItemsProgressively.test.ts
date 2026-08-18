@@ -102,4 +102,36 @@ describe("dispatchThreadItemsProgressively", () => {
     });
     expect(dispatch).not.toHaveBeenCalled();
   });
+
+  it("retreats the first-paint cut to the turn start instead of splitting a turn", async () => {
+    const prefix = makeItems(250);
+    const turnItems: ConversationItem[] = Array.from({ length: 20 }, (_, index) => ({
+      id: `turn-item-${index}`,
+      kind: "message" as const,
+      role: "assistant" as const,
+      text: `turn-${index}`,
+      turnId: "turn-cut",
+    }));
+    const tail = Array.from({ length: 290 }, (_, index) => ({
+      id: `tail-${index}`,
+      kind: "message" as const,
+      role: "assistant" as const,
+      text: `tail-${index}`,
+    }));
+    const items = [...prefix, ...turnItems, ...tail];
+    const dispatch = vi.fn();
+
+    const result = await dispatchThreadItemsProgressively(
+      dispatch,
+      "claude:turn-cut",
+      items,
+      { batchSize: THREAD_ITEMS_FIRST_PAINT_COUNT },
+    );
+
+    const first = dispatch.mock.calls[0]?.[0] as { items: ConversationItem[] };
+    expect(first.items[0]?.id).toBe("turn-item-0");
+    expect(first.items.length).toBeGreaterThan(THREAD_ITEMS_FIRST_PAINT_COUNT);
+    expect(result.remainingOlderCount).toBe(250);
+    expect(result.displayedCount).toBe(items.length - 250);
+  });
 });

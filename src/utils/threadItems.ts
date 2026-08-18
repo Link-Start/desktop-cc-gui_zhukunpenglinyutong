@@ -749,7 +749,58 @@ function annotateGeneratedImageAnchor(
 
 type PrepareThreadItemsOptions = {
   preserveMessageTextIds?: ReadonlySet<string>;
+  /** 当前 processing / live turn。空 assistant 若属于该 turn 则保留壳。 */
+  liveTurnId?: string | null;
 };
+
+function isEmptyAssistantShell(
+  item: ConversationItem,
+): item is Extract<ConversationItem, { kind: "message" }> {
+  return (
+    item.kind === "message" &&
+    item.role === "assistant" &&
+    item.text.trim().length === 0 &&
+    (!item.images || item.images.length === 0) &&
+    !item.executionTargetSnapshot
+  );
+}
+
+function messageTurnIdOf(item: ConversationItem): string | null {
+  if (item.kind !== "message") {
+    return null;
+  }
+  const turnId = item.turnId;
+  return typeof turnId === "string" && turnId.length > 0 ? turnId : null;
+}
+
+function hasLaterUserMessage(
+  items: readonly ConversationItem[],
+  fromIndex: number,
+): boolean {
+  for (let index = fromIndex + 1; index < items.length; index += 1) {
+    const candidate = items[index];
+    if (candidate?.kind === "message" && candidate.role === "user") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function shouldKeepEmptyAssistantShell(
+  item: Extract<ConversationItem, { kind: "message" }>,
+  index: number,
+  items: readonly ConversationItem[],
+  options?: PrepareThreadItemsOptions,
+): boolean {
+  if (options?.preserveMessageTextIds?.has(item.id) === true) {
+    return true;
+  }
+  const turnId = messageTurnIdOf(item);
+  if (turnId && options?.liveTurnId && turnId === options.liveTurnId) {
+    return true;
+  }
+  return hasLaterUserMessage(items, index);
+}
 
 export function prepareThreadItems(
   items: ConversationItem[],
@@ -780,13 +831,14 @@ export function prepareThreadItems(
     coalesced[index] = mergeSameKindItem(existing, item);
   }
   const filtered: ConversationItem[] = [];
-  for (const item of coalesced) {
+  for (let index = 0; index < coalesced.length; index += 1) {
+    const item = coalesced[index];
+    if (!item) {
+      continue;
+    }
     if (
-      item.kind === "message" &&
-      item.role === "assistant" &&
-      item.text.trim().length === 0 &&
-      (!item.images || item.images.length === 0) &&
-      !item.executionTargetSnapshot
+      isEmptyAssistantShell(item) &&
+      !shouldKeepEmptyAssistantShell(item, index, coalesced, options)
     ) {
       continue;
     }
