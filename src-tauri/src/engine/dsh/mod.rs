@@ -265,6 +265,11 @@ pub async fn send_user_turn(
                 "DSH model must be a provider/model catalog id, got `{model}`"
             ));
         };
+        if session::is_reserved_mossx_dsh_provider(&provider) {
+            return Err(format!(
+                "DSH model provider `{provider}` is reserved by mossx and has no DSH adapter"
+            ));
+        }
         session::select_model(&client, &native_session_id, &provider, &model_id, effort).await?;
         Some((provider, model_id))
     } else {

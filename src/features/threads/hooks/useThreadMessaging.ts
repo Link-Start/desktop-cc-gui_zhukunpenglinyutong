@@ -78,6 +78,7 @@ import {
   consumeExplicitComposerEngineSwitch,
   shouldSpawnNativeThreadForEngineMismatch,
 } from "../../composer/hooks/explicitComposerEngineSwitch";
+import { getComposerEnginePrefForEngine } from "../../composer/hooks/composerEnginePrefsStore";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -239,6 +240,7 @@ import {
   buildReviewCommandText,
   extractSessionIdFromEngineSendResponse,
   resolveDshModelForSend,
+  resolveDshSendFallbackCatalogId,
   isCodexMissingThreadBindingError,
   isInvalidReviewThreadIdError,
   isLikelyForeignModelForGemini,
@@ -1740,6 +1742,10 @@ export function useThreadMessaging({
             ? resolveDshModelForSend({
                 catalogId: selectedModelId,
                 runtimeModel: sanitizedOpenCodeModel,
+                fallbackCatalogId: resolveDshSendFallbackCatalogId(
+                  threadId,
+                  getComposerEnginePrefForEngine("dsh").modelId,
+                ),
               })
             : sanitizedOpenCodeModel;
       if (resolvedEngine === "opencode") {

@@ -17,6 +17,7 @@ import {
   upsertEngineSelectedModelId,
 } from "./modelSelection";
 import { resolveClaudeManagedRuntimeModel } from "../../features/models/claudeManagedRuntimeModel";
+import { resolveThreadEngine } from "./selectedComposerSession";
 
 export function useAppShellComposerModelSection({
   accessMode,
@@ -262,6 +263,12 @@ export function useAppShellComposerModelSection({
         };
       }
       const isCrossEngineSelection = targetEngine !== activeEngine;
+      // Stay-on-thread: skip is about thread ownership, not drifted
+      // `activeEngine`. When the user is on a DSH thread and the pick
+      // belongs to another engine, keep the DSH ledger / send resolver.
+      const threadEngine = resolveThreadEngine(activeThreadId ?? "");
+      const skipDshThreadLedger =
+        threadEngine === "dsh" && targetEngine !== "dsh";
       const nextSelectedEffort =
         getEffectiveSelectedEffort({
           activeEngine: targetEngine,
@@ -290,6 +297,31 @@ export function useAppShellComposerModelSection({
           selectedModelId: nextSelectedModel.id,
         });
       }
+      if (targetEngine === "codex") {
+        if (isCrossEngineSelection || !hasActiveComposerThread) {
+          setSelectedModelId(nextSelectedModel.id);
+        }
+      } else {
+        // 幂等：id 未变不换 map 引用，避免父树无意义 rerender（#185）
+        setEngineSelectedModelIdByType((prev) =>
+          upsertEngineSelectedModelId({
+            activeEngine: targetEngine,
+            nextModelId: nextSelectedModel.id,
+            previousSelectionByEngine: prev,
+          }),
+        );
+        // Model switch must not wipe a remembered high with effort:null.
+        // Explicit effort changes go through handleSelectComposerEffort.
+        persistComposerEnginePref?.(targetEngine, {
+          modelId: nextSelectedModel.id,
+          ...(nextSelectedEffort !== null ? { effort: nextSelectedEffort } : {}),
+        });
+      }
+      // Stay-on-thread: a foreign catalog pick on a DSH thread must not
+      // overwrite the DSH ledger / same-tick send resolver with ccgui/...
+      if (skipDshThreadLedger) {
+        return;
+      }
       const committedId = nextSelectedModel.id;
       const committedRuntime = (
         nextSelectedModel.model ?? nextSelectedModel.id
@@ -312,26 +344,6 @@ export function useAppShellComposerModelSection({
         effort: nextSelectedEffort,
         collaborationMode: previousResolver?.collaborationMode ?? null,
       };
-      if (targetEngine === "codex") {
-        if (isCrossEngineSelection || !hasActiveComposerThread) {
-          setSelectedModelId(nextSelectedModel.id);
-        }
-      } else {
-        // 幂等：id 未变不换 map 引用，避免父树无意义 rerender（#185）
-        setEngineSelectedModelIdByType((prev) =>
-          upsertEngineSelectedModelId({
-            activeEngine: targetEngine,
-            nextModelId: nextSelectedModel.id,
-            previousSelectionByEngine: prev,
-          }),
-        );
-        // Model switch must not wipe a remembered high with effort:null.
-        // Explicit effort changes go through handleSelectComposerEffort.
-        persistComposerEnginePref?.(targetEngine, {
-          modelId: nextSelectedModel.id,
-          ...(nextSelectedEffort !== null ? { effort: nextSelectedEffort } : {}),
-        });
-      }
       handleSelectComposerSelection({
         modelId: nextSelectedModel.id,
         effort: nextSelectedEffort,

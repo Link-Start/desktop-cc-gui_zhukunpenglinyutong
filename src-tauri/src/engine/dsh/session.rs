@@ -424,6 +424,11 @@ pub fn split_model_selection(
     Some((provider.to_string(), model.to_string()))
 }
 
+/// mossx managed catalog prefix. The DSH host has no adapter for this provider.
+pub fn is_reserved_mossx_dsh_provider(provider: &str) -> bool {
+    provider.trim().eq_ignore_ascii_case("ccgui")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,6 +488,15 @@ mod tests {
             )
         );
         assert_eq!(split_model_selection("deepseek-v4-flash", None), None);
+        assert_eq!(
+            split_model_selection("ccgui/grok-4.5", None).unwrap(),
+            ("ccgui".to_string(), "grok-4.5".to_string())
+        );
+        assert!(is_reserved_mossx_dsh_provider("ccgui"));
+        assert!(is_reserved_mossx_dsh_provider("CCGUI"));
+        assert!(!is_reserved_mossx_dsh_provider("ggggg"));
+        assert!(!is_reserved_mossx_dsh_provider("deepseek-official"));
+        assert!(!is_reserved_mossx_dsh_provider("vision-http"));
     }
 
     const TINY_PNG_BASE64: &str =

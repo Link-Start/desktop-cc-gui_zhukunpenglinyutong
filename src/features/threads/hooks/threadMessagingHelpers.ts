@@ -253,19 +253,79 @@ export function resolveNativeSessionIdForSend(input: {
   return null;
 }
 
+/** mossx managed catalog prefix. DSH host has no adapter for this provider. */
+const DSH_RESERVED_MOSSX_PROVIDERS = new Set(["ccgui"]);
+
+export function isReservedMossxDshProvider(provider: string): boolean {
+  return DSH_RESERVED_MOSSX_PROVIDERS.has(provider.trim().toLowerCase());
+}
+
+/**
+ * Parse a DSH catalog id `provider/model`. First slash is the provider
+ * boundary so model ids such as `ovh/Qwen2.5` stay intact.
+ */
+export function splitDshCatalogSelection(
+  catalogOrModel: string | null | undefined,
+): { provider: string; model: string } | null {
+  const trimmed = catalogOrModel?.trim() || "";
+  if (!trimmed) {
+    return null;
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === trimmed.length - 1) {
+    return null;
+  }
+  const provider = trimmed.slice(0, slashIndex).trim();
+  const model = trimmed.slice(slashIndex + 1).trim();
+  if (!provider || !model) {
+    return null;
+  }
+  return { provider, model };
+}
+
+export function isTrustedDshCatalogId(
+  catalogOrModel: string | null | undefined,
+): boolean {
+  const split = splitDshCatalogSelection(catalogOrModel);
+  if (!split) {
+    return false;
+  }
+  return !isReservedMossxDshProvider(split.provider);
+}
+
 export function resolveDshModelForSend(input: {
   catalogId?: string | null;
   runtimeModel?: string | null;
+  fallbackCatalogId?: string | null;
 }): string | null {
-  const catalogId = input.catalogId?.trim() || "";
-  if (catalogId.includes("/")) {
-    return catalogId;
+  for (const candidate of [
+    input.catalogId,
+    input.runtimeModel,
+    input.fallbackCatalogId,
+  ]) {
+    const trimmed = candidate?.trim() || "";
+    if (isTrustedDshCatalogId(trimmed)) {
+      return trimmed;
+    }
   }
-  const runtimeModel = input.runtimeModel?.trim() || "";
-  if (runtimeModel.includes("/")) {
-    return runtimeModel;
+  return null;
+}
+
+/**
+ * Global `composerEnginePrefs.dsh.modelId` is engine-wide, not thread-local.
+ * Only first-send pending threads may fall back to it. An existing `dsh:`
+ * session must omit the model so `selectModel` does not retarget another
+ * thread's last DSH pick.
+ */
+export function resolveDshSendFallbackCatalogId(
+  threadId: string,
+  prefCatalogId?: string | null,
+): string | null {
+  if (!threadId.startsWith("dsh-pending-")) {
+    return null;
   }
-  return catalogId || runtimeModel || null;
+  const trimmed = prefCatalogId?.trim() || "";
+  return trimmed || null;
 }
 
 type GeminiSessionSummary = {
