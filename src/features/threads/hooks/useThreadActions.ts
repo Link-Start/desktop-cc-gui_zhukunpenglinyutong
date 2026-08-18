@@ -102,6 +102,7 @@ import {
   isSharedCollabWorkerSpawnTitle,
   isSharedControlPlaneSpawnTitle,
   stripHiddenSharedBindingSummaries,
+  threadIdInHiddenSharedBindingSet,
   threadIdMatchesHiddenAutomaticSessionSet,
   withTimeout,
   type GeminiSessionSummary,
@@ -1071,7 +1072,14 @@ export function useThreadActions({
                 : {}),
             };
           })
-          .filter((entry) => entry.id && !hiddenSharedBindingIds.has(entry.id));
+          .filter(
+            (entry) =>
+              entry.id &&
+              !threadIdInHiddenSharedBindingSet(
+                entry.id,
+                hiddenSharedBindingIds,
+              ),
+          );
 
         let allSummaries: ThreadSummary[] = summaries;
         const mergedById = new Map<string, ThreadSummary>();
@@ -1279,7 +1287,7 @@ export function useThreadActions({
               const parentThreadId = session.parentSessionId
                 ? `claude:${session.parentSessionId}`
                 : null;
-              if (hiddenSharedBindingIds.has(id)) {
+              if (threadIdInHiddenSharedBindingSet(id, hiddenSharedBindingIds)) {
                 return;
               }
               if (
@@ -1397,7 +1405,7 @@ export function useThreadActions({
             : [];
           opencodeSessions.forEach((session) => {
             const id = `opencode:${session.sessionId}`;
-            if (hiddenSharedBindingIds.has(id)) {
+            if (threadIdInHiddenSharedBindingSet(id, hiddenSharedBindingIds)) {
               return;
             }
             if (
@@ -1505,15 +1513,11 @@ export function useThreadActions({
             projectCatalogValue?.sessions ?? []
           ).filter((entry) => {
             if (deletedThreadIdSet.has(entry.sessionId)) return false;
-            // id 命中 Shared hidden binding（含 codex:uuid / raw uuid）
             if (
-              hiddenSharedBindingIds.has(entry.sessionId) ||
-              (() => {
-                const colon = entry.sessionId.indexOf(":");
-                if (colon <= 0) return false;
-                const bare = entry.sessionId.slice(colon + 1).trim();
-                return Boolean(bare && hiddenSharedBindingIds.has(bare));
-              })()
+              threadIdInHiddenSharedBindingSet(
+                entry.sessionId,
+                hiddenSharedBindingIds,
+              )
             ) {
               return false;
             }
@@ -1565,7 +1569,10 @@ export function useThreadActions({
           existingThreads.forEach((thread) => {
             if (
               thread.threadKind === "shared" ||
-              hiddenSharedBindingIds.has(thread.id)
+              threadIdInHiddenSharedBindingSet(
+                thread.id,
+                hiddenSharedBindingIds,
+              )
             ) {
               return;
             }
@@ -1607,7 +1614,10 @@ export function useThreadActions({
           existingThreads.forEach((thread) => {
             if (
               thread.threadKind === "shared" ||
-              hiddenSharedBindingIds.has(thread.id)
+              threadIdInHiddenSharedBindingSet(
+                thread.id,
+                hiddenSharedBindingIds,
+              )
             ) {
               return;
             }
@@ -1653,7 +1663,10 @@ export function useThreadActions({
             allSummaries,
             cachedGemini.sessions.filter(
               (session) =>
-                !hiddenSharedBindingIds.has(`gemini:${session.sessionId}`),
+                !threadIdInHiddenSharedBindingSet(
+                  `gemini:${session.sessionId}`,
+                  hiddenSharedBindingIds,
+                ),
             ),
             workspace.id,
             mappedTitles,
@@ -1666,7 +1679,10 @@ export function useThreadActions({
             allSummaries,
             cachedKimi.sessions.filter(
               (session) =>
-                !hiddenSharedBindingIds.has(`kimi:${session.sessionId}`),
+                !threadIdInHiddenSharedBindingSet(
+                  `kimi:${session.sessionId}`,
+                  hiddenSharedBindingIds,
+                ),
             ),
             workspace.id,
             mappedTitles,
@@ -1679,7 +1695,10 @@ export function useThreadActions({
             allSummaries,
             cachedPi.sessions.filter(
               (session) =>
-                !hiddenSharedBindingIds.has(`pi:${session.sessionId}`),
+                !threadIdInHiddenSharedBindingSet(
+                  `pi:${session.sessionId}`,
+                  hiddenSharedBindingIds,
+                ),
             ),
             workspace.id,
             mappedTitles,
@@ -1692,7 +1711,10 @@ export function useThreadActions({
             allSummaries,
             cachedGrok.sessions.filter(
               (session) =>
-                !hiddenSharedBindingIds.has(`grok:${session.sessionId}`),
+                !threadIdInHiddenSharedBindingSet(
+                  `grok:${session.sessionId}`,
+                  hiddenSharedBindingIds,
+                ),
             ),
             workspace.id,
             mappedTitles,
@@ -1706,7 +1728,10 @@ export function useThreadActions({
             allSummaries,
             cachedDsh.sessions.filter(
               (session) =>
-                !hiddenSharedBindingIds.has(`dsh:${session.sessionId}`),
+                !threadIdInHiddenSharedBindingSet(
+                  `dsh:${session.sessionId}`,
+                  hiddenSharedBindingIds,
+                ),
             ),
             workspace.id,
             mappedTitles,
@@ -2029,8 +2054,9 @@ export function useThreadActions({
               baselineSummaries,
               normalizedGeminiSessions.filter(
                 (session) =>
-                  !freshHiddenSharedBindingIds.has(
+                  !threadIdInHiddenSharedBindingSet(
                     `gemini:${session.sessionId}`,
+                    freshHiddenSharedBindingIds,
                   ),
               ),
               workspace.id,
@@ -2155,8 +2181,9 @@ export function useThreadActions({
               baselineSummaries,
               normalizedGrokSessions.filter(
                 (session) =>
-                  !freshHiddenSharedBindingIds.has(
+                  !threadIdInHiddenSharedBindingSet(
                     `grok:${session.sessionId}`,
+                    freshHiddenSharedBindingIds,
                   ),
               ),
               workspace.id,
@@ -2266,8 +2293,9 @@ export function useThreadActions({
                 baselineSummaries,
                 normalizedKimiSessions.filter(
                   (session) =>
-                    !freshHiddenSharedBindingIds.has(
+                    !threadIdInHiddenSharedBindingSet(
                       `kimi:${session.sessionId}`,
+                      freshHiddenSharedBindingIds,
                     ),
                 ),
                 workspace.id,
@@ -2355,7 +2383,10 @@ export function useThreadActions({
               baselineSummaries,
               normalizedDshSessions.filter(
                 (session) =>
-                  !hiddenSharedBindingIds.has(`dsh:${session.sessionId}`),
+                  !threadIdInHiddenSharedBindingSet(
+                    `dsh:${session.sessionId}`,
+                    hiddenSharedBindingIds,
+                  ),
               ),
               workspace.id,
               mappedTitles,
