@@ -7,7 +7,7 @@
 ## 2. Shader and tones
 
 - [x] 2.1 `fluidTones.ts` 支持可选 `chroma`；新增 `ash = { id: "ash", hue: 3, depth: 46, chroma: 0.06 }`；dark/light 皆为低饱和灰白且与 `ink` 可区分
-- [x] 2.2 `fluidShader.ts` 增加 `u_motionMode`（0 drift / 1 taiji / 2 storm / 3 tornado / 4 chase）与 `FluidParams.motionMode`；`setParams` 热更新不 relink；storm 比原型提高雨丝对比；`chase` 阴阳二气追逐且 pair 游走，分支 `< 3.5` tornado else chase
+- [x] 2.2 `fluidShader.ts` 增加 `u_motionMode`（0 drift / 1 taiji / 2 storm / 3 tornado / 4 chase）与 `FluidParams.motionMode`；`setParams` 热更新不 relink；storm 比原型提高雨丝对比；`chase` 两条中国龙各自游走，分支 `< 3.5` tornado else chase
 - [x] 2.3 `FirstRunFluidBackdrop` 接收可选 `motionMode` / `speed`；缺省仍走 `SITE_FLUID_PARAMS`（speed 14 + drift）。`WorkspaceWallpaperHost` 传入 `WORKSPACE_FLUID_SPEED = 9` 与 sanitize 后的 motion。Windows / lite / reduced-motion 契约不变
 
 ## 3. Settings UI and i18n
@@ -25,5 +25,5 @@
 ## 5. Chase motion
 
 - [x] 5.1 union / `WORKSPACE_FLUID_MOTIONS` 增加 `chase`（mode 4）；sanitize 合法保留，未知仍回 `drift`
-- [x] 5.2 shader `motionChase`：阴阳二气追逐 + Lissajous 游走；`taiji` 保持居中；分支不得被 tornado `else` 吞掉
+- [x] 5.2 shader `motionChase`：两条中国龙各自游走；`taiji` 保持居中；分支不得被 tornado `else` 吞掉
 - [x] 5.3 10 locale + vitest.setup 补 `workspaceWallpaperMotion_chase`（zh 游走 / zh-TW 遊走 / 其余 Chase）；原型与 OpenSpec delta 同步五场

@@ -57,7 +57,7 @@
 
 ## 验收标准
 
-1. 流体模式下 Settings 展示 7 个配色点 + 5 个动势芯片；点芯片立即换场，不重挂 wallpaper host。`chase` 是阴阳二气追逐且游走，不是居中太极。
+1. 流体模式下 Settings 展示 7 个配色点 + 5 个动势芯片；点芯片立即换场，不重挂 wallpaper host。`chase` 是两条中国龙各自游走，不是居中太极。
 2. 缺 `fluidMotion` 或非法值 sanitize 为 `drift`；缺 / 非法 `fluidPreset` 仍回 `mist`。
 3. `ash` 在 light / dark 下都是低饱和灰白，与 `ink`（偏色青）可区分。
 4. 工作台流体比改前明显更慢；first-run 向导速度不变。

@@ -2,7 +2,7 @@
 
 ### Requirement: Fluid wallpaper SHALL expose orthogonal motion presets
 
-流体模式下系统 MUST 持久化 `workspaceWallpaper.fluidMotion`，取值 MUST 是 `drift` | `taiji` | `storm` | `tornado` | `chase`。缺字段或非法值 MUST sanitize 为 `drift`。动势 MUST 与 `fluidPreset` 正交：换配色 MUST NOT 改动势，换动势 MUST NOT 改配色。系统 MUST 用同一条 WebGL2 shader 的 `u_motionMode` 切换场，MUST NOT 另开第二条 GPU 管线。first-run 向导 MUST 继续使用 `drift`，MUST NOT 读取工作台 `fluidMotion`。`taiji` MUST 保持居中双鱼慢转；`chase` MUST 是阴阳二气追逐且 pair 中心 MUST 游走，MUST NOT 钉在画面中心。
+流体模式下系统 MUST 持久化 `workspaceWallpaper.fluidMotion`，取值 MUST 是 `drift` | `taiji` | `storm` | `tornado` | `chase`。缺字段或非法值 MUST sanitize 为 `drift`。动势 MUST 与 `fluidPreset` 正交：换配色 MUST NOT 改动势，换动势 MUST NOT 改配色。系统 MUST 用同一条 WebGL2 shader 的 `u_motionMode` 切换场，MUST NOT 另开第二条 GPU 管线。first-run 向导 MUST 继续使用 `drift`，MUST NOT 读取工作台 `fluidMotion`。`taiji` MUST 保持居中双鱼慢转；`chase` MUST 是两条中国龙各自游走，MUST NOT 钉在画面中心，MUST NOT 复用 `taiji` 的居中双鱼盘。
 
 #### Scenario: Missing motion falls back to drift
 
@@ -26,8 +26,9 @@
 #### Scenario: Chase wanders instead of locking to center
 
 - **WHEN** 用户选择 `chase`
-- **THEN** 主窗口 fluid 层 MUST 渲染阴阳二气追逐
-- **AND** pair 中心 MUST 沿非居中轨迹游走
+- **THEN** 主窗口 fluid 层 MUST 渲染两条中国龙
+- **AND** 龙形 MUST 具备可辨识的中国龙特征：鹿角、火焰鬃、后飘长须、四肢龙爪与尾鳍（不允许无毛无爪的蠕虫状）
+- **AND** 两条龙 MUST 走彼此独立的非居中轨迹
 - **AND** MUST NOT 复用 `taiji` 的居中双鱼盘
 
 ### Requirement: Settings appearance SHALL list fluid motions next to palettes

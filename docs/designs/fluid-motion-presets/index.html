@@ -293,7 +293,7 @@
 
   <section class="grid" id="grid"></section>
   <p class="note">
-    流动 = 现有墨韵域扭曲。太极 = 极坐标双鱼慢转（居中）。游走 = 阴阳二气追逐，pair 不居中。暴风雨 = 斜向雨幕 + 碎云。龙卷风 = 漏斗涡旋。
+    流动 = 现有墨韵域扭曲。太极 = 极坐标双鱼慢转（居中）。游走 = 两条中国龙各自游走。暴风雨 = 斜向雨幕 + 碎云。龙卷风 = 漏斗涡旋。
     深灰白 = 低饱和 <code>ash</code>。速度与工作台一致（比 first-run 慢）。
   </p>
 
@@ -314,7 +314,7 @@
       { id: "taiji", name: "太极", desc: "阴阳双鱼绕心慢转", mode: 1 },
       { id: "storm", name: "暴风雨", desc: "斜向雨幕，碎云掠过", mode: 2 },
       { id: "tornado", name: "龙卷风", desc: "中心漏斗，螺旋臂", mode: 3 },
-      { id: "chase", name: "游走", desc: "阴阳二气追逐，不居中", mode: 4 },
+      { id: "chase", name: "游走", desc: "两条中国龙各自游走", mode: 4 },
     ];
 
     function hslToHex(h, s, l) {
@@ -470,42 +470,176 @@
       return mix(u_color3, col, mask);
     }
 
+    float sdSegment(vec2 p, vec2 a, vec2 b) {
+      vec2 pa = p - a;
+      vec2 ba = b - a;
+      float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-5), 0.0, 1.0);
+      return length(pa - ba * h);
+    }
+
+    // Tapered segment: radius lerps r0 -> r1 along a -> b.
+    float sdSegT(vec2 p, vec2 a, vec2 b, float r0, float r1) {
+      vec2 pa = p - a;
+      vec2 ba = b - a;
+      float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-5), 0.0, 1.0);
+      return length(pa - ba * h) - mix(r0, r1, h);
+    }
+
+    vec2 dragonHead(float t, float seed, float aspect) {
+      return vec2(
+        0.50 * aspect
+          + 0.26 * sin(t * 0.13 + seed)
+          + 0.12 * sin(t * 0.27 + seed * 1.7)
+          + 0.06 * cos(t * 0.43 + seed * 0.6),
+        0.50
+          + 0.22 * cos(t * 0.11 + seed * 1.2)
+          + 0.12 * sin(t * 0.23 + seed * 0.5)
+          + 0.05 * cos(t * 0.39 + seed * 1.9)
+      );
+    }
+
+    vec2 dragonFwd(float t, float seed) {
+      float hx = 0.26 * 0.13 * cos(t * 0.13 + seed)
+        + 0.12 * 0.27 * cos(t * 0.27 + seed * 1.7)
+        - 0.06 * 0.43 * sin(t * 0.43 + seed * 0.6);
+      float hy = -0.22 * 0.11 * sin(t * 0.11 + seed * 1.2)
+        + 0.12 * 0.23 * cos(t * 0.23 + seed * 0.5)
+        - 0.05 * 0.39 * sin(t * 0.39 + seed * 1.9);
+      float extra = 0.55 * sin(t * 0.19 + seed * 2.1);
+      float c = cos(extra);
+      float s = sin(extra);
+      vec2 turned = vec2(hx * c - hy * s, hx * s + hy * c);
+      return normalize(turned + vec2(1e-4, 0.0));
+    }
+
+    vec2 dragonSpine(float t, float seed, float aspect, float along) {
+      vec2 head = dragonHead(t, seed, aspect);
+      vec2 fwd = dragonFwd(t, seed);
+      vec2 side = vec2(-fwd.y, fwd.x);
+      float wave = sin(along * 12.6 - t * 2.6 + seed) * (0.078 * (0.25 + along));
+      wave += sin(along * 22.0 - t * 3.4 + seed * 1.6) * (0.020 * along);
+      float curl = along * along * 0.10 * sin(t * 0.7 + seed);
+      return head - fwd * (along * 0.70) + side * (wave + curl);
+    }
+
+    // x = body+head+legs+claws, y = horns/whiskers/ridge/brow/tail-fin, z = eye
+    vec3 dragonStroke(vec2 p, float t, float seed, float aspect) {
+      float aa = 1.5 / max(u_resolution.y, 1.0);
+      vec2 prev = dragonSpine(t, seed, aspect, 0.0);
+      float body = 1e5;
+      float ridge = 1e5;
+      for (int i = 1; i <= 26; i++) {
+        float along = float(i) / 26.0;
+        vec2 next = dragonSpine(t, seed, aspect, along);
+        float thick = mix(0.024, 0.0040, pow(along, 0.8));
+        thick *= 1.0 + 0.10 * sin(along * 40.0 + seed);
+        body = min(body, sdSegment(p, prev, next) - thick);
+        float saw = abs(fract(along * 15.0 - t * 0.15) * 2.0 - 1.0);
+        ridge = min(ridge, sdSegment(p, prev, next) - thick * (0.10 + 0.30 * saw) * (1.0 - along * 0.55));
+        prev = next;
+      }
+      vec2 head = dragonSpine(t, seed, aspect, 0.0);
+      vec2 fwd = dragonFwd(t, seed);
+      vec2 side = vec2(-fwd.y, fwd.x);
+      float headSd = sdSegT(p, head - fwd * 0.030, head + fwd * 0.020, 0.019, 0.0145);
+      headSd = min(headSd, sdSegT(p, head + fwd * 0.020, head + fwd * 0.050, 0.0145, 0.0090));
+      headSd = min(headSd, length(p - (head + fwd * 0.055)) - 0.0105);
+      vec2 jawDir = rotate(fwd, 0.40);
+      headSd = min(headSd, sdSegT(p, head + fwd * 0.006, head + fwd * 0.006 + jawDir * 0.036, 0.0075, 0.0025));
+      float mane = 1e5;
+      for (int k = -2; k <= 2; k++) {
+        float kf = float(k);
+        vec2 m0 = head - fwd * 0.006 + side * kf * 0.013;
+        vec2 m1 = m0 - fwd * (0.024 + abs(kf) * 0.005) + side * kf * 0.018;
+        vec2 m2 = m1 - fwd * 0.013 + side * kf * 0.012 + fwd * 0.007 * sin(t * 2.2 + kf * 1.3 + seed);
+        mane = min(mane, sdSegT(p, m0, m1, 0.0060, 0.0034));
+        mane = min(mane, sdSegT(p, m1, m2, 0.0034, 0.0007));
+      }
+      float horn = 1e5;
+      for (int hi = 0; hi < 2; hi++) {
+        float hs = hi == 0 ? 1.0 : -1.0;
+        vec2 hb = head - fwd * 0.014 + side * hs * 0.012;
+        vec2 hm = hb - fwd * 0.034 + side * hs * 0.020;
+        vec2 ht = hb - fwd * 0.060 + side * hs * 0.046;
+        horn = min(horn, sdSegT(p, hb, hm, 0.0050, 0.0034));
+        horn = min(horn, sdSegT(p, hm, ht, 0.0034, 0.0011));
+        vec2 t1 = hb - fwd * 0.014 + side * hs * 0.036;
+        vec2 t2 = hm - fwd * 0.016 + side * hs * 0.036;
+        horn = min(horn, sdSegT(p, mix(hb, hm, 0.45), t1, 0.0026, 0.0008));
+        horn = min(horn, sdSegT(p, mix(hm, ht, 0.40), t2, 0.0022, 0.0007));
+      }
+      float whisk = 1e5;
+      for (int wi = 0; wi < 2; wi++) {
+        float ws = wi == 0 ? 1.0 : -1.0;
+        vec2 wPrev = head + fwd * 0.048 + side * ws * 0.009;
+        for (int si = 1; si <= 4; si++) {
+          float fs = float(si) / 4.0;
+          float sway = sin(fs * 5.5 - t * 1.8 + seed + ws) * 0.009 * fs;
+          vec2 wp = head + fwd * (0.048 - fs * 0.115)
+            + side * ws * (0.009 + 0.040 * sin(fs * 2.2) + sway);
+          whisk = min(whisk, sdSegT(p, wPrev, wp, mix(0.0018, 0.0005, fs - 0.25), mix(0.0018, 0.0005, fs)));
+          wPrev = wp;
+        }
+      }
+      float legs = 1e5;
+      for (int li = 0; li < 4; li++) {
+        float la = 0.15 + float(li) * 0.16;
+        float sgn = (li == 0 || li == 2) ? 1.0 : -1.0;
+        float paddle = sin(t * 1.9 + float(li) * 1.7 + seed) * 0.10;
+        vec2 root = dragonSpine(t, seed, aspect, la);
+        vec2 p0 = dragonSpine(t, seed, aspect, max(la - 0.04, 0.0));
+        vec2 p1 = dragonSpine(t, seed, aspect, min(la + 0.04, 1.0));
+        vec2 alongDir = normalize(p1 - p0 + vec2(1e-4, 0.0));
+        vec2 outDir = rotate(vec2(-alongDir.y, alongDir.x) * sgn, paddle);
+        vec2 knee = root + outDir * 0.026 + alongDir * 0.012;
+        vec2 ankle = knee + outDir * 0.017 - alongDir * 0.022;
+        legs = min(legs, sdSegT(p, root, knee, 0.0100, 0.0062));
+        legs = min(legs, sdSegT(p, knee, ankle, 0.0062, 0.0040));
+        for (int ci = 0; ci < 3; ci++) {
+          float ca = (float(ci) - 1.0) * 0.55;
+          vec2 cdir = rotate(-alongDir, ca);
+          vec2 tip = ankle + cdir * (0.015 - abs(ca) * 0.004);
+          legs = min(legs, sdSegT(p, ankle, tip, 0.0034, 0.0007));
+        }
+      }
+      vec2 tailTip = dragonSpine(t, seed, aspect, 1.0);
+      vec2 tailPre = dragonSpine(t, seed, aspect, 0.94);
+      vec2 tailDir = rotate(
+        normalize(tailTip - tailPre + vec2(1e-5, 0.0)),
+        0.15 * sin(t * 2.0 + seed)
+      );
+      float tailFin = 1e5;
+      for (int fi = 0; fi < 3; fi++) {
+        float fa = (float(fi) - 1.0) * 0.42;
+        vec2 fd = rotate(tailDir, fa);
+        vec2 fe = tailTip + fd * (0.050 - abs(fa) * 0.010);
+        vec2 fpa = p - tailTip;
+        vec2 fba = fe - tailTip;
+        float fh = clamp(dot(fpa, fba) / max(dot(fba, fba), 1e-5), 0.0, 1.0);
+        tailFin = min(tailFin, length(fpa - fba * fh) - (0.0015 + 0.0105 * pow(sin(fh * PI), 0.7)));
+      }
+      vec2 eyePos = head + fwd * 0.020 + side * 0.010;
+      float eye = length(p - eyePos) - 0.0048;
+      vec2 browDir = rotate(fwd, 0.55);
+      float brow = sdSegT(p, eyePos - browDir * 0.010, eyePos + browDir * 0.011, 0.0026, 0.0009);
+      float fill = 1.0 - smoothstep(-aa, aa, body);
+      fill = max(fill, 1.0 - smoothstep(-aa, aa, min(headSd, mane)));
+      fill = max(fill, 1.0 - smoothstep(-aa, aa, legs));
+      float accent = 1.0 - smoothstep(-aa, aa, horn);
+      accent = max(accent, 1.0 - smoothstep(-aa, aa, whisk));
+      accent = max(accent, 1.0 - smoothstep(-aa, aa, tailFin));
+      accent = max(accent, 1.0 - smoothstep(-aa, aa, brow));
+      accent = max(accent, (1.0 - smoothstep(-aa, aa, ridge)) * 0.40);
+      float eyeMask = 1.0 - smoothstep(-aa * 0.6, aa * 0.6, eye);
+      return vec3(fill, accent, eyeMask);
+    }
+
     vec3 chase(vec2 uv, float t) {
       vec2 p = uv;
       float aspect = u_resolution.x / max(u_resolution.y, 1.0);
       p.x *= aspect;
-      vec2 pair = vec2(
-        0.50 * aspect + 0.24 * sin(t * 0.27) + 0.09 * sin(t * 0.71 + 1.3),
-        0.50 + 0.18 * sin(t * 0.19 + 0.7) + 0.07 * cos(t * 0.53 + 2.1)
-      );
-      float lead = t * 0.88;
-      float lag = lead + PI + 0.42 * sin(t * 0.33);
-      float yangSep = 0.15 + 0.03 * sin(t * 0.41);
-      float yinSep = 0.15 + 0.03 * sin(t * 0.41 + 1.7);
-      vec2 yangDir = vec2(cos(lead), sin(lead));
-      vec2 yinDir = vec2(cos(lag), sin(lag));
-      vec2 yangPos = pair + yangDir * yangSep;
-      vec2 yinPos = pair + yinDir * yinSep;
-      vec2 yangHead = vec2(-yangDir.y, yangDir.x);
-      vec2 yinHead = vec2(-yinDir.y, yinDir.x);
-      vec2 yangRel = p - yangPos;
-      vec2 yinRel = p - yinPos;
-      float nYang = noise(p * 5.2 + t * 0.35) - 0.5;
-      float nYin = noise(p * 5.2 - t * 0.31 + 3.1) - 0.5;
-      float yangR = length(vec2(dot(yangRel, yangHead) * 0.62, dot(yangRel, yangDir))) * (1.0 + 0.18 * nYang);
-      float yinR = length(vec2(dot(yinRel, yinHead) * 0.62, dot(yinRel, yinDir))) * (1.0 + 0.18 * nYin);
-      float yangBlob = smoothstep(0.24, 0.03, yangR);
-      float yinBlob = smoothstep(0.24, 0.03, yinR);
-      float yangWake = smoothstep(0.20, 0.0, length(p - (yangPos - yangHead * 0.14))) * 0.42;
-      float yinWake = smoothstep(0.20, 0.0, length(p - (yinPos - yinHead * 0.14))) * 0.42;
-      float yangEye = 1.0 - smoothstep(0.022, 0.046, length(p - (yangPos - yangHead * 0.025)));
-      float yinEye = 1.0 - smoothstep(0.022, 0.046, length(p - (yinPos - yinHead * 0.025)));
-      vec2 bridge = yangPos - yinPos;
-      float bridgeLen = length(bridge);
-      vec2 bridgeAxis = bridge / max(bridgeLen, 0.001);
-      vec2 toMid = p - (yangPos + yinPos) * 0.5;
-      float ribbon = (1.0 - smoothstep(bridgeLen * 0.5, bridgeLen * 0.5 + 0.02, abs(dot(toMid, bridgeAxis))))
-        * (1.0 - smoothstep(0.012, 0.055, abs(dot(toMid, vec2(-bridgeAxis.y, bridgeAxis.x))))) * 0.28;
+      vec3 yang = dragonStroke(p, t, 0.35, aspect);
+      vec3 yin = dragonStroke(p, t * 0.87 + 5.2, 3.9, aspect);
       vec3 wash = mix(u_color3, u_color2, 0.12);
       vec3 yangCol = u_color1;
       vec3 yinRaw = u_color2;
@@ -514,11 +648,13 @@
       vec3 yinCol = abs(yinLum - washLum) > 0.14
         ? yinRaw
         : (washLum > 0.5 ? yangCol * 0.22 : mix(vec3(1.0), yangCol, 0.18));
-      vec3 col = mix(wash, mix(yangCol, yinCol, 0.5), ribbon);
-      col = mix(col, yangCol, clamp(yangBlob + yangWake, 0.0, 1.0));
-      col = mix(col, yinCol, clamp(yinBlob + yinWake, 0.0, 1.0));
-      col = mix(col, yinCol, yangEye);
-      col = mix(col, yangCol, yinEye);
+      vec3 col = wash;
+      col = mix(col, yangCol, clamp(yang.x, 0.0, 1.0));
+      col = mix(col, yinCol, clamp(yin.x, 0.0, 1.0));
+      col = mix(col, yangCol * 0.72, yang.y);
+      col = mix(col, yinCol * 0.72, yin.y);
+      col = mix(col, yinCol, yang.z);
+      col = mix(col, yangCol, yin.z);
       return col;
     }
 

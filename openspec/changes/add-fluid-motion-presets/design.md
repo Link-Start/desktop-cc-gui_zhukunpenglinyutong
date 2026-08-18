@@ -30,7 +30,7 @@
 - 不选：多套 program。切换成本高，lite / pause / reduced-motion 要复制多份
 - drift 继续走现有 domain-warp；结构化场用 screen-space `vUv`（太极 / 涡旋不能再被墨韵坐标扭曲）
 - storm 相对原型略提高雨丝与云层对比，避免 8–12px frost 后糊成一片
-- `chase` 是阴阳二气追逐：pair 中心走 Lissajous，yin 相位滞后，MUST NOT 复用 `taiji` 居中双鱼盘。`else` 分支必须先 `< 3.5` 走 tornado，再走 chase，否则 mode 4 会被 tornado 吞掉
+- `chase` 是两条中国龙：各自走 incommensurate wander + slither，长身渐细，MUST NOT 复用 `taiji` 居中双鱼盘。`else` 分支必须先 `< 3.5` 走 tornado，再走 chase，否则 mode 4 会被 tornado 吞掉
 
 ### D3. `ash` 用可选 `chroma`，不走 hue ramp
 
@@ -66,4 +66,4 @@
 
 ## Open Questions
 
-- 无。原型已目视确认四套场后，用户追加 `chase`：类似太极但不要居中，要游走。
+- 无。原型已目视确认四套场后，用户追加 `chase`：先做阴阳二气，后改成两条中国龙各自游走。
