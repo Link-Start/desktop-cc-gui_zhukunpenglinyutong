@@ -1718,7 +1718,9 @@ export const MessagesCore = memo(function MessagesCore({
     collapseExploreItems(effectiveItems);
   }, [collapseExploreItems, effectiveItems, isThinking, liveAutoExpandedExploreId]);
   const shouldRenderUserInputNode =
-    (activeEngine === "codex" || activeEngine === "claude") &&
+    (activeEngine === "codex" ||
+      activeEngine === "claude" ||
+      activeEngine === "dsh") &&
     Boolean(legacyOnUserInputSubmit);
   const visibleApprovals = useMemo(() => {
     return getVisibleApprovalsForThread(approvals, workspaceId, threadId);

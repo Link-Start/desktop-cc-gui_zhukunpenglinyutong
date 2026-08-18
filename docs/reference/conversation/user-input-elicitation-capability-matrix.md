@@ -5,9 +5,9 @@ status: active
 
 # User Input Elicitation 能力矩阵与单 UI 入口
 
-> **最近校准**：2026-08-12 · mossx `0.8.8` · change `fix-askuserquestion-settlement-tombstone`（用户验收通过）  
+> **最近校准**：2026-08-16 · DSH live 弹卡接入 `RequestUserInputMessage`（复用 Claude 提交 / 跳过 / 30min 超时）  
 > **事实边界**：以当前代码与 OpenSpec 为准；本文解释 contract，不新增 behavior requirement。  
-> **相关 change**：`openspec/changes/fix-askuserquestion-settlement-tombstone/`  
+> **相关 change**：`openspec/changes/fix-askuserquestion-settlement-tombstone/` · `openspec/changes/add-dsh-engine/`  
 > **新 CLI 接入**：[`../../research/mossx-new-cli-onboarding-guide.md`](../../research/mossx-new-cli-onboarding-guide.md)
 
 ---
@@ -25,6 +25,7 @@ status: active
 |--------|-----------|--------------|---------------------------|------|
 | **Claude** | ✅ | Native plan：`AskUserQuestion` → kill+`--resume`；Default：MCP `mcp__ccgui__AskUserQuestion` oneshot | 受限（见 §4） | 全量实现；结算 tombstone 主战场 |
 | **Codex** | ✅ | app-server `item/tool/requestUserInput` + 本地 plan prompt（`ccgui-plan-*`） | 视 app-server / snapshot | 与 Claude **共用同一 FE** |
+| **DSH** | ✅ | mux `question/requested` → `RequestUserInput`；答/跳过走 `POST /api/respond`（整批答案；全跳过 = `cancelled`） | 不把 incomplete `ask_user_question` 灌成可点卡 | 与 Claude/Codex **共用同一 FE**；不依赖 Plan mode |
 | Gemini | ❌ | 无 | `userInputQueue: []` | 未实现 |
 | Grok | ❌ | 无 | `userInputQueue: []` | 未实现 |
 | Kimi | ❌ | 无 | `userInputQueue: []` | 未实现 |
@@ -86,7 +87,7 @@ status: active
 5. **History**：submitted 用 `requestUserInputSubmitted` + 同一 id 前缀；incomplete 勿误 rehydrate 可点卡  
 6. **样式**：只改 `request-user-input.css` / dialog 共享层，禁止 engine 专用皮肤分叉  
 
-自检：Claude default（MCP）跳过 + 提交；Codex plan 阻塞弹卡；重开会话无幽灵卡。
+自检：Claude default（MCP）跳过 + 提交；Codex plan 阻塞弹卡；DSH `ask_user_question` 弹同一张卡并可跳过/超时；重开会话无幽灵卡。
 
 ---
 
@@ -97,7 +98,9 @@ Engine emit RequestUserInput
   → useAppServerEvents → useThreadUserInputEvents（tombstone 闸门）
   → RequestUserInputMessage
   → respondToUserInputRequest
-  → Claude: MCP oneshot / kill+resume  |  Codex: app-server / local consume
+  → Claude: MCP oneshot / kill+resume
+    Codex: app-server / local consume
+    DSH: /api/respond（整批 answers / 全跳过 cancelled）
   → completed + markUserInputRequestSettled
   → RequestUserInputSubmittedBlock（历史）
 ```

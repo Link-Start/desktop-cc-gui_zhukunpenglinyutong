@@ -211,7 +211,7 @@ export function resolveCanonicalToolName(
   return "";
 }
 
-/** AskUserQuestion (native or mcp__ccgui__ / "Mcp Ccgui Askuserquestion"). */
+/** AskUserQuestion (native, DSH `ask_user_question`, or mcp__ccgui__). */
 export function isAskUserQuestionToolName(
   toolName: string,
   title?: string,

@@ -164,3 +164,11 @@ mux frame `rpcId`.
 - **THEN** mossx SHALL render the existing approval card
 - **AND** the user's allow/reject SHALL be posted to `/api/respond`
 - **AND** mossx SHALL NOT invent a DSH-only modal
+
+#### Scenario: Agent asks the user a question
+
+- **WHEN** mux emits `question/requested` for the active DSH session
+- **THEN** mossx SHALL render the existing `RequestUserInputMessage` card
+- **AND** submit SHALL post the full answer batch to `/api/respond`
+- **AND** skip / dismiss / timeout without a recommended option SHALL cancel the mux waiter
+- **AND** mossx SHALL NOT invent a DSH-only modal or require Plan mode

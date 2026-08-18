@@ -163,6 +163,9 @@ function isStaleSettledRequestError(
   if (normalizedMessage.includes("already expired or was answered")) {
     return true;
   }
+  if (normalizedMessage.includes("dsh respond rejected: not-pending")) {
+    return true;
+  }
   const hasStaleRuntimeEvidence =
     normalizedMessage.includes("workspace not connected") ||
     normalizedMessage.includes("timeout") ||

@@ -82,7 +82,7 @@ const FILE_CHANGE_DIFF_KEYS = ["diff", "patch", "unified_diff", "unifiedDiff"];
 const IMAGE_FILE_EXTENSION_REGEX =
   /\.(png|jpe?g|gif|webp|bmp|tiff?|svg|ico|avif)(?:[?#].*)?$/i;
 const COLLAPSIBLE_TOOLS = new Set([
-  "grep", "glob", "write", "save-file", "askuserquestion", "update_plan",
+  "grep", "glob", "write", "save-file", "askuserquestion", "ask_user_question", "update_plan",
   "shell_command", "exitplanmode", "webfetch", "websearch", "skill", "useskill",
   "runskill", "run_skill", "execute_skill", "task", "todowrite",
 ]);

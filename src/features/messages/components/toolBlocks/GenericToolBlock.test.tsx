@@ -322,6 +322,27 @@ describe("GenericToolBlock", () => {
     expect(screen.queryByText("This feature requires Plan mode")).toBeNull();
   });
 
+  it("hides plan-mode hint for dsh ask_user_question", () => {
+    render(
+      <GenericToolBlock
+        item={{
+          ...askUserItem,
+          title: "Tool: ask_user_question",
+          detail: JSON.stringify({
+            questions: [{ id: "q1", question: "Which example?" }],
+          }),
+        }}
+        isExpanded
+        onToggle={vi.fn()}
+        activeCollaborationModeId="code"
+        activeEngine="dsh"
+      />,
+    );
+
+    expect(screen.queryByText("This feature requires Plan mode")).toBeNull();
+    expect(screen.queryByText(/"questions"/)).toBeNull();
+  });
+
   it("shows blocked suggestion for modeBlocked askuserquestion item", () => {
     const view = render(
       <GenericToolBlock
