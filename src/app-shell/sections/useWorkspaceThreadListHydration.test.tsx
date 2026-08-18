@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const listenMock = vi.hoisted(() =>
-  vi.fn(async () => {
+  vi.fn(async (..._args: unknown[]) => {
     return () => undefined;
   }),
 );
@@ -1197,7 +1197,17 @@ describe("useWorkspaceThreadListHydration", () => {
 
     it("re-reads active workspace Index after upserted>0 without disk lists", async () => {
       const imported = captureImportedHandler();
-      const listThreadsForWorkspace = vi.fn(async () => undefined);
+      const listThreadsForWorkspace = vi.fn(
+        async (
+          _workspace: WorkspaceInfo,
+          _options?: {
+            preserveState?: boolean;
+            mergeExistingThreads?: boolean;
+            includeEngineDiskLists?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => undefined,
+      );
       const workspaces = [createWorkspace("ws-1")];
       renderHook(() =>
         useWorkspaceThreadListHydration({
@@ -1240,7 +1250,17 @@ describe("useWorkspaceThreadListHydration", () => {
 
     it("does not rematerialize or claim empty when upserted is 0", async () => {
       const imported = captureImportedHandler();
-      const listThreadsForWorkspace = vi.fn(async () => undefined);
+      const listThreadsForWorkspace = vi.fn(
+        async (
+          _workspace: WorkspaceInfo,
+          _options?: {
+            preserveState?: boolean;
+            mergeExistingThreads?: boolean;
+            includeEngineDiskLists?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => undefined,
+      );
       const workspaces = [createWorkspace("ws-1")];
       renderHook(() =>
         useWorkspaceThreadListHydration({

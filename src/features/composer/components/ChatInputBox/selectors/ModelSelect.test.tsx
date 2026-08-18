@@ -1500,9 +1500,9 @@ describe("ModelSelect atomic target groups", () => {
   it("rolls back channel override when native continuation is cancelled", async () => {
     let resolveCatalog: ((models: unknown[]) => void) | undefined;
     const onOpenProviderProfile = vi.fn(
-      () =>
+      (): Promise<void> =>
         new Promise((resolve) => {
-          resolveCatalog = resolve;
+          resolveCatalog = () => resolve();
         }),
     );
 
