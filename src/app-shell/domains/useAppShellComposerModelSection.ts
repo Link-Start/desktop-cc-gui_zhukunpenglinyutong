@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ModelOption } from "../../types";
 import { useCollaborationModeSelection } from "../../features/collaboration/hooks/useCollaborationModeSelection";
 import { useComposerMenuActions } from "../../features/composer/hooks/useComposerMenuActions";
@@ -48,6 +48,12 @@ export function useAppShellComposerModelSection({
   setSelectedEffort,
   setSelectedModelId,
 }: any) {
+  const userCommittedComposerSelectionRef = useRef<{
+    id: string;
+    model: string;
+    threadId: string | null;
+    engine: string;
+  } | null>(null);
   const [engineSelectedModelIdByType, setEngineSelectedModelIdByType] =
     useState<Record<string, string | null>>({});
   const activeEngineSelectedModelId = engineSelectedModelIdByType[activeEngine] ?? null;
@@ -282,6 +288,28 @@ export function useAppShellComposerModelSection({
           selectedModelId: nextSelectedModel.id,
         });
       }
+      const committedId = nextSelectedModel.id;
+      const committedRuntime = (
+        nextSelectedModel.model ?? nextSelectedModel.id
+      ).trim();
+      userCommittedComposerSelectionRef.current = {
+        id: committedId,
+        model: committedRuntime,
+        threadId: activeThreadId,
+        engine: targetEngine,
+      };
+      const previousResolver = composerSelectionResolverRef.current;
+      composerSelectionResolverRef.current = {
+        id: committedId,
+        model: committedRuntime,
+        source: nextSelectedModel.source ?? "unknown",
+        providerProfileId:
+          targetEngine === "codex"
+            ? (nextSelectedModel.providerProfileId?.trim() || null)
+            : (previousResolver?.providerProfileId ?? null),
+        effort: nextSelectedEffort,
+        collaborationMode: previousResolver?.collaborationMode ?? null,
+      };
       if (targetEngine === "codex") {
         if (isCrossEngineSelection || !hasActiveComposerThread) {
           setSelectedModelId(nextSelectedModel.id);
@@ -309,6 +337,8 @@ export function useAppShellComposerModelSection({
     },
     [
       activeEngine,
+      activeThreadId,
+      composerSelectionResolverRef,
       effectiveModels,
       effectiveSelectedEffort,
       handleSelectComposerSelection,
@@ -366,9 +396,14 @@ export function useAppShellComposerModelSection({
     activeEngine === "claude" && claudeRuntimeResolution?.entryId
       ? claudeRuntimeResolution.entryId
       : effectiveSelectedModelId;
+  const userCommitted = userCommittedComposerSelectionRef.current;
+  const honorUserCommit =
+    userCommitted != null &&
+    userCommitted.engine === activeEngine &&
+    userCommitted.threadId === activeThreadId;
   composerSelectionResolverRef.current = {
-    id: resolvedComposerModelId,
-    model: resolvedModel,
+    id: honorUserCommit ? userCommitted.id : resolvedComposerModelId,
+    model: honorUserCommit ? userCommitted.model : resolvedModel,
     source: resolvedModelSource,
     providerProfileId: resolvedProviderProfileId,
     effort: resolvedEffort,

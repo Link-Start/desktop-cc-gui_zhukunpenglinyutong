@@ -485,4 +485,109 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
       effort: null,
     });
   });
+
+  it("writes resolver on the same tick as handleSelectModel", () => {
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "claude-opus-4-8",
+        model: "claude-opus-4-8",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result } = renderSection({
+      activeEngine: "claude",
+      activeThreadId: "claude-thread-send",
+      composerSelectionResolverRef,
+      selectedComposerSelection: {
+        modelId: "claude-opus-4-8",
+        effort: null,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("claude-sonnet-4-6");
+      expect(composerSelectionResolverRef.current).toMatchObject({
+        id: "claude-sonnet-4-6",
+        model: "claude-sonnet-4-6",
+      });
+    });
+  });
+
+  it("keeps a user-clicked residual-shaped runtime instead of same-tick catalog repair", () => {
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "claude-opus-4-8",
+        model: "claude-opus-4-8",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result, rerender } = renderHook(
+      ({ selectedComposerSelection }) =>
+        useAppShellComposerModelSection({
+          accessMode: "auto",
+          activeEngine: "claude",
+          activeThreadId: "claude-thread-freeform",
+          activeWorkspaceId: "workspace-1",
+          appSettings: {},
+          appSettingsLoading: false,
+          applySelectedCollaborationMode: vi.fn(),
+          collaborationModes: [],
+          composerInputRef: { current: null },
+          composerSelectionResolverRef,
+          engineModelCatalogsAsOptions: { kimi: kimiModels },
+          engineModelsAsOptions: claudeModels,
+          globalSelectionReady: true,
+          handleSelectComposerSelection: vi.fn(),
+          handleSetAccessMode: vi.fn(),
+          models: [],
+          modelsReady: true,
+          persistComposerEnginePref: vi.fn(),
+          persistComposerSelectionForThread: vi.fn(),
+          queueSaveSettings: vi.fn(),
+          selectedCollaborationMode: null,
+          selectedCollaborationModeId: null,
+          selectedComposerSelection,
+          selectedEffort: null,
+          selectedModelId: null,
+          setAppSettings: vi.fn(),
+          setSelectedEffort: vi.fn(),
+          setSelectedModelId: vi.fn(),
+        }),
+      {
+        initialProps: {
+          selectedComposerSelection: {
+            modelId: "claude-opus-4-8",
+            effort: null,
+          },
+        },
+      },
+    );
+
+    act(() => {
+      result.current.handleSelectModel("k3");
+      expect(composerSelectionResolverRef.current).toMatchObject({
+        id: "k3",
+        model: "k3",
+      });
+    });
+
+    rerender({
+      selectedComposerSelection: {
+        modelId: "k3",
+        effort: null,
+      },
+    });
+
+    expect(composerSelectionResolverRef.current).toMatchObject({
+      id: "k3",
+      model: "k3",
+    });
+    expect(result.current.resolvedModel).not.toBe("k3");
+  });
 });

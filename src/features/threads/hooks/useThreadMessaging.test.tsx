@@ -563,6 +563,110 @@ describe("useThreadMessaging", () => {
     );
   });
 
+  it("does not assemble Shared send from leftover Composer resolver or global model", async () => {
+    selectNextTarget("ws-1", "shared:thread-override-ignored", {
+      engine: "claude",
+      providerProfileId: "k3",
+      modelCatalogEntryId: "kimi-k3",
+      providerProfileNameSnapshot: "k3",
+      providerProfileSource: "managed",
+      model: "kimi-k3",
+      reasoning: null,
+    });
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-override-ignored",
+      model: "foreign-global-model",
+      resolveComposerSelection: () => ({
+        id: "stale-overlay-model",
+        model: "stale-overlay-model",
+        source: "custom",
+        providerProfileId: "leftover-override",
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-override-ignored",
+        "ignore leftover override",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        model: "kimi-k3",
+        target: expect.objectContaining({
+          engine: "claude",
+          providerProfileId: "k3",
+          model: "kimi-k3",
+        }),
+      }),
+    );
+  });
+
+  it("uses the committed Native resolver instead of a foreign global selectedModelId", async () => {
+    const { result } = makeThreadMessagingHook("claude", {
+      model: "foreign-global-model",
+      resolveComposerSelection: () => ({
+        id: "clicked-runtime",
+        model: "clicked-runtime",
+        source: "custom",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello committed runtime",
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "claude",
+        model: "clicked-runtime",
+      }),
+    );
+  });
+
+  it("does not fall back to hook model when Native resolver model is empty but id is committed", async () => {
+    const { result } = makeThreadMessagingHook("claude", {
+      model: "foreign-global-model",
+      resolveComposerSelection: () => ({
+        id: "clicked-runtime",
+        model: null,
+        source: "custom",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello resolver id",
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "claude",
+        model: "clicked-runtime",
+      }),
+    );
+  });
+
   it("returns the Shared typed commit and prefers a frozen queue target", async () => {
     const threadId = "shared:thread-frozen-target";
     selectNextTarget("ws-1", threadId, {

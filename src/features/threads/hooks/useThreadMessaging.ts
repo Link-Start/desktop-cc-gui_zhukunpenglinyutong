@@ -1633,7 +1633,12 @@ export function useThreadMessaging({
       const resolvedComposerSelection = resolveComposerSelection?.() ?? null;
       const modelFromOptions =
         options?.model !== undefined ? options.model : undefined;
-      const modelFromHook = resolvedComposerSelection?.model ?? model;
+      // resolver 在场时是 Native send 唯一模型权威：禁止回落到全局 / 其他会话 hook model。
+      const modelFromHook = resolveComposerSelection
+        ? (resolvedComposerSelection?.model?.trim() ||
+            resolvedComposerSelection?.id?.trim() ||
+            null)
+        : model;
       const selectedModelId =
         threadKind === "shared"
           ? (supportedStoredSharedTarget?.modelCatalogEntryId ?? null)

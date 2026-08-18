@@ -61,6 +61,7 @@ import {
 } from "../../threads/constants/codexProviderProfiles";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
+import { useNativeAtomicSelectionOverlay } from "../hooks/useNativeAtomicSelectionOverlay";
 import {
   ensureInteractiveInputHooks,
   getLastInteractiveInputAtMs,
@@ -790,14 +791,9 @@ function ComposerImpl({
    * 长链，catalog 分叉时勾选/触发器不更新。用本状态对齐 Shared 的「target 即 UI」。
    * 只覆盖 model 身份；effort 仍跟 selectedEffort prop，避免抢走推理档位选择器。
    */
-  const [nativeAtomicSelection, setNativeAtomicSelection] = useState<{
-    modelCatalogEntryId: string;
-    model: string;
-  } | null>(null);
-  // 切会话 / 引擎 / 渠道时丢弃点选覆盖，避免串台
-  useEffect(() => {
-    setNativeAtomicSelection((prev) => (prev === null ? prev : null));
-  }, [activeThreadId, selectedEngine, providerProfileId]);
+  const nativeAtomicResetKey = `${activeThreadId ?? ""}::${selectedEngine ?? ""}::${providerProfileId ?? ""}`;
+  const [nativeAtomicSelection, setNativeAtomicSelection] =
+    useNativeAtomicSelectionOverlay(nativeAtomicResetKey);
   // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
   const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
     if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
