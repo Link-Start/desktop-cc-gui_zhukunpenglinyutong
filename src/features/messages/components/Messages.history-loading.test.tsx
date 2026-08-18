@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, RequestUserInputRequest } from "../../../types";
 import { Messages } from "./Messages";
@@ -174,7 +174,7 @@ describe("Messages history loading", () => {
     expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeNull();
   });
 
-  it("shows a bounded retry surface instead of empty-thread after history recovery fails", () => {
+  it("does not paint the legacy Native recovery card after history recovery fails", () => {
     const onRetryHistory = vi.fn();
 
     render(
@@ -191,14 +191,11 @@ describe("Messages history loading", () => {
       />,
     );
 
-    expect(screen.getByRole("alert", { name: "messages.threadRecoveryTitle" })).toBeTruthy();
-    expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
-    expect(screen.queryByText("messages.emptyThread")).toBeNull();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "messages.threadRecoveryAction" }),
-    );
-    expect(onRetryHistory).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("alert", { name: "messages.threadRecoveryTitle" }),
+    ).toBeNull();
+    expect(screen.queryByText("messages.threadRecoveryFailed")).toBeNull();
+    expect(screen.getByText("messages.emptyThread")).toBeTruthy();
   });
 
   it("does not show the Native recovery card for Shared sessions", () => {
@@ -223,7 +220,7 @@ describe("Messages history loading", () => {
     expect(screen.getByText("messages.emptyThread")).toBeTruthy();
   });
 
-  it("keeps last-good history visible beside the recovery failure surface", () => {
+  it("keeps last-good history visible without the legacy recovery card", () => {
     render(
       <Messages
         items={[
@@ -246,7 +243,10 @@ describe("Messages history loading", () => {
     );
 
     expect(screen.getByText("上一次成功恢复的消息")).toBeTruthy();
-    expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
+    expect(screen.queryByText("messages.threadRecoveryFailed")).toBeNull();
+    expect(
+      screen.queryByRole("alert", { name: "messages.threadRecoveryTitle" }),
+    ).toBeNull();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 

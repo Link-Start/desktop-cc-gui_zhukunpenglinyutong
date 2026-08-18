@@ -325,7 +325,6 @@ export function useAppShellLayoutNodesSection(
     fileTreeSourceVersion,
     files,
     forkThreadForWorkspace,
-    forkSessionFromMessageForWorkspace,
     getPinTimestamp,
     gitDiffListView,
     gitDiffViewStyle,
@@ -1762,18 +1761,18 @@ export function useAppShellLayoutNodesSection(
     toggleCompletionEmailIntent(activeThreadId);
   });
   const handleForkFromMessage = useEventCallback(
-    async (messageId: string, options?: CodexProviderProfileSelection) => {
+    async (_messageId: string, options?: CodexProviderProfileSelection) => {
       if (!activeWorkspace || !activeThreadId) {
         return;
       }
-      const forkedThreadId = await forkSessionFromMessageForWorkspace(
+      // 幕布尾部 Fork 与 Composer `/fork` 走同一条 native thread/fork 链路。
+      // 不要再走 message-anchored forkSessionFromMessage：Claude 会先造
+      // 一个没有 `--fork-session` 的空 child，resume 失败后弹出恢复卡。
+      const forkedThreadId = await forkThreadForWorkspace(
         activeWorkspace.id,
         activeThreadId,
-        messageId,
         {
           activate: true,
-          mode: "messages-only",
-          operation: "fork",
           providerProfileId: options?.providerProfileId ?? null,
           providerProfile: options?.providerProfile ?? null,
         },

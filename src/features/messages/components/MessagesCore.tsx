@@ -206,7 +206,6 @@ export const MessagesCore = memo(function MessagesCore({
   const {
     isHistoryLoading = false,
     historyLoadingProgress = null,
-    historyRecoveryFailureReason = null,
     isContextCompacting = false,
     proxyEnabled = false,
     proxyUrl = null,
@@ -1812,9 +1811,9 @@ export const MessagesCore = memo(function MessagesCore({
       activeUserInputRequestId,
       claudeHistoryTranscriptFallbackActive,
       hasVisibleUserInputRequest,
-      historyRecoveryFailureReason: nativeRuntimeRecoveryEnabled
-        ? historyRecoveryFailureReason
-        : null,
+      // Native 历史恢复失败不再挂幕布卡片。错误 fork 曾靠这张卡暴露空会话，
+      // 恢复入口改走 Composer / runtime notice，避免幕布再出现旧恢复条。
+      historyRecoveryFailureReason: null,
       isHistoryLoading,
       historyLoadingProgress,
       latestRetryMessage,

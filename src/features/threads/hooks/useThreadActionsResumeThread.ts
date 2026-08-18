@@ -67,6 +67,7 @@ import {
   buildPartialHistoryDiagnostic,
   resolveThreadStabilityDiagnostic,
 } from "../utils/stabilityDiagnostics";
+import { isClaudeForkThreadId } from "../utils/claudeForkThread";
 import { createThreadHistoryLoaderForThread } from "./useThreadActions.historyLoaderFactory";
 import {
   RELATED_THREAD_LOAD_CONCURRENCY,
@@ -346,7 +347,7 @@ export function useThreadActionsResumeThreadForWorkspace(
         return true;
       };
       const localItems = itemsByThread[threadId] ?? [];
-      if (isPendingThreadId(threadId)) {
+      if (isPendingThreadId(threadId) || isClaudeForkThreadId(threadId)) {
         setThreadLoaded(threadId, true);
         setThreadHistoryRecoveryFailed(threadId, false);
         onDebug?.({
@@ -357,7 +358,9 @@ export function useThreadActionsResumeThreadForWorkspace(
           payload: {
             workspaceId,
             threadId,
-            reason: "optimistic-pending-thread",
+            reason: isClaudeForkThreadId(threadId)
+              ? "provisional-claude-fork"
+              : "optimistic-pending-thread",
           },
         });
         return threadId;
