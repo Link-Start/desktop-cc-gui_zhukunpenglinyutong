@@ -16,6 +16,32 @@ import type { ConversationItem } from "../../../../types";
  */
 export const HISTORY_WINDOW_SIZE_FLAG_KEY = "ccgui.perf.historyWindowSize";
 export const DEFAULT_HISTORY_WINDOW_SIZE = 800;
+export const NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX = 32;
+
+export function resolveEarlierHistoryChip(input: {
+  knownCollapsedCount: number;
+  diskHistoryHasMore: boolean;
+}): {
+  visible: boolean;
+  hasUncountedEarlierHistory: boolean;
+  countedCount: number;
+} {
+  const countedCount = Math.max(0, input.knownCollapsedCount);
+  const hasUncountedEarlierHistory =
+    input.diskHistoryHasMore && countedCount === 0;
+  return {
+    visible: countedCount > 0 || input.diskHistoryHasMore,
+    hasUncountedEarlierHistory,
+    countedCount,
+  };
+}
+
+export function shouldRequestOlderHistoryNearTop(scrollTop: number): boolean {
+  return (
+    Number.isFinite(scrollTop) &&
+    scrollTop < NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX
+  );
+}
 const TEST_DEFAULT_HISTORY_WINDOW_SIZE = 0;
 
 const isTestMode = (() => {

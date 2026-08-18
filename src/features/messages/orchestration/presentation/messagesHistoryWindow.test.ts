@@ -4,9 +4,12 @@ import type { ConversationItem } from "../../../../types";
 import {
   DEFAULT_HISTORY_WINDOW_SIZE,
   HISTORY_WINDOW_SIZE_FLAG_KEY,
+  NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX,
   __resetHistoryWindowSizeCacheForTests,
   readHistoryWindowSize,
+  resolveEarlierHistoryChip,
   resolveHistoryWindowCutIndex,
+  shouldRequestOlderHistoryNearTop,
 } from "./messagesHistoryWindow";
 
 function userMessage(id: string, turnId?: string): ConversationItem {
@@ -157,5 +160,62 @@ describe("resolveHistoryWindowCutIndex", () => {
         activeTurnId: null,
       }),
     ).toBe(200);
+  });
+});
+
+describe("resolveEarlierHistoryChip", () => {
+  it("shows an uncounted chip when only disk hasMore is true", () => {
+    expect(
+      resolveEarlierHistoryChip({
+        knownCollapsedCount: 0,
+        diskHistoryHasMore: true,
+      }),
+    ).toEqual({
+      visible: true,
+      hasUncountedEarlierHistory: true,
+      countedCount: 0,
+    });
+  });
+
+  it("keeps the counted copy when local remainder is known", () => {
+    expect(
+      resolveEarlierHistoryChip({
+        knownCollapsedCount: 12,
+        diskHistoryHasMore: true,
+      }),
+    ).toEqual({
+      visible: true,
+      hasUncountedEarlierHistory: false,
+      countedCount: 12,
+    });
+  });
+
+  it("hides the chip when nothing older remains", () => {
+    expect(
+      resolveEarlierHistoryChip({
+        knownCollapsedCount: 0,
+        diskHistoryHasMore: false,
+      }),
+    ).toEqual({
+      visible: false,
+      hasUncountedEarlierHistory: false,
+      countedCount: 0,
+    });
+  });
+});
+
+describe("shouldRequestOlderHistoryNearTop", () => {
+  it("requests when scrollTop is near zero", () => {
+    expect(shouldRequestOlderHistoryNearTop(0)).toBe(true);
+    expect(
+      shouldRequestOlderHistoryNearTop(NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX - 1),
+    ).toBe(true);
+  });
+
+  it("does not request when the viewport is away from the top", () => {
+    expect(
+      shouldRequestOlderHistoryNearTop(NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX),
+    ).toBe(false);
+    expect(shouldRequestOlderHistoryNearTop(240)).toBe(false);
   });
 });

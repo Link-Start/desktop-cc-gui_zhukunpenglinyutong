@@ -278,6 +278,7 @@ const messages = {
     "backToTop": "맨 위로",
     "backToBottom": "맨 아래로",
     "showEarlierMessages": "이전 메시지 {{count}}개 표시",
+    "loadEarlierMessages": "이전 메시지 불러오기",
     "liveControls": "라이브 캔버스 컨트롤",
     "liveAutoFollowToggle": "포커스 따라가기",
     "liveAutoFollowEnable": "최신 출력으로 포커스 따라가기 활성화",

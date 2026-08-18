@@ -84,9 +84,11 @@ import {
   hasPendingOlderHistory,
   rememberFullHistoryForWindow,
   replacePendingOlderHistoryItems,
-  takeNextOlderHistoryBatch,
 } from "../utils/pendingOlderHistory";
 import { setOlderHistoryRequester } from "../utils/olderHistoryRequestBridge";
+import { createOlderHistoryRequester } from "../utils/createOlderHistoryRequester";
+import { publishThreadDiskHistoryWindows } from "../utils/threadDiskHistoryWindowStore";
+import { notifyOlderHistoryBeforePrepend } from "../utils/olderHistoryScrollRestoreBridge";
 
 export type ResumeThreadForWorkspaceOptions = {
   preferLocalCodexHistory?: boolean;
@@ -128,6 +130,7 @@ export function useThreadActionsResumeThreadForWorkspace(
     dispatch: rawDispatch,
     getCustomName,
     itemsByThread,
+    historyWindowByThread,
     tokenUsageByThread = {},
     loadedThreadsRef,
     onDebug,
@@ -156,31 +159,87 @@ export function useThreadActionsResumeThreadForWorkspace(
   itemsByThreadRef.current = itemsByThread;
   const threadStatusByIdRef = useRef(threadStatusById);
   threadStatusByIdRef.current = threadStatusById;
+  const historyWindowByThreadRef = useRef(historyWindowByThread ?? {});
+  historyWindowByThreadRef.current = historyWindowByThread ?? {};
+  const threadsByWorkspaceRef = useRef(threadsByWorkspace);
+  threadsByWorkspaceRef.current = threadsByWorkspace;
+  const activeThreadIdByWorkspaceRef = useRef(activeThreadIdByWorkspace);
+  activeThreadIdByWorkspaceRef.current = activeThreadIdByWorkspace;
+  const olderHistoryInFlightByThreadRef = useRef(
+    new Map<string, { cursor: string; epoch: number }>(),
+  );
+  const olderHistoryDiskPageEpochByThreadRef = useRef<Record<string, number>>(
+    {},
+  );
 
   useEffect(() => {
-    setOlderHistoryRequester((targetThreadId) => {
-      const batch = takeNextOlderHistoryBatch(targetThreadId);
-      if (batch.length === 0) {
-        return false;
+    publishThreadDiskHistoryWindows(historyWindowByThread);
+  }, [historyWindowByThread]);
+
+  useEffect(() => {
+    const activeThreadIds = new Set(
+      Object.values(activeThreadIdByWorkspace).filter(
+        (threadId): threadId is string => Boolean(threadId),
+      ),
+    );
+    for (const threadId of olderHistoryInFlightByThreadRef.current.keys()) {
+      if (activeThreadIds.has(threadId)) {
+        continue;
       }
-      rawDispatch({
-        type: "prependThreadItems",
-        threadId: targetThreadId,
-        items: batch,
-      });
-      const hasMore = hasPendingOlderHistory(targetThreadId);
-      rawDispatch({
-        type: "setThreadHistoryWindow",
-        threadId: targetThreadId,
-        hasMore,
-        nextCursor: hasMore ? "memory" : null,
-      });
-      return true;
+      olderHistoryDiskPageEpochByThreadRef.current[threadId] =
+        (olderHistoryDiskPageEpochByThreadRef.current[threadId] ?? 0) + 1;
+      olderHistoryInFlightByThreadRef.current.delete(threadId);
+    }
+  }, [activeThreadIdByWorkspace]);
+
+  useEffect(() => {
+    const requester = createOlderHistoryRequester({
+      dispatch: rawDispatch,
+      getHistoryWindow: (targetThreadId) =>
+        historyWindowByThreadRef.current[targetThreadId],
+      resolveWorkspace: (targetThreadId) => {
+        for (const [workspaceId, threads] of Object.entries(
+          threadsByWorkspaceRef.current,
+        )) {
+          if (!threads.some((thread) => thread.id === targetThreadId)) {
+            continue;
+          }
+          const workspacePath =
+            workspacePathsByIdRef.current[workspaceId] ??
+            resolveWorkspacePath?.(workspaceId) ??
+            "";
+          if (!workspacePath) {
+            return null;
+          }
+          return { workspaceId, workspacePath };
+        }
+        for (const [workspaceId, activeThreadId] of Object.entries(
+          activeThreadIdByWorkspaceRef.current,
+        )) {
+          if (activeThreadId !== targetThreadId) {
+            continue;
+          }
+          const workspacePath =
+            workspacePathsByIdRef.current[workspaceId] ??
+            resolveWorkspacePath?.(workspaceId) ??
+            "";
+          if (!workspacePath) {
+            return null;
+          }
+          return { workspaceId, workspacePath };
+        }
+        return null;
+      },
+      getDiskPageEpoch: (targetThreadId) =>
+        olderHistoryDiskPageEpochByThreadRef.current[targetThreadId] ?? 0,
+      inFlightByThread: olderHistoryInFlightByThreadRef.current,
+      notifyBeforePrepend: notifyOlderHistoryBeforePrepend,
     });
+    setOlderHistoryRequester(requester);
     return () => {
       setOlderHistoryRequester(null);
     };
-  }, [rawDispatch]);
+  }, [rawDispatch, resolveWorkspacePath, workspacePathsByIdRef]);
 
   const resumeThreadForWorkspace = useCallback(
     async (

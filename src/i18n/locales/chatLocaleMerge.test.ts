@@ -9,4 +9,12 @@ describe("chat locale merge", () => {
     expect(en.composer.queueStatusFuseReady).toBe("Can fuse into current turn");
     expect(en.chat.fuseFromQueue).toBe("Fuse");
   });
+
+  it("keeps load-earlier chip copy in zh and en", () => {
+    expect(zh.messages.loadEarlierMessages).toBe("加载更早的消息");
+    expect(en.messages.loadEarlierMessages).toBe("Load earlier messages");
+    expect(zh.messages.loadEarlierMessages).not.toBe(
+      "messages.loadEarlierMessages",
+    );
+  });
 });

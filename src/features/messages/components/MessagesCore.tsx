@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConversationItem } from "../../../types";
@@ -74,7 +75,11 @@ import {
   STREAMING_VISIBLE_WINDOW,
   VISIBLE_MESSAGE_WINDOW,
 } from "../utils/messagesRenderUtils";
-import { readHistoryWindowSize } from "../orchestration/presentation/messagesHistoryWindow";
+import {
+  readHistoryWindowSize,
+  resolveEarlierHistoryChip,
+  shouldRequestOlderHistoryNearTop,
+} from "../orchestration/presentation/messagesHistoryWindow";
 import {
   buildMessageActionTargets,
   buildMessagesScrollKey,
@@ -92,6 +97,11 @@ import {
   hasPendingOlderHistory,
 } from "../../threads/utils/pendingOlderHistory";
 import { requestOlderHistory } from "../../threads/utils/olderHistoryRequestBridge";
+import { setOlderHistoryBeforePrependListener } from "../../threads/utils/olderHistoryScrollRestoreBridge";
+import {
+  hasThreadDiskHistoryMore,
+  subscribeThreadDiskHistoryWindows,
+} from "../../threads/utils/threadDiskHistoryWindowStore";
 import {
   DEFAULT_RENDER_LOOP_GUARD_BUDGET,
   resolveIdempotentRenderLoopGuard,
@@ -547,11 +557,16 @@ export const MessagesCore = memo(function MessagesCore({
   const pendingOlderHistoryCount = threadId
     ? getPendingOlderHistoryRemainingCount(threadId)
     : 0;
+  const diskHistoryHasMore = useSyncExternalStore(
+    subscribeThreadDiskHistoryWindows,
+    () => (threadId ? hasThreadDiskHistoryMore(threadId) : false),
+    () => false,
+  );
   const tryLoadOlderHistoryPage = useCallback(() => {
     if (!threadId) {
       return false;
     }
-    if (!hasPendingOlderHistory(threadId)) {
+    if (!hasPendingOlderHistory(threadId) && !hasThreadDiskHistoryMore(threadId)) {
       return false;
     }
     // 用户点芯片 = 主动回看。只 pauseFollow，不改吸底判定/RO/followSignal。
@@ -579,6 +594,21 @@ export const MessagesCore = memo(function MessagesCore({
     }
     restoreHistoryExpansionScrollPosition(container, snapshot);
   }, [containerRef, olderHistoryRestoreToken]);
+  useEffect(() => {
+    setOlderHistoryBeforePrependListener((targetThreadId) => {
+      if (!threadId || targetThreadId !== threadId) {
+        return;
+      }
+      pauseFollow();
+      olderHistoryRestoreRef.current = readHistoryExpansionScrollSnapshot(
+        containerRef.current,
+      );
+      setOlderHistoryRestoreToken((token) => token + 1);
+    });
+    return () => {
+      setOlderHistoryBeforePrependListener(null);
+    };
+  }, [containerRef, pauseFollow, threadId]);
   const historyOpenedScopeRef = useRef<string | null>(null);
   const {
     closeFileLinkMenu,
@@ -1143,6 +1173,11 @@ export const MessagesCore = memo(function MessagesCore({
     windowCollapseAllowedRef: isUserAtBottomRef,
     workspaceId,
   });
+  const earlierHistoryChip = resolveEarlierHistoryChip({
+    knownCollapsedCount:
+      presentationCollapsedHistoryItemCount + pendingOlderHistoryCount,
+    diskHistoryHasMore,
+  });
   const {
     assistantFinalBoundarySet,
     assistantLiveTurnFinalBoundarySuppressedSet,
@@ -1418,7 +1453,15 @@ export const MessagesCore = memo(function MessagesCore({
   // 这里的 onScroll 只驱动锚点轨道高亮。
   const handleCanvasScroll = useCallback(() => {
     scheduleAnchorUpdate("scroll");
-  }, [scheduleAnchorUpdate]);
+    const container = containerRef.current;
+    if (
+      !container ||
+      !shouldRequestOlderHistoryNearTop(container.scrollTop)
+    ) {
+      return;
+    }
+    tryLoadOlderHistoryPage();
+  }, [containerRef, scheduleAnchorUpdate, tryLoadOlderHistoryPage]);
   // ScrollControl 浮标：回顶 / 回底均为用户主动导航，对称 smooth；
   // 回底结束后再硬钉一次并 re-arm follow。send / history-open 仍走瞬时 resumeFollowAndPin。
   const handleScrollControlRequest = useCallback(
@@ -1742,8 +1785,8 @@ export const MessagesCore = memo(function MessagesCore({
       suppressedUserNoteCardContextMessageIds,
       turnFileChangesByBoundaryId,
       turnTargetBadgeVisibleItemIds,
-      visibleCollapsedHistoryItemCount:
-        presentationCollapsedHistoryItemCount + pendingOlderHistoryCount,
+      visibleCollapsedHistoryItemCount: earlierHistoryChip.countedCount,
+      hasUncountedEarlierHistory: earlierHistoryChip.hasUncountedEarlierHistory,
     },
     live: {
       heartbeatPulse: timelineHeartbeatPulse,

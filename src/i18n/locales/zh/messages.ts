@@ -331,6 +331,7 @@ const messages = {
     backToTop: "回到顶部",
     backToBottom: "回到底部",
     showEarlierMessages: "显示之前的 {{count}} 条消息",
+    loadEarlierMessages: "加载更早的消息",
     liveControls: "实时幕布控制",
     liveAutoFollowToggle: "焦点跟随",
     liveAutoFollowEnable: "开启焦点跟随到最新输出",

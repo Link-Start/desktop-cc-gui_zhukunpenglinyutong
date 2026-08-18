@@ -353,6 +353,7 @@ const messages = {
     backToTop: "Back to top",
     backToBottom: "Back to bottom",
     showEarlierMessages: "Show {{count}} earlier messages",
+    loadEarlierMessages: "Load earlier messages",
     liveControls: "Live canvas controls",
     liveAutoFollowToggle: "Focus follow",
     liveAutoFollowEnable: "Enable focus follow for latest output",

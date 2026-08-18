@@ -278,6 +278,7 @@ const messages = {
     "backToTop": "先頭に戻る",
     "backToBottom": "末尾に戻る",
     "showEarlierMessages": "以前のメッセージ {{count}} 件を表示",
+    "loadEarlierMessages": "以前のメッセージを読み込む",
     "liveControls": "ライブキャンバスの操作",
     "liveAutoFollowToggle": "フォーカス追従",
     "liveAutoFollowEnable": "最新出力へのフォーカス追従を有効化",

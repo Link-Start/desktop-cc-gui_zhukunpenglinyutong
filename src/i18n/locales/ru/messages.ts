@@ -278,6 +278,7 @@ const messages = {
     "backToTop": "Наверх",
     "backToBottom": "Вниз",
     "showEarlierMessages": "Показать {{count}} предыдущих сообщений",
+    "loadEarlierMessages": "Загрузить более ранние сообщения",
     "liveControls": "Управление живым холстом",
     "liveAutoFollowToggle": "Следование за фокусом",
     "liveAutoFollowEnable": "Включить следование за фокусом для последнего вывода",

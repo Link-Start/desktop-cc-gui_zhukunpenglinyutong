@@ -8,6 +8,7 @@ import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 export type UseThreadActionsOptions = {
   dispatch: Dispatch<ThreadAction>;
   itemsByThread: ThreadState["itemsByThread"];
+  historyWindowByThread?: ThreadState["historyWindowByThread"];
   tokenUsageByThread?: ThreadState["tokenUsageByThread"];
   userInputRequests: ThreadState["userInputRequests"];
   threadsByWorkspace: ThreadState["threadsByWorkspace"];

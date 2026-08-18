@@ -84,6 +84,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     groupedEntries,
     processPhaseChips,
     visibleCollapsedHistoryItemCount,
+    hasUncountedEarlierHistory = false,
   } = snapshot;
   const {
     hiddenClaudeReasoningOnly,
@@ -577,13 +578,19 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           rowCount={timelineRenderWeightSummary.rowCount}
           visible={shouldShowConversationLightweightPrompt}
         />
-        {visibleCollapsedHistoryItemCount > 0 && (
+        {(visibleCollapsedHistoryItemCount > 0 || hasUncountedEarlierHistory) && (
           <div
             className="messages-collapsed-indicator"
-            data-collapsed-count={visibleCollapsedHistoryItemCount}
+            {...(visibleCollapsedHistoryItemCount > 0
+              ? { "data-collapsed-count": visibleCollapsedHistoryItemCount }
+              : { "data-has-uncounted-earlier": "true" })}
             onClick={onShowAllHistoryItems}
           >
-            {t("messages.showEarlierMessages", { count: visibleCollapsedHistoryItemCount })}
+            {visibleCollapsedHistoryItemCount > 0
+              ? t("messages.showEarlierMessages", {
+                  count: visibleCollapsedHistoryItemCount,
+                })
+              : t("messages.loadEarlierMessages")}
           </div>
         )}
         <TimelineProjectionViewport
