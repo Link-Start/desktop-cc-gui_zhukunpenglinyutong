@@ -6,6 +6,7 @@ import { useComposerShortcuts } from "../../features/composer/hooks/useComposerS
 import { usePersistComposerSettings } from "../../features/app/hooks/usePersistComposerSettings";
 import {
   enrichScopedCodexReasoningMetadata,
+  findModelById,
   getEffectiveModels,
   getEffectiveReasoningOptions,
   getEffectiveReasoningSupported,
@@ -220,12 +221,13 @@ export function useAppShellComposerModelSection({
         return;
       }
       let targetEngine = activeEngine;
-      let nextSelectedModel =
-        effectiveModels.find((model) => model.id === id) ?? null;
+      // 本 catalog 先按 id 或 runtime `.model` 命中，避免 DSH `{provider}/{model}`
+      // 的 last-segment / runtime 被其它 CLI catalog id 抢走。
+      let nextSelectedModel = findModelById(effectiveModels, id);
       if (!nextSelectedModel) {
-        // Cross-engine pick from the grouped provider dropdown: the engine
-        // switch runs async, so resolve the owning engine catalog now and
-        // store the selection under the target engine.
+        // Cross-engine pick from the grouped provider dropdown: exact catalog
+        // id only. Do not match `.model` across catalogs — that is how
+        // DSH `grok-4.6` / `claude-sonnet-4-6` collides with native CLIs.
         for (const [engine, catalog] of Object.entries(providerModelCatalogs)) {
           if (engine === activeEngine) {
             continue;

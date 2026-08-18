@@ -710,6 +710,7 @@ export const ModelSelect = memo(({
   const getModelLabel = (
     model: ModelInfo,
     providerId?: string | null,
+    options?: { closed?: boolean },
   ): string => {
     if (!providerId || providerId === "claude") {
       const claudeLabel = resolveClaudeCatalogModelLabel(model, modelMapping);
@@ -726,7 +727,7 @@ export const ModelSelect = memo(({
     }
 
     if (providerId === 'dsh') {
-      return formatDshModelDisplayLabel(model);
+      return formatDshModelDisplayLabel(model, { closed: options?.closed === true });
     }
 
     const parentLabel = model.label?.trim() || "";
@@ -765,7 +766,7 @@ export const ModelSelect = memo(({
   const modelResolved = Boolean(currentModel);
   // 未解析到已选模型时：固定占位 loading，禁止用「选择模型」空缺再闪成真名（冷启/切会话 UX）
   const currentModelLabel = modelResolved
-    ? getModelLabel(currentModel!, selectedModelProvider)
+    ? getModelLabel(currentModel!, selectedModelProvider, { closed: true })
     : t('models.loading', { defaultValue: '加载中' });
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 

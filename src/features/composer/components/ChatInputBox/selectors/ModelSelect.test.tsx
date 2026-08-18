@@ -2343,7 +2343,7 @@ describe("ModelSelect empty channel models and custom reasoning defaults", () =>
     );
 
     const trigger = screen.getByRole("button", {
-      name: "chat.currentModel:Grok 4.6",
+      name: "chat.currentModel:grok-4.6 / Grok 4.6",
     });
     expect(within(trigger).getByTestId("grok-icon")).toBeTruthy();
     expect(trigger.querySelector("img")).toBeNull();

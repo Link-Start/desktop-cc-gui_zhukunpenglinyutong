@@ -61,6 +61,7 @@ import {
 } from "../../threads/constants/codexProviderProfiles";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
+import { markExplicitComposerEngineSwitch } from "../hooks/explicitComposerEngineSwitch";
 import { useNativeAtomicSelectionOverlay } from "../hooks/useNativeAtomicSelectionOverlay";
 import {
   ensureInteractiveInputHooks,
@@ -1262,6 +1263,7 @@ function ComposerImpl({
         return;
       }
       if (target.engine !== selectedEngine) {
+        markExplicitComposerEngineSwitch(target.engine);
         onSelectEngine?.(target.engine);
       }
       if (catalogEntryId && runtimeModel) {
@@ -1297,6 +1299,7 @@ function ComposerImpl({
       // 首页 engine 选择必须同步全局 activeEngine + client store，否则重启后首页
       // 回落到默认 claude，而项目会话因 thread.engineSource 仍显示上次的 CLI。
       if (target.engine !== selectedEngine) {
+        markExplicitComposerEngineSwitch(target.engine);
         pendingPickerEngineRef.current = target.engine;
         onSelectEngine?.(target.engine);
       }

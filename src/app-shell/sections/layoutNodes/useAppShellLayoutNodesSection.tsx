@@ -48,6 +48,7 @@ import {
 } from "../quickSwitcherNavigationState";
 import { getEngineModels } from "../../../services/tauri/appServer";
 import { archiveWorkspaceSessions } from "../../../services/tauri/sessionManagement";
+import { markExplicitComposerEngineSwitch } from "../../../features/composer/hooks/explicitComposerEngineSwitch";
 import {
   clearDetachedExternalChangeMonitor,
   configureDetachedExternalChangeMonitor,
@@ -774,6 +775,7 @@ export function useAppShellLayoutNodesSection(
       if (thread?.threadKind === "shared") {
         return;
       }
+      markExplicitComposerEngineSwitch(engine);
       await setActiveEngine(engine);
       if (!activeWorkspaceId || !activeThreadId) {
         return;

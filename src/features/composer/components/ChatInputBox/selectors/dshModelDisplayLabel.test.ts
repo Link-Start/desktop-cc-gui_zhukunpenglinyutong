@@ -42,4 +42,40 @@ describe("formatDshModelDisplayLabel", () => {
       }),
     ).toBe("Grok 4.6");
   });
+
+  it("keeps the provider on the closed trigger so native CLI names cannot collide", () => {
+    expect(
+      formatDshModelDisplayLabel(
+        {
+          id: "ggggg/grok-4.6",
+          model: "grok-4.6",
+        },
+        { closed: true },
+      ),
+    ).toBe("ggggg / grok-4.6");
+    expect(
+      formatDshModelDisplayLabel(
+        {
+          id: "acme/claude-sonnet-4-6",
+          model: "claude-sonnet-4-6",
+        },
+        { closed: true },
+      ),
+    ).toBe("acme / claude-sonnet-4-6");
+    expect(
+      formatDshModelDisplayLabel(
+        {
+          id: "vision-http/ovh/Qwen2.5-VL-72B-Instruct",
+          model: "ovh/Qwen2.5-VL-72B-Instruct",
+        },
+        { closed: true },
+      ),
+    ).toBe("vision-http / Qwen2.5-VL-72B-Instruct");
+  });
+
+  it("does not prefix a provider when the catalog id has no slash", () => {
+    expect(
+      formatDshModelDisplayLabel({ id: "grok-4.6" }, { closed: true }),
+    ).toBe("grok-4.6");
+  });
 });

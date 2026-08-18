@@ -2,12 +2,32 @@ import type { ModelInfo } from "../types";
 
 const PROVIDER_LABEL_SEPARATOR = " / ";
 
+export type DshModelDisplayLabelOptions = {
+  /** Closed trigger shows `provider / lastSegment` so it cannot collide with other CLI names. */
+  closed?: boolean;
+};
+
 /**
  * DSH catalog rows are stored as `{provider} / {model}` and some model ids
- * are routed (`ovh/Qwen2.5-VL-72B-Instruct`). The picker only shows the
- * last model token.
+ * are routed (`ovh/Qwen2.5-VL-72B-Instruct`). List rows show the last model
+ * token; the closed trigger keeps the provider prefix.
  */
 export function formatDshModelDisplayLabel(
+  model: Pick<ModelInfo, "id"> & Partial<Pick<ModelInfo, "model" | "label">>,
+  options: DshModelDisplayLabelOptions = {},
+): string {
+  const lastSegment = resolveDshLastSegment(model);
+  if (!options.closed) {
+    return lastSegment;
+  }
+  const provider = firstPathSegment(model.id);
+  if (!provider || provider.toLowerCase() === lastSegment.toLowerCase()) {
+    return lastSegment;
+  }
+  return `${provider}${PROVIDER_LABEL_SEPARATOR}${lastSegment}`;
+}
+
+function resolveDshLastSegment(
   model: Pick<ModelInfo, "id"> & Partial<Pick<ModelInfo, "model" | "label">>,
 ): string {
   const candidates = [
@@ -31,6 +51,11 @@ function takeAfterProviderSeparator(label?: string): string {
   return index >= 0
     ? value.slice(index + PROVIDER_LABEL_SEPARATOR.length).trim()
     : value;
+}
+
+function firstPathSegment(value: string): string {
+  const slash = value.indexOf("/");
+  return (slash >= 0 ? value.slice(0, slash) : "").trim();
 }
 
 function lastPathSegment(value: string): string {

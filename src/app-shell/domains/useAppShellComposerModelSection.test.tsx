@@ -353,6 +353,51 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     expect(setSelectedModelId).not.toHaveBeenCalled();
   });
 
+  it("keeps a DSH runtime pick on DSH when another CLI catalog uses the same id", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const dshModels = [
+      makeModel("ggggg/grok-4.6", { model: "grok-4.6", isDefault: true }),
+      makeModel("acme/claude-sonnet-4-6", { model: "claude-sonnet-4-6" }),
+    ];
+    const { result } = renderSection({
+      activeEngine: "dsh",
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+      engineModelsAsOptions: dshModels,
+      engineModelCatalogsAsOptions: {
+        grok: [makeModel("grok-4.6", { isDefault: true })],
+        claude: claudeModels,
+        kimi: kimiModels,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("grok-4.6");
+    });
+
+    expect(result.current.engineSelectedModelIdByType.dsh).toBe("ggggg/grok-4.6");
+    expect(result.current.engineSelectedModelIdByType.grok).toBeUndefined();
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("dsh", {
+      modelId: "ggggg/grok-4.6",
+    });
+
+    act(() => {
+      result.current.handleSelectModel("claude-sonnet-4-6");
+    });
+
+    expect(result.current.engineSelectedModelIdByType.dsh).toBe(
+      "acme/claude-sonnet-4-6",
+    );
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("dsh", {
+      modelId: "acme/claude-sonnet-4-6",
+    });
+    expect(handleSelectComposerSelection).toHaveBeenLastCalledWith({
+      modelId: "acme/claude-sonnet-4-6",
+      effort: null,
+    });
+  });
+
   it("keeps same-engine selection behavior unchanged", () => {
     const persistComposerEnginePref = vi.fn();
     const handleSelectComposerSelection = vi.fn();

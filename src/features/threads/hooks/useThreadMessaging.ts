@@ -74,6 +74,10 @@ import { templateToStageBindings } from "../../multi-agent/templates/types";
 import { subscribeMultiAgentConversationItems } from "../../multi-agent/runtime/conversationBridge";
 import { readExternalAbsoluteFile } from "../../../services/tauri/workspaceFiles";
 import { reconcileAtomicReasoningEffort } from "../../models/atomicModelReasoning";
+import {
+  consumeExplicitComposerEngineSwitch,
+  shouldSpawnNativeThreadForEngineMismatch,
+} from "../../composer/hooks/explicitComposerEngineSwitch";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -3396,8 +3400,16 @@ export function useThreadMessaging({
           return;
         }
         assertEngineExecutionEnabled(currentEngine);
-        // If current thread differs from current selection, or threadId prefix is incompatible, create a new thread.
-        if (threadEngine !== currentEngine || !threadIdCompatible) {
+        const explicitEngine = consumeExplicitComposerEngineSwitch();
+        const shouldSpawn = shouldSpawnNativeThreadForEngineMismatch({
+          threadEngine,
+          currentEngine,
+          threadIdCompatible,
+          explicitEngine,
+        });
+        // Implicit rematch / same-name runtime drift must stay on this thread.
+        // Only an explicit engine-group switch may spawn another native CLI.
+        if (shouldSpawn) {
           onDebug?.({
             id: `${Date.now()}-client-engine-switch`,
             timestamp: Date.now(),
@@ -3410,9 +3422,9 @@ export function useThreadMessaging({
               oldEngine: threadEngine,
               newEngine: currentEngine,
               threadIdCompatible,
+              explicitEngine,
             },
           });
-          // Create a new thread with the current engine
           const newThreadId = await startThreadForMessageSend(
             activeWorkspace,
             currentEngine,
@@ -3421,7 +3433,6 @@ export function useThreadMessaging({
           if (!newThreadId) {
             return;
           }
-          // Send message to the new thread
           await sendMessageToThread(
             activeWorkspace,
             newThreadId,
@@ -3433,6 +3444,22 @@ export function useThreadMessaging({
             },
           );
           return;
+        }
+        if (threadEngine !== currentEngine || !threadIdCompatible) {
+          onDebug?.({
+            id: `${Date.now()}-client-engine-stay`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "engine/stay-on-thread",
+            payload: {
+              workspaceId: activeWorkspace.id,
+              threadId: activeThreadId,
+              threadEngine,
+              currentEngine,
+              threadIdCompatible,
+              explicitEngine,
+            },
+          });
         }
       }
 
