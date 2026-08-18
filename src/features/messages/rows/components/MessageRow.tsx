@@ -1404,7 +1404,9 @@ export const MessageRow = memo(function MessageRow({
         isMemoryPickSummary && memorySummaryRecords.length > 0
           ? " has-memory-inject"
           : ""
-      }${browserContextSummary ? " has-browser-excerpt" : ""}`}
+      }${browserContextSummary ? " has-browser-excerpt" : ""}${
+        dshGoalContext ? " has-dsh-goal" : ""
+      }`}
     >
       {item.role === "user" ? (
         <>
