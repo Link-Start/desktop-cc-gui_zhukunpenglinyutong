@@ -32,6 +32,15 @@ export function insertUnmatchedIncomingByNeighbor(
     if (emittedIds.has(leftover.id)) {
       continue;
     }
+    // 整段 incoming 都对不上时，explore / 未完成 command 是别的会话残留，
+    // 插到 optimistic 前面会变成新 tab 顶上的 Exploring 串线。
+    // user / assistant leftover 仍走 B3 相对插入，禁止在这里丢掉。
+    if (
+      firstMatchedIncomingIndex < 0 &&
+      isUnmatchedExploreOrInProgressCommand(leftover)
+    ) {
+      continue;
+    }
     const insertAt = resolveLeftoverInsertIndex({
       leftoverIndex: incomingIndexById.get(leftover.id),
       incomingItems,
@@ -95,4 +104,18 @@ function resolveLeftoverInsertIndex({
   }
 
   return result.length;
+}
+
+function isInProgressCommandExecution(item: ConversationItem): boolean {
+  if (item.kind !== "tool" || item.toolType !== "commandExecution") {
+    return false;
+  }
+  const normalized = (item.status ?? "").toLowerCase();
+  return /(pending|running|processing|started|in[_ -]?progress|inprogress)/.test(
+    normalized,
+  );
+}
+
+function isUnmatchedExploreOrInProgressCommand(item: ConversationItem): boolean {
+  return item.kind === "explore" || isInProgressCommandExecution(item);
 }

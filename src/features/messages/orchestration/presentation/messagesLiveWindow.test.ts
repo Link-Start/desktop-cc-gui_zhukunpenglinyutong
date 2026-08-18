@@ -7,6 +7,8 @@ import {
   buildRenderedItemsWindow,
   resolveMessagesPresentationMode,
   resolveStreamingPresentationItems,
+  suppressCompletedExploreItemsBetweenLatestUserTurns,
+  suppressOrphanExploringItemsBeforeLatestUserTurn,
 } from "./messagesLiveWindow";
 import { STREAMING_VISIBLE_WINDOW } from "../../utils/messagesRenderUtils";
 
@@ -352,5 +354,76 @@ describe("messages live window", () => {
     expect(streaming.items.length).toBeLessThanOrEqual(windowSize * 2 + 1);
     expect(streaming.items.some((item) => item.id === "user-latest")).toBe(true);
     expect(streaming.omittedBeforeWorkingSetCount).toBeGreaterThan(0);
+  });
+
+  it("drops orphan exploring cards that sit above the latest user turn", () => {
+    const leftoverExplore: ConversationItem = {
+      id: "foreign-explore",
+      kind: "explore",
+      status: "exploring",
+      entries: [{ kind: "list", label: "Downloads" }],
+    };
+    const items: ConversationItem[] = [
+      leftoverExplore,
+      userMessage("user-latest", "在吗"),
+      assistantMessage("assistant-greeting", "你好"),
+    ];
+
+    const filtered = suppressOrphanExploringItemsBeforeLatestUserTurn(items);
+
+    expect(filtered.map((item) => item.id)).toEqual([
+      "user-latest",
+      "assistant-greeting",
+    ]);
+  });
+
+  it("keeps current-turn exploring that follows the latest user", () => {
+    const liveExplore: ConversationItem = {
+      id: "live-explore",
+      kind: "explore",
+      status: "exploring",
+      entries: [{ kind: "list", label: "Downloads" }],
+    };
+    const items: ConversationItem[] = [
+      userMessage("user-latest", "在吗"),
+      liveExplore,
+    ];
+
+    expect(suppressOrphanExploringItemsBeforeLatestUserTurn(items)).toBe(items);
+  });
+
+  it("does not drop explored cards that precede the latest user", () => {
+    const explored: ConversationItem = {
+      id: "kept-explored",
+      kind: "explore",
+      status: "explored",
+      entries: [{ kind: "read", label: "routes.ts" }],
+    };
+    const items: ConversationItem[] = [
+      explored,
+      userMessage("user-latest", "在吗"),
+    ];
+
+    expect(suppressOrphanExploringItemsBeforeLatestUserTurn(items)).toBe(items);
+  });
+
+  it("still only drops completed explore cards between two user turns", () => {
+    const explored: ConversationItem = {
+      id: "between-explored",
+      kind: "explore",
+      status: "explored",
+      entries: [{ kind: "read", label: "routes.ts" }],
+    };
+    const items: ConversationItem[] = [
+      userMessage("user-1", "第一问"),
+      explored,
+      userMessage("user-2", "第二问"),
+    ];
+
+    expect(
+      suppressCompletedExploreItemsBetweenLatestUserTurns(items).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["user-1", "user-2"]);
   });
 });

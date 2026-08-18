@@ -31,6 +31,13 @@
 - [x] 6.2 [P1][depends:6.1] 回写 plan T7–T10 / Progress Log。Input: 本 change 证据。Output: `docs/plans/2026-08-18-conversation-curtain-history-missing-and-order.md` 勾选对应 Todo。Validation: 文档与 tasks checkbox 一致。
 - [ ] 6.3 [P2] 手测：连堆（空壳/live 外置）+ 发送后 hydrate 单气泡 + 迟到 80 尾窗不跑到最底。Input: plan §6.2。Output: 用户可见验收。Validation: 未手测前保持未勾选；不得用本任务代替 6.1。
 
+## 7. B3 follow-up：Grok leftover Exploring 串线
+
+- [x] 7.1 [P1] 失败用例：fully unmatched incoming 只有 explore / in-progress `commandExecution` 时，不得插到 optimistic 前面。Input: `insertUnmatchedIncomingByNeighbor.test.ts`、`threadReducerOptimisticItemMerge.merge-order.test.ts`。Output: 红灯指向当前 index-0 插入。Validation: B3「fully unmatched older user/assistant window」用例仍绿。
+- [x] 7.2 [P1][depends:7.1] leftover 在 `firstMatchedIncomingIndex < 0` 时跳过 explore / in-progress command。Input: `insertUnmatchedIncomingByNeighbor.ts`。Output: 串线 explore 不进新 tab；有 matched neighbor 时 explore 仍相对插入。Validation: 7.1 转绿；既有 B3 四条相对插入用例不回退。
+- [x] 7.3 [P1] Grok presentation 隐藏 latest user 之前的 orphan `exploring`，保留其后的当前轮 Exploring。Input: `messagesLiveWindow.ts`、`MessagesCore.tsx`、`Messages.explore.test.tsx`。Output: `suppressOrphanExploringItemsBeforeLatestUserTurn`；Grok 不要求 `isThinking`。Validation: live-window 单测 + Messages explore 组件测转绿；Codex/Claude hide-all exploring 不回退。
+- [x] 7.4 [P1] `pickLikelyGrokSessionId` 跳过已被其他 mossx thread 占用的 session；另一 `grok-pending-*` 已有 items 时跳过 list fallback。Input: `threadMessagingHelpers.ts`、`useThreadMessaging.ts`。Output: occupied set + `hasOtherPendingWithItems`。Validation: helper 单测覆盖 occupied / unoccupied / 旧 `grok:` 不误杀。
+
 ## 明确不做
 
 - 不按 `timestamp` 全局 sort。

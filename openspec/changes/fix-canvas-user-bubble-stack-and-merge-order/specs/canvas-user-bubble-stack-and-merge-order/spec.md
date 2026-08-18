@@ -60,6 +60,54 @@ The system MUST NOT reorder the list by `timestamp`.
 - **THEN** the merge MAY append those leftovers
 - **AND** this MUST be the fallback, not the default path for a late older window
 
+#### Scenario: unmatched explore leftover MUST NOT land above a new optimistic user
+
+- **WHEN** local items contain only an unmatched optimistic user
+- **AND** incoming leftover is a fully unmatched `explore` item or an in-progress `commandExecution`
+- **AND** incoming has no already-emitted matched neighbor (`firstMatchedIncomingIndex < 0`)
+- **THEN** the merge MUST NOT insert that leftover above the optimistic user
+- **AND** unmatched user / assistant leftovers in the same fully-unmatched window MUST still insert above the optimistic tail
+- **AND** explore leftovers MUST still insert relative to neighbors when a matched incoming id exists
+
+### Requirement: Grok Canvas MUST Hide Orphan Exploring Before The Latest User
+
+Grok presentation MUST hide an `exploring` card that appears before the latest ordinary user question. The current-turn Exploring card after that user MUST stay visible. This MUST apply even when the turn is no longer `isThinking`, so a stuck leftover Exploring from a failed prior send cannot sit above a new user bubble.
+
+The system MUST NOT hide every Grok `exploring` card the way Codex/Claude hide in-progress explore. Completed `explored` cards before the latest user MUST remain.
+
+#### Scenario: leftover exploring above the latest grok user is hidden
+
+- **WHEN** the visible item list is `explore(exploring) → user → assistant`
+- **AND** the active engine is `grok`
+- **THEN** the canvas MUST NOT render that Exploring card
+- **AND** the latest user bubble and later assistant MUST remain
+
+#### Scenario: current-turn grok exploring after the latest user stays visible
+
+- **WHEN** the visible item list is `user → explore(exploring)`
+- **AND** the active engine is `grok`
+- **THEN** the canvas MUST still render that Exploring card
+
+### Requirement: Grok Pending Session Fallback MUST Skip Occupied Sessions
+
+When a `grok-pending-*` thread falls back to `pickLikelyGrokSessionId` because the send response has no `sessionId`, the picker MUST NOT bind a Grok session that is already occupied by another mossx thread.
+
+Occupied means: another thread id is already `grok:{sessionId}`, or another pending thread has already cached that session id. If another `grok-pending-*` thread already has items, the list fallback MUST be skipped entirely so a failed prior tab cannot donate its leftover session to a new tab.
+
+The picker MUST still bind when the only recent candidate is unoccupied. An older remapped `grok:` thread MUST NOT by itself disable the fallback.
+
+#### Scenario: occupied recent session is not rebound onto a new pending tab
+
+- **WHEN** `pickLikelyGrokSessionId` sees exactly one recent session
+- **AND** that session id is already bound to another mossx `grok:` thread or cached on another pending thread
+- **THEN** the picker MUST return null
+
+#### Scenario: unoccupied recent session still binds
+
+- **WHEN** an older `grok:` thread occupies a different session
+- **AND** the only recent candidate is not in the occupied set
+- **THEN** the picker MUST return that recent session id
+
 ### Requirement: First-Paint History Window MUST Reuse Turn-Boundary Cut
 
 When `dispatchThreadItemsProgressively` first-paints a list larger than `THREAD_ITEMS_FIRST_PAINT_COUNT` (300) in `tail-first` mode, the cut index MUST be computed by the same `resolveHistoryWindowCutIndex` function used by the DOM history window. The first-paint path MUST NOT use a bare `items.slice(-N)` that splits a `turnId` segment.

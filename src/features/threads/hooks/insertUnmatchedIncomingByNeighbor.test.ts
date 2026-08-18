@@ -109,4 +109,84 @@ describe("insertUnmatchedIncomingByNeighbor", () => {
       "optimistic-user-only",
     ]);
   });
+
+  it("does not insert unmatched explore leftovers when incoming has no matched neighbor", () => {
+    const optimistic = userMessage("optimistic-user-only", "在吗");
+    const leftoverExplore: ConversationItem = {
+      id: "foreign-explore",
+      kind: "explore",
+      status: "exploring",
+      entries: [{ kind: "list", label: "Downloads" }],
+    };
+    const leftoverCommand: ConversationItem = {
+      id: "foreign-ls",
+      kind: "tool",
+      toolType: "commandExecution",
+      title: "Command: ls /Users/demo/Downloads",
+      detail: "",
+      status: "inProgress",
+    };
+    const incoming = [leftoverExplore, leftoverCommand];
+
+    const merged = insertUnmatchedIncomingByNeighbor(
+      [optimistic],
+      incoming,
+      incoming,
+    );
+
+    expect(merged.map((item) => item.id)).toEqual(["optimistic-user-only"]);
+  });
+
+  it("still inserts unmatched user/assistant leftovers when incoming has no matched neighbor", () => {
+    const optimistic = userMessage("optimistic-user-only", "在吗");
+    const leftoverExplore: ConversationItem = {
+      id: "foreign-explore",
+      kind: "explore",
+      status: "explored",
+      entries: [{ kind: "list", label: "Downloads" }],
+    };
+    const incoming = [
+      leftoverExplore,
+      userMessage("older-1", "更早问"),
+      assistantMessage("older-a", "更早答"),
+    ];
+
+    const merged = insertUnmatchedIncomingByNeighbor(
+      [optimistic],
+      incoming,
+      incoming,
+    );
+
+    expect(merged.map((item) => item.id)).toEqual([
+      "older-1",
+      "older-a",
+      "optimistic-user-only",
+    ]);
+  });
+
+  it("still inserts explore leftovers when a matched incoming neighbor exists", () => {
+    const leftoverExplore: ConversationItem = {
+      id: "same-session-explore",
+      kind: "explore",
+      status: "explored",
+      entries: [{ kind: "read", label: "routes.ts" }],
+    };
+    const ordered = [
+      userMessage("hist-2", "第二问"),
+      userMessage("optimistic-user-mid", "新问"),
+    ];
+    const incoming = [leftoverExplore, userMessage("hist-2", "第二问")];
+
+    const merged = insertUnmatchedIncomingByNeighbor(
+      ordered,
+      [leftoverExplore],
+      incoming,
+    );
+
+    expect(merged.map((item) => item.id)).toEqual([
+      "same-session-explore",
+      "hist-2",
+      "optimistic-user-mid",
+    ]);
+  });
 });

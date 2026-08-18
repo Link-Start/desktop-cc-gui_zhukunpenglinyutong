@@ -346,13 +346,81 @@ export function pickLikelyPiSessionId(
   return pickLikelyGeminiSessionId(payload, minUpdatedAt);
 }
 
+export function collectOccupiedGrokSessionIds(input: {
+  itemsByThread: Record<string, readonly unknown[] | undefined>;
+  pendingSessionIdByThread: ReadonlyMap<string, string>;
+  currentThreadId: string;
+}): {
+  occupiedSessionIds: Set<string>;
+  hasOtherPendingWithItems: boolean;
+} {
+  const occupiedSessionIds = new Set<string>();
+  let hasOtherPendingWithItems = false;
+
+  for (const [threadId, items] of Object.entries(input.itemsByThread)) {
+    if (threadId === input.currentThreadId) {
+      continue;
+    }
+    if (threadId.startsWith("grok:")) {
+      const sessionId = threadId.slice("grok:".length).trim();
+      if (sessionId) {
+        occupiedSessionIds.add(sessionId);
+      }
+    }
+    if (
+      threadId.startsWith("grok-pending-") &&
+      Array.isArray(items) &&
+      items.length > 0
+    ) {
+      hasOtherPendingWithItems = true;
+    }
+  }
+
+  for (const [threadId, sessionId] of input.pendingSessionIdByThread) {
+    if (threadId === input.currentThreadId) {
+      continue;
+    }
+    const normalized = sessionId.trim();
+    if (normalized) {
+      occupiedSessionIds.add(normalized);
+    }
+  }
+
+  return { occupiedSessionIds, hasOtherPendingWithItems };
+}
+
+function filterUnoccupiedGrokSessionPayload(
+  payload: unknown,
+  occupiedSessionIds: ReadonlySet<string>,
+): unknown {
+  const nestedSessions =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>).sessions
+      : null;
+  const entries = Array.isArray(payload)
+    ? payload
+    : Array.isArray(nestedSessions)
+      ? nestedSessions
+      : [];
+  return entries.filter((entry) => {
+    const summary = normalizeGeminiSessionSummary(entry);
+    return summary !== null && !occupiedSessionIds.has(summary.sessionId);
+  });
+}
+
 export function pickLikelyGrokSessionId(
   payload: unknown,
   minUpdatedAt: number,
+  occupiedSessionIds?: ReadonlySet<string>,
 ): string | null {
   // Grok session summaries share the Gemini summary shape, so the same
-  // single-candidate safety rule applies.
-  return pickLikelyGeminiSessionId(payload, minUpdatedAt);
+  // single-candidate safety rule applies. Occupied ids belong to another
+  // mossx thread and must not be rebound onto a fresh pending tab.
+  const filteredPayload =
+    occupiedSessionIds && occupiedSessionIds.size > 0
+      ? filterUnoccupiedGrokSessionPayload(payload, occupiedSessionIds)
+      : payload;
+  return pickLikelyGeminiSessionId(filteredPayload, minUpdatedAt);
 }
 
 export function resolveRecoverableCodexFirstPacketTimeout(

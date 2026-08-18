@@ -15,6 +15,7 @@
 
 - **B1 空 assistant 保留**：`prepareThreadItems` 不得无条件丢掉「无 text / 无 images / 无 `executionTargetSnapshot`」的 assistant。本 turn 仍 live/processing、后面还有 user、或该 id 仍被 `liveAssistantTextChannel` 引用时必须保留；真的空、已 settle、且没有结构意义的才丢。
 - **B3 leftover 相对插入**：`mergeThreadItemsPreservingOptimisticUsers` 不得把未匹配 incoming 一律 `push` 到末尾。未匹配项按其在 incoming 中与邻近已匹配 id 的关系插入，保持「旧在上、新在下」。
+- **B3 follow-up（Grok leftover Exploring）**：incoming 完全对不上时，不得把 explore / in-progress `commandExecution` leftover 插到新 optimistic user 前面。Grok canvas 必须隐藏 latest user 之前的 orphan `exploring`，并禁止 `pickLikelyGrokSessionId` 把已被其他 mossx thread 占用的 session 绑到新 pending tab。
 - **B2 optimistic 包装对齐**：只扩现有 `normalizeComparableUserText` / wrapper 剥离；先用失败用例钉漂移，对不上则保留 optimistic 在原位，禁止复制一份。
 - **B4 首屏 turn 回退**：`dispatchThreadItemsProgressively` 的 `slice(-300)` 之后复用 `resolveHistoryWindowCutIndex` 同一套 turn 边界回退（抽共享函数，禁止复制一份近似逻辑）。
 
@@ -73,5 +74,6 @@
 | B2 | 发送后 history hydrate，权威项带 memory / note-card / agent-prompt 包装 | 不得长期并列 optimistic + 真实同一句 |
 | B2b | 两句归一化后仍不等价的真实提问 | 两条都保留，禁止因部分相似而折叠 |
 | B3 | local 已有新尾 + 迟到 `setThreadItems`(80 尾窗 / projection) | 旧消息在上，新消息在下；禁止旧页跑到最底 |
+| B3f | 新 tab optimistic user + 完全对不上的 explore leftover | 不得在「在吗」上方出现上一轮 Exploring / `List · Downloads`；当前轮 Exploring 仍可见 |
 | B4 | 首屏 300 切口落在同 `turnId` 段中间 | 切口回退到段首；与 DOM 800 窗同一函数 |
 | R | 多工具回合 settle | 不要求本 change 修 live settle 错序；不得因 merge 改动把它弄得更糟 |

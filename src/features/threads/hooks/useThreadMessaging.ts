@@ -246,6 +246,7 @@ import {
   isUnknownEngineInterruptTurnMethodError,
   mapNetworkErrorToUserMessage,
   normalizeAccessMode,
+  collectOccupiedGrokSessionIds,
   pickLikelyGeminiSessionId,
   pickLikelyGrokSessionId,
   pickLikelyKimiSessionId,
@@ -2796,14 +2797,23 @@ export function useThreadMessaging({
                 const workspacePath = workspace.path?.trim();
                 if (workspacePath) {
                   try {
-                    const sessions = await listGrokSessionsService(
-                      workspacePath,
-                      6,
-                    );
-                    responseSessionId = pickLikelyGrokSessionId(
-                      sessions,
-                      sendRequestedAt - 120_000,
-                    );
+                    const occupancy = collectOccupiedGrokSessionIds({
+                      itemsByThread,
+                      pendingSessionIdByThread:
+                        grokSessionIdByPendingThreadRef.current,
+                      currentThreadId: threadId,
+                    });
+                    if (!occupancy.hasOtherPendingWithItems) {
+                      const sessions = await listGrokSessionsService(
+                        workspacePath,
+                        6,
+                      );
+                      responseSessionId = pickLikelyGrokSessionId(
+                        sessions,
+                        sendRequestedAt - 120_000,
+                        occupancy.occupiedSessionIds,
+                      );
+                    }
                   } catch {
                     responseSessionId = null;
                   }

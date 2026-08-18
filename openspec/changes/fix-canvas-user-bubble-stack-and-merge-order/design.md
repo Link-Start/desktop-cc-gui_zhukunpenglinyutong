@@ -77,6 +77,13 @@ P0 Bug A（Claude 磁盘尾窗 80 接到幕布芯片）已独立落地。本 cha
 
 实现抽纯函数（建议 `insertUnmatchedIncomingByNeighbor`），与 merge 主流程分开测。禁止在函数里读 `Date`。
 
+**B3 follow-up（Grok leftover Exploring）**：当 `firstMatchedIncomingIndex < 0`（incoming 完全对不上）时，`explore`（任意 status）与 in-progress `commandExecution` leftover **不得**插到结果开头。这类项是别的会话残留，不是「迟到更早窗」。user / assistant leftover 仍按原 D2 插到开头，B3 既有 fully-unmatched older-window 用例不得回退。有 matched neighbor 时 explore 仍相对插入。
+
+配套两层，禁止只靠一层：
+
+1. **Presentation**：Grok 用 `suppressOrphanExploringItemsBeforeLatestUserTurn` 隐藏 latest user 之前的 `exploring`，保留其后的当前轮 Exploring。不要求 `isThinking`。禁止把 Grok 改成 Codex/Claude 那种全藏 `exploring`。
+2. **Session bind**：`pickLikelyGrokSessionId` 增加 optional `occupiedSessionIds`。已被其他 `grok:` thread 占用、或已被其他 pending cache 的 session 不得回绑。另一 `grok-pending-*` 已有 items 时跳过 list fallback。禁止因为仓库里存在任意旧 `grok:` thread 就关掉 pickLikely。
+
 ### D3. B2：只扩现有 `normalizeComparableUserText`，先红灯再加剥离
 
 **选择**：不新写模糊匹配。流程：

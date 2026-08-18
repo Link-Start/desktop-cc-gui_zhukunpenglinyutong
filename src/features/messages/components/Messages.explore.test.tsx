@@ -556,6 +556,82 @@ describe("Messages explore rows", () => {
     expect(container.textContent ?? "").toContain("Read reducers.ts");
   });
 
+  it("hides leftover exploring above the latest grok user", async () => {
+    const leftoverItems: ConversationItem[] = [
+      {
+        id: "foreign-explore",
+        kind: "explore",
+        status: "exploring",
+        entries: [{ kind: "list", label: "Downloads" }],
+      },
+      {
+        id: "user-latest",
+        kind: "message",
+        role: "user",
+        text: "在吗",
+      },
+      {
+        id: "assistant-greeting",
+        kind: "message",
+        role: "assistant",
+        text: "你好！有什么我可以帮助你的吗？",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={leftoverItems}
+        threadId="grok-pending-new"
+        workspaceId="ws-1"
+        isThinking={false}
+        activeEngine="grok"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.textContent ?? "").toContain("在吗");
+    });
+    expect(container.querySelectorAll(".explore-inline").length).toBe(0);
+    expect(container.textContent ?? "").not.toContain("Exploring");
+  });
+
+  it("keeps current-turn grok exploring after the latest user", async () => {
+    const liveItems: ConversationItem[] = [
+      {
+        id: "user-latest",
+        kind: "message",
+        role: "user",
+        text: "在吗",
+      },
+      {
+        id: "live-explore",
+        kind: "explore",
+        status: "exploring",
+        entries: [{ kind: "list", label: "Downloads" }],
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={liveItems}
+        threadId="grok-pending-live"
+        workspaceId="ws-1"
+        isThinking={true}
+        activeEngine="grok"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    await waitFor(() => {
+      expect(container.querySelectorAll(".explore-inline").length).toBe(1);
+    });
+    expect(container.textContent ?? "").toContain("Exploring");
+    expect(container.textContent ?? "").toContain("Downloads");
+  });
+
   it("does not merge explore items across interleaved tools", async () => {
     const items: ConversationItem[] = [
       {

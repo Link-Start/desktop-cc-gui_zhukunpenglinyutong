@@ -45,6 +45,7 @@ import {
 import {
   buildLiveTailWorkingSet,
   suppressCompletedExploreItemsBetweenLatestUserTurns,
+  suppressOrphanExploringItemsBeforeLatestUserTurn,
 } from "../orchestration/presentation/messagesLiveWindow";
 import {
   isAssistantMessageConversationItem,
@@ -1049,12 +1050,17 @@ export const MessagesCore = memo(function MessagesCore({
     ],
   );
   const timelineSourceItems = useMemo(() => {
-    if (activeEngine !== "codex" || !isThinking) {
-      return visibleItems;
+    if (activeEngine === "codex" && isThinking) {
+      return suppressCompletedExploreItemsBetweenLatestUserTurns(visibleItems, {
+        enableCollaborationBadge,
+      });
     }
-    return suppressCompletedExploreItemsBetweenLatestUserTurns(visibleItems, {
-      enableCollaborationBadge,
-    });
+    if (activeEngine === "grok") {
+      return suppressOrphanExploringItemsBeforeLatestUserTurn(visibleItems, {
+        enableCollaborationBadge,
+      });
+    }
+    return visibleItems;
   }, [activeEngine, enableCollaborationBadge, isThinking, visibleItems]);
   const { timelineItems, phases: processPhases } = useMemo(
     () =>

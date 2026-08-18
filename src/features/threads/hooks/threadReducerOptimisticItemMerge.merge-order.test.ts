@@ -75,4 +75,32 @@ describe("mergeThreadItemsPreservingOptimisticUsers leftover order", () => {
     expect(users.filter((item) => item.text === "hello world")).toHaveLength(1);
     expect(users[users.length - 1]?.id).toBe("optimistic-user-keep");
   });
+
+  it("does not splice a foreign unmatched explore window above a new optimistic user", () => {
+    const local: ConversationItem[] = [
+      userMessage("optimistic-user-only", "在吗"),
+    ];
+    const incoming: ConversationItem[] = [
+      {
+        id: "foreign-explore",
+        kind: "explore",
+        status: "exploring",
+        entries: [{ kind: "list", label: "Downloads" }],
+      },
+      {
+        id: "foreign-ls",
+        kind: "tool",
+        toolType: "commandExecution",
+        title: "Command: ls /Users/demo/Downloads",
+        detail: "",
+        status: "inProgress",
+      },
+    ];
+
+    const merged = mergeThreadItemsPreservingOptimisticUsers(local, incoming, {
+      isProcessing: true,
+    });
+
+    expect(merged.map((item) => item.id)).toEqual(["optimistic-user-only"]);
+  });
 });
