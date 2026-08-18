@@ -2,6 +2,76 @@
 
 ---
 
+### **2026年8月18日（v0.9.1）**
+
+中文：
+
+这一版将应用升到 **0.9.1**，主线是「大会话打开只画最新一页、侧栏 Session Index 真冷路径、切项目 / 切模型 / Fork 不再跑偏」：切会话改 Spine 幕布并带阶段进度；DSH 等大会话默认只装最新一页，上翻 / All 再按页取更早；侧栏首屏零扫盘、按页展开、按创建时间排序，并恢复后台扫盘把漏掉的新会话补回来。另收口 Shared 历史卡在 58%、幕布用户气泡连堆、空 Session 下崽、同名模型误开新会话、点选模型假切换，以及置顶按日折叠、会话 Tab 开关与推送目标记忆。
+
+✨ Features
+- **会话历史 Spine 幕布 + 阶段进度**：切会话从 spinner+进度条换成 13 Spine（Native 爬光、Shared 四段真相位、DSH 布尔幕布）；大会话打开显示准备 / 快照 / 解析 / 组装百分比，DSH 按页报号，方便定位 6000+ 会话卡在 host 翻页还是 hydrate
+- **侧栏置顶按日历日折叠**：去掉「已固定」段头，`yyyy-mm-dd` 作为最外层并与工作区对齐；默认只展开最新日，折叠状态写入 clientStorage
+- **外观设置会话 Tab 开关**：可手动隐藏或显示顶部会话 Tab，不把 `topSessionTabs` 纳入 essential chrome
+- **Git 推送记住最近三次目标**：推送对话框记住 workspace 最近 3 个 remote / branch / Gerrit 组合，打开时回填上次目标
+
+🔧 Improvements
+- 将应用版本号提升到 `0.9.1`（`package.json` / `package-lock.json` / `src-tauri/tauri.conf.json`），为 patch 发版对齐 SemVer 与打包元数据
+- **大会话首屏只装最新一页**：DSH 打开默认只拉 1 页 host history，幕布在 tail hydrate 后卸下；更早内容走统一 older-page；hydrate 改线性 working-set，芯片按 500 翻页并提供 All，上翻不再自动翻页、prepend 不再吸底
+- **Session Index 真冷路径**：first-paint / focus-refresh / 软再同步只读 SQLite，不再探 DSH / PI 盘；路径钥匙收 Windows 长路径与盘符大小写；超时只标 partial，不再用空数组盖账本
+- **侧栏按页递增展开**：首次露出 12 条，「更多」按 12 / 24 / 36 / 48 提高可见上限，去掉独立「加载更早的」
+- **上下文注入卡改单行折叠条**：默认只露 completed pill 和标题，点开再看 goal 正文
+- **左侧消息锚点贴边**：rail 左移到 12px，默认短线 14→9px；窄幕布不再隐藏锚点
+
+🐛 Fixes
+- **切项目恢复上次会话**：非当前工作区行走 `onSelectWorkspace` 并恢复 last thread，不再误入 workspace home
+- **未加载会话切回先拉幕布**：select 帧显示 history-loading，避免 emptyThread 闪烁
+- **Claude 磁盘尾窗翻页**：芯片读磁盘 `hasMore`，pending 耗尽后按 cursor 加载更早一页
+- **Shared 历史 V0 先画**：V0 snapshot 就绪即 hydrate 并卸投影幕布，projection 继续后台跑，不再整页卡在 58%
+- **幕布用户气泡连堆与迟到历史错序**：首屏超预算在 turn 边界回退；unmatched incoming 按邻居相对插入；空 assistant 壳按后接 user / liveTurn 保留
+- **幕布 Fork 走 Composer 链路**：与 `/fork` 共用 `forkThreadForWorkspace`，去掉会造出无法 resume 空会话的旧恢复卡
+- **侧栏按创建时间排序**：`updatedAt` 继续更新但不驱动排序；refresh 不再把旧行顶上去
+- **恢复后台扫盘 + last-good floor**：Index 非空不再盖掉更新的 last-good；3s 强制首拍，磁盘 mtime 对照账本
+- **点选模型写 send 账本**：Native overlay 只做反馈，resolver 同步写入并 pin runtime；假切换回滚；send 有 resolver 时不再回落全局 model
+- **native 续聊不因同名模型开新会话**：本 catalog 优先匹配，续聊默认锁当前 thread，只有显式切换引擎组才开新会话
+- **拦截空 Claude / Codex Session 下崽**：扫盘不再导入空 Session / MOSSX 控制面 / helper；过夜空 native 会话与本地 pending 草稿从首页清掉
+- **DSH 历史游标不被内存余量覆盖**：点 All 后仍能按页加载更早的 host 历史
+- **Grok leftover Exploring 不再串到新 tab**：incoming 对不上时不再把 explore / 未完成 command 插到 optimistic 前面
+
+English:
+
+This release moves the app to **0.9.1**. The headline is open-large-session by the latest page only, a true Session Index cold path, and project / model / Fork switches that stay on the intended thread: session switches use a Spine curtain with stage progress; DSH and other large threads hydrate the newest page first, then page older history on scroll-up / All; the sidebar first-paints from SQLite with no disk probe, expands by page, sorts by created time, and restores background scan so missed new sessions come back. The rest closes Shared history stuck at 58%, stacked user bubbles, empty-session spawn, same-name model opening a new chat, fake model switches, plus calendar-day pin folding, a session-tab toggle, and remembered push targets.
+
+✨ Features
+- **History Spine curtain + stage progress**: session switch replaces spinner+bar with 13 Spines (Native light crawl, Shared four real phases, DSH boolean curtain); large opens show prepare / snapshot / parse / assemble %; DSH emits page numbers so a 6000+ thread can be told apart as host paging vs hydrate
+- **Pinned sidebar folds by calendar day**: drop the “Pinned” section header; `yyyy-mm-dd` is the outer group and aligns with workspaces; only the newest day expands by default; fold state lives in clientStorage
+- **Appearance toggle for session tabs**: hide or show the top session tabs by hand; `topSessionTabs` is not essential chrome
+- **Remember the last three Git push targets**: the push dialog stores the workspace’s last 3 remote / branch / Gerrit combos and prefills the previous target
+
+🔧 Improvements
+- Bump the app version to `0.9.1` across frontend package metadata, the lockfile, and Tauri bundle configuration so this patch ship aligns SemVer and packaging metadata
+- **Large sessions load the newest page first**: DSH open fetches 1 page of host history and drops the curtain after tail hydrate; older content uses the shared older-page contract; hydrate is a linear working-set; the chip pages by 500 and offers All; scroll-up no longer auto-pages, and prepend no longer snaps to the bottom
+- **True Session Index cold path**: first-paint / focus-refresh / soft resync read SQLite only and do not probe DSH / PI disks; path keys normalize Windows long-path prefixes and drive-letter case; timeouts mark partial instead of covering the ledger with an empty array
+- **Sidebar expands by page**: first reveal is 12 rows; “More” raises the visible cap 12 / 24 / 36 / 48; the standalone “Load older” control is gone
+- **Context-injection card becomes a one-line fold**: default shows the completed pill and title; expand to read the goal body
+- **Left message anchors hug the canvas**: rail moves to 12px, default dash 14→9px; narrow canvases no longer hide the rail
+
+🐛 Fixes
+- **Switching projects restores the last session**: a non-current workspace row runs `onSelectWorkspace` and restores the last thread instead of dumping into workspace home
+- **Unloaded sessions raise the curtain on switch-back**: the select frame shows history-loading so emptyThread does not flash
+- **Claude disk-tail paging**: the chip reads disk `hasMore` and loads the next older page by cursor after pending is exhausted
+- **Shared history paints V0 first**: a ready V0 snapshot hydrates and drops the projection curtain immediately; projection keeps running in the background so the page no longer sticks at 58%
+- **Stacked user bubbles and late-history mis-order**: over-budget first paint falls back on turn boundaries; unmatched incoming inserts relative to neighbors; empty assistant shells stay only when followed by user / liveTurn
+- **Canvas Fork uses the Composer path**: shares `forkThreadForWorkspace` with `/fork` and drops the old recovery card that created unresumable empty Claude sessions
+- **Sidebar sorts by created time**: `updatedAt` still updates but does not drive order; refresh no longer boosts old rows
+- **Background scan restored + last-good as floor**: a non-empty Index no longer covers a newer last-good; force a 3s first beat and compare disk mtime to the ledger
+- **Picker writes the send ledger**: Native overlay is feedback only; the resolver writes and pins the runtime; fake switches roll back; send with a resolver no longer falls back to the global model
+- **Native resume no longer opens a new chat on a same-name model**: this catalog matches first; resume stays on the current thread unless the user explicitly switches engine group
+- **Empty Claude / Codex Sessions stay out of the list**: scan no longer imports empty Sessions / MOSSX control-plane / helpers; overnight empty native sessions and local pending drafts leave Home
+- **DSH history cursor is not overwritten by memory remainder**: All still pages older host history
+- **Grok leftover Exploring no longer leaks into a new tab**: when incoming does not match, do not insert explore / unfinished commands ahead of optimistic rows
+
+---
+
 ### **2026年8月17日（v0.9.0）**
 
 中文：
