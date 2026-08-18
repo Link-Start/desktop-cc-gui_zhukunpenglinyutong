@@ -31,6 +31,8 @@ export interface FluidParams {
   color1: string;
   color2: string;
   color3: string;
+  /** 0 drift / 1 taiji / 2 storm / 3 tornado / 4 chase. Defaults to drift. */
+  motionMode?: number;
 }
 
 export const SITE_FLUID_PARAMS: FluidParams = {
@@ -54,6 +56,7 @@ export const SITE_FLUID_PARAMS: FluidParams = {
   color1: "#8AA3D6",
   color2: "#FFFFFF",
   color3: "#FFFFFF",
+  motionMode: 0,
 };
 
 const VERTEX_SHADER = `#version 300 es
@@ -123,6 +126,7 @@ uniform sampler2D u_flowmap;
 uniform float u_distortBoost;
 uniform float u_noiseBoost;
 uniform float u_swirlBoost;
+uniform float u_motionMode;
 out vec4 fragColor;
 
 #define TWO_PI 6.28318530718
@@ -145,7 +149,141 @@ vec3 blend_multi(float mixer, float softness) {
   return col;
 }
 
+vec3 motionTaiji(vec2 uv, float t) {
+  vec2 p = uv - 0.5;
+  p.x *= u_resolution.x / u_resolution.y;
+  p = rotate(p, t * 0.45);
+  p *= 1.72;
+  float disk = smoothstep(1.06, 0.9, length(p));
+  float topC = length(p - vec2(0.0, 0.5));
+  float botC = length(p - vec2(0.0, -0.5));
+  float right = smoothstep(-0.03, 0.03, p.x);
+  float yang = mix(smoothstep(0.52, 0.46, botC), 1.0 - smoothstep(0.52, 0.46, topC), right);
+  yang = mix(yang, 1.0, 1.0 - smoothstep(0.09, 0.13, length(p - vec2(0.0, 0.5))));
+  yang = mix(yang, 0.0, 1.0 - smoothstep(0.09, 0.13, length(p - vec2(0.0, -0.5))));
+  vec3 fish = mix(u_color1.rgb, u_color2.rgb, yang);
+  vec3 wash = mix(u_color3.rgb, u_color2.rgb, 0.35);
+  return mix(wash, fish, disk);
+}
+
+vec3 motionStorm(vec2 uv, float t) {
+  vec2 p = uv;
+  p.x += t * 0.06;
+  float clouds = noise(p * vec2(2.2, 1.4) + t * 0.12);
+  clouds = mix(clouds, noise(p * 5.0 - t * 0.2), 0.35);
+  float rain = 0.0;
+  for (float i = 1.0; i <= 4.0; i++) {
+    vec2 q = p * vec2(14.0 * i, 64.0 * i);
+    q.x += q.y * 0.42;
+    q.y += t * (3.2 + i * 0.8);
+    float cell = random(floor(q));
+    float streak = smoothstep(0.78, 0.96, cell) * (1.0 - fract(q.y));
+    rain += streak / i;
+  }
+  float flash = pow(max(0.0, sin(t * 0.55) * sin(t * 1.21 + 1.7)), 22.0);
+  vec3 col = mix(u_color1.rgb, u_color3.rgb, clouds);
+  col = mix(col, u_color2.rgb, clamp(rain, 0.0, 1.0));
+  col += flash * 0.38 * u_color2.rgb;
+  return col;
+}
+
+vec3 motionTornado(vec2 uv, float t) {
+  vec2 p = uv - vec2(0.5, 0.46);
+  p.x *= u_resolution.x / u_resolution.y;
+  float funnel = 0.16 + 0.78 * smoothstep(-0.75, 0.95, p.y);
+  p.x /= max(funnel, 0.08);
+  float r = length(p);
+  float ang = atan(p.y, p.x);
+  ang += 1.65 / (r + 0.12) + t * 1.35;
+  vec2 sp = vec2(cos(ang), sin(ang)) * r;
+  float arms = 0.5 + 0.5 * sin(ang * 3.0 + r * 9.0 - t * 2.8);
+  float dust = noise(sp * 5.5 + t * 0.6);
+  float core = smoothstep(0.5, 0.0, r);
+  vec3 col = mix(u_color3.rgb, u_color1.rgb, arms);
+  col = mix(col, u_color2.rgb, dust * 0.38);
+  col = mix(col, u_color1.rgb * 0.22, core * 0.75);
+  float mask = smoothstep(1.25, 0.28, r);
+  return mix(u_color3.rgb, col, mask);
+}
+
+vec3 motionChase(vec2 uv, float t) {
+  vec2 p = uv;
+  float aspect = u_resolution.x / max(u_resolution.y, 1.0);
+  p.x *= aspect;
+
+  // Pair center wanders on a Lissajous; never pinned to screen center.
+  vec2 pair = vec2(
+    0.50 * aspect
+      + 0.24 * sin(t * 0.27)
+      + 0.09 * sin(t * 0.71 + 1.3),
+    0.50
+      + 0.18 * sin(t * 0.19 + 0.7)
+      + 0.07 * cos(t * 0.53 + 2.1)
+  );
+
+  // Yang leads; yin lags with a breathing phase so they chase, not lock 180°.
+  float lead = t * 0.88;
+  float lag = lead + PI + 0.42 * sin(t * 0.33);
+  float yangSep = 0.15 + 0.03 * sin(t * 0.41);
+  float yinSep = 0.15 + 0.03 * sin(t * 0.41 + 1.7);
+  vec2 yangDir = vec2(cos(lead), sin(lead));
+  vec2 yinDir = vec2(cos(lag), sin(lag));
+  vec2 yangPos = pair + yangDir * yangSep;
+  vec2 yinPos = pair + yinDir * yinSep;
+  vec2 yangHead = vec2(-yangDir.y, yangDir.x);
+  vec2 yinHead = vec2(-yinDir.y, yinDir.x);
+
+  vec2 yangRel = p - yangPos;
+  vec2 yinRel = p - yinPos;
+  float nYang = noise(p * 5.2 + t * 0.35) - 0.5;
+  float nYin = noise(p * 5.2 - t * 0.31 + 3.1) - 0.5;
+  float yangR = length(vec2(dot(yangRel, yangHead) * 0.62, dot(yangRel, yangDir)))
+    * (1.0 + 0.18 * nYang);
+  float yinR = length(vec2(dot(yinRel, yinHead) * 0.62, dot(yinRel, yinDir)))
+    * (1.0 + 0.18 * nYin);
+
+  float yangBlob = smoothstep(0.24, 0.03, yangR);
+  float yinBlob = smoothstep(0.24, 0.03, yinR);
+  float yangWake = smoothstep(0.20, 0.0, length(p - (yangPos - yangHead * 0.14))) * 0.42;
+  float yinWake = smoothstep(0.20, 0.0, length(p - (yinPos - yinHead * 0.14))) * 0.42;
+  float yangEye = 1.0 - smoothstep(0.022, 0.046, length(p - (yangPos - yangHead * 0.025)));
+  float yinEye = 1.0 - smoothstep(0.022, 0.046, length(p - (yinPos - yinHead * 0.025)));
+
+  vec2 bridge = yangPos - yinPos;
+  float bridgeLen = length(bridge);
+  vec2 bridgeAxis = bridge / max(bridgeLen, 0.001);
+  vec2 toMid = p - (yangPos + yinPos) * 0.5;
+  float ribbon = (1.0 - smoothstep(bridgeLen * 0.5, bridgeLen * 0.5 + 0.02, abs(dot(toMid, bridgeAxis))))
+    * (1.0 - smoothstep(0.012, 0.055, abs(dot(toMid, vec2(-bridgeAxis.y, bridgeAxis.x))))) * 0.28;
+
+  vec3 wash = mix(u_color3.rgb, u_color2.rgb, 0.12);
+  vec3 yangCol = u_color1.rgb;
+  vec3 yinRaw = u_color2.rgb;
+  float washLum = dot(wash, vec3(0.2126, 0.7152, 0.0722));
+  float yinLum = dot(yinRaw, vec3(0.2126, 0.7152, 0.0722));
+  vec3 yinCol = abs(yinLum - washLum) > 0.14
+    ? yinRaw
+    : (washLum > 0.5 ? yangCol * 0.22 : mix(vec3(1.0), yangCol, 0.18));
+  vec3 col = mix(wash, mix(yangCol, yinCol, 0.5), ribbon);
+  col = mix(col, yangCol, clamp(yangBlob + yangWake, 0.0, 1.0));
+  col = mix(col, yinCol, clamp(yinBlob + yinWake, 0.0, 1.0));
+  col = mix(col, yinCol, yangEye);
+  col = mix(col, yangCol, yinEye);
+  return col;
+}
+
 void main() {
+  if (u_motionMode > 0.5) {
+    float structuredTime = u_time * 7.0;
+    vec3 structured;
+    if (u_motionMode < 1.5) structured = motionTaiji(vUv, structuredTime);
+    else if (u_motionMode < 2.5) structured = motionStorm(vUv, structuredTime);
+    else if (u_motionMode < 3.5) structured = motionTornado(vUv, structuredTime);
+    else structured = motionChase(vUv, structuredTime);
+    fragColor = vec4(structured, 1.0);
+    return;
+  }
+
   vec2 uv = gl_FragCoord.xy / u_resolution.xy;
   float t = .5 * u_time;
   float ns = .0005 + .006 * u_scale;
@@ -312,6 +450,7 @@ export function attachFluidShader(
     distortBoost: gl.getUniformLocation(displayProgram, "u_distortBoost"),
     noiseBoost: gl.getUniformLocation(displayProgram, "u_noiseBoost"),
     swirlBoost: gl.getUniformLocation(displayProgram, "u_swirlBoost"),
+    motionMode: gl.getUniformLocation(displayProgram, "u_motionMode"),
   };
 
   const quadBuffer = gl.createBuffer();
@@ -503,6 +642,7 @@ export function attachFluidShader(
     gl.uniform1f(display.distortBoost, p.distortBoost);
     gl.uniform1f(display.noiseBoost, p.noiseBoost);
     gl.uniform1f(display.swirlBoost, p.swirlBoost);
+    gl.uniform1f(display.motionMode, p.motionMode ?? 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
 

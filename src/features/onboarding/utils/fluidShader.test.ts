@@ -8,6 +8,8 @@ describe("attachFluidShader", () => {
     const handle = attachFluidShader(canvas, SITE_FLUID_PARAMS);
     expect(() => {
       handle.setParams(SITE_FLUID_PARAMS);
+      handle.setParams({ ...SITE_FLUID_PARAMS, motionMode: 3, speed: 9 });
+      handle.setParams({ ...SITE_FLUID_PARAMS, motionMode: 4, speed: 9 });
       handle.stir(0.5, 0.5, 0, 0);
       handle.pause();
       handle.resume();

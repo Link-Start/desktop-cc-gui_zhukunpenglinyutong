@@ -1,11 +1,14 @@
 import type {
+  WorkspaceWallpaperFluidMotion,
   WorkspaceWallpaperFluidPreset,
   WorkspaceWallpaperMode,
   WorkspaceWallpaperSettings,
 } from "../../../types";
 import { isWindowsPlatform } from "../../../utils/platform";
 import {
+  DEFAULT_WORKSPACE_FLUID_MOTION,
   DEFAULT_WORKSPACE_FLUID_PRESET,
+  isWorkspaceFluidMotionId,
   isWorkspaceFluidPresetId,
 } from "../../onboarding/utils/fluidTones";
 
@@ -14,11 +17,14 @@ export const WORKSPACE_WALLPAPER_MODES = ["none", "fluid", "custom"] as const;
 export const DEFAULT_WORKSPACE_WALLPAPER_VEIL_OPACITY = 12;
 export const MIN_WORKSPACE_WALLPAPER_VEIL_OPACITY = 0;
 export const MAX_WORKSPACE_WALLPAPER_VEIL_OPACITY = 20;
+/** Workspace fluid is slower than first-run (`SITE_FLUID_PARAMS.speed = 14`). */
+export const WORKSPACE_FLUID_SPEED = 9;
 
 export const DEFAULT_WORKSPACE_WALLPAPER: WorkspaceWallpaperSettings = {
   mode: "none",
   customImagePath: null,
   fluidPreset: DEFAULT_WORKSPACE_FLUID_PRESET,
+  fluidMotion: DEFAULT_WORKSPACE_FLUID_MOTION,
   veilOpacity: DEFAULT_WORKSPACE_WALLPAPER_VEIL_OPACITY,
 };
 
@@ -95,15 +101,38 @@ export function sanitizeWorkspaceWallpaper(
   )
     ? value.fluidPreset
     : DEFAULT_WORKSPACE_FLUID_PRESET;
+  const fluidMotion: WorkspaceWallpaperFluidMotion = isWorkspaceFluidMotionId(
+    value.fluidMotion,
+  )
+    ? value.fluidMotion
+    : DEFAULT_WORKSPACE_FLUID_MOTION;
   const veilOpacity = sanitizeWorkspaceWallpaperVeilOpacity(value.veilOpacity);
   if (value.mode === "custom") {
-    return { mode: "custom", customImagePath, fluidPreset, veilOpacity };
+    return {
+      mode: "custom",
+      customImagePath,
+      fluidPreset,
+      fluidMotion,
+      veilOpacity,
+    };
   }
   if (value.mode === "none") {
-    return { mode: "none", customImagePath, fluidPreset, veilOpacity };
+    return {
+      mode: "none",
+      customImagePath,
+      fluidPreset,
+      fluidMotion,
+      veilOpacity,
+    };
   }
   if (value.mode === "fluid") {
-    return { mode: "fluid", customImagePath, fluidPreset, veilOpacity };
+    return {
+      mode: "fluid",
+      customImagePath,
+      fluidPreset,
+      fluidMotion,
+      veilOpacity,
+    };
   }
   return { ...DEFAULT_WORKSPACE_WALLPAPER };
 }

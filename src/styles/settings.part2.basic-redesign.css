@@ -1745,6 +1745,33 @@
     0 0 0 3.5px color-mix(in srgb, var(--settings-basic-text) 55%, transparent);
 }
 
+.settings-section-basic .settings-wallpaper-motions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: min(100%, 520px);
+}
+
+.settings-section-basic .settings-wallpaper-motion {
+  appearance: none;
+  margin: 0;
+  border: 1px solid var(--settings-basic-border);
+  background: color-mix(in srgb, var(--settings-basic-surface) 88%, var(--settings-basic-border));
+  color: var(--settings-basic-text);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.settings-section-basic .settings-wallpaper-motion.is-active {
+  background: var(--settings-basic-text);
+  color: var(--settings-basic-surface);
+  border-color: var(--settings-basic-text);
+}
+
 .settings-section-basic .settings-wallpaper-path {
   flex: 1 1 auto;
   min-width: 0;

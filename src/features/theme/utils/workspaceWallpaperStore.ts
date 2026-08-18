@@ -38,6 +38,7 @@ export function publishWorkspaceWallpaper(
     snapshot.mode === next.mode &&
     snapshot.customImagePath === next.customImagePath &&
     snapshot.fluidPreset === next.fluidPreset &&
+    snapshot.fluidMotion === next.fluidMotion &&
     snapshot.veilOpacity === next.veilOpacity
   ) {
     return snapshot;

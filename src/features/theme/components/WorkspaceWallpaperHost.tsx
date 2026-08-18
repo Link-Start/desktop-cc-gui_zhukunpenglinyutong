@@ -2,8 +2,12 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getAppSettings } from "../../../services/tauri";
 import { FirstRunFluidBackdrop } from "../../onboarding/components/FirstRunFluidBackdrop";
-import { DEFAULT_WORKSPACE_FLUID_PRESET } from "../../onboarding/utils/fluidTones";
 import {
+  DEFAULT_WORKSPACE_FLUID_MOTION,
+  DEFAULT_WORKSPACE_FLUID_PRESET,
+} from "../../onboarding/utils/fluidTones";
+import {
+  WORKSPACE_FLUID_SPEED,
   isWorkspaceFluidWallpaperSupported,
   resolveWorkspaceWallpaperMode,
   sanitizeWorkspaceWallpaperVeilOpacity,
@@ -119,6 +123,8 @@ export function WorkspaceWallpaperHost() {
         <FirstRunFluidBackdrop
           profile="lite"
           presetId={wallpaper.fluidPreset ?? DEFAULT_WORKSPACE_FLUID_PRESET}
+          motionId={wallpaper.fluidMotion ?? DEFAULT_WORKSPACE_FLUID_MOTION}
+          speed={WORKSPACE_FLUID_SPEED}
         />
       ) : null}
       {mode === "custom" && customSrc ? (

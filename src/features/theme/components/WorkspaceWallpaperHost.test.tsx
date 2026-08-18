@@ -22,13 +22,19 @@ vi.mock("../../../utils/platform", async () => {
 vi.mock("../../onboarding/components/FirstRunFluidBackdrop", () => ({
   FirstRunFluidBackdrop: ({
     profile,
+    motionId,
+    speed,
   }: {
     profile?: string;
+    motionId?: string;
+    speed?: number;
   }) => (
     <div
       data-testid="first-run-fluid"
       aria-hidden
       data-profile={profile ?? "full"}
+      data-motion={motionId ?? "drift"}
+      data-speed={speed === undefined ? "" : String(speed)}
     />
   ),
 }));
@@ -44,6 +50,8 @@ const getAppSettings = vi.hoisted(() =>
         mode: string;
         customImagePath: string | null;
         veilOpacity?: number;
+        fluidPreset?: string;
+        fluidMotion?: string;
       };
     }> => ({
       workspaceWallpaper: { mode: "none", customImagePath: null },
@@ -155,6 +163,21 @@ describe("WorkspaceWallpaperHost", () => {
     await waitFor(() => {
       expect(screen.getByTestId("first-run-fluid").dataset.profile).toBe("lite");
     });
+  });
+
+  it("forwards sanitized motion and workspace speed to the fluid backdrop", async () => {
+    getAppSettings.mockResolvedValueOnce({
+      workspaceWallpaper: {
+        mode: "fluid",
+        customImagePath: null,
+        fluidMotion: "taiji",
+      },
+    });
+    render(<WorkspaceWallpaperHost />);
+    await waitFor(() => {
+      expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe("taiji");
+    });
+    expect(screen.getByTestId("first-run-fluid").dataset.speed).toBe("9");
   });
 
   it("does not mount a wallpaper layer on Windows even when fluid is persisted", async () => {

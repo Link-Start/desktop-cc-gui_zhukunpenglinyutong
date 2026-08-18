@@ -90,6 +90,35 @@ describe("FirstRunFluidBackdrop", () => {
     expect(attachFluidShader.mock.calls[0]?.[2]).toBe("lite");
   });
 
+  it("keeps first-run speed and drift unless workspace overrides them", () => {
+    render(<FirstRunFluidBackdrop />);
+    const params = attachFluidShader.mock.calls[0]?.[1];
+    expect(params?.speed).toBe(14);
+    expect(params?.motionMode).toBe(0);
+  });
+
+  it("forwards workspace motion and speed through setParams without remounting", () => {
+    const handle: FluidShaderHandle = {
+      setParams: vi.fn(),
+      stir: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      dispose: vi.fn(),
+    };
+    attachFluidShader.mockReturnValue(handle);
+
+    const { rerender } = render(
+      <FirstRunFluidBackdrop motionId="drift" speed={9} />,
+    );
+    expect(attachFluidShader).toHaveBeenCalledTimes(1);
+
+    rerender(<FirstRunFluidBackdrop motionId="tornado" speed={9} />);
+    expect(attachFluidShader).toHaveBeenCalledTimes(1);
+    expect(handle.setParams).toHaveBeenCalledWith(
+      expect.objectContaining({ motionMode: 3, speed: 9 }),
+    );
+  });
+
   it("uses a solid backdrop on Windows instead of the fluid shader", () => {
     mocks.isWindowsPlatform.mockReturnValue(true);
     const { container } = render(<FirstRunFluidBackdrop />);

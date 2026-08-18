@@ -293,6 +293,7 @@ const baseSettings: AppSettings = {
     mode: "none",
     customImagePath: null,
     fluidPreset: "mist",
+    fluidMotion: "drift",
     veilOpacity: 12,
   },
   userMsgColor: "",
@@ -1622,6 +1623,7 @@ describe("SettingsView Display", () => {
           mode: "none",
           customImagePath: null,
           fluidPreset: "mist",
+          fluidMotion: "drift",
           veilOpacity: 12,
         },
       }),
@@ -1662,6 +1664,9 @@ describe("SettingsView Display", () => {
     });
     await flushSettingsViewEffects();
 
+    expect(screen.getByRole("radio", { name: "Ash" })).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Fluid motion" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Chase" })).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Orchid" }));
 
     expect(onUpdateAppSettings).toHaveBeenCalledWith(
@@ -1670,10 +1675,58 @@ describe("SettingsView Display", () => {
           mode: "fluid",
           customImagePath: null,
           fluidPreset: "orchid",
+          fluidMotion: "drift",
           veilOpacity: 12,
         },
       }),
     );
+  });
+
+  it("updates the fluid wallpaper motion without changing the palette", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "ash",
+          fluidMotion: "drift",
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Tornado" }));
+
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "ash",
+          fluidMotion: "tornado",
+          veilOpacity: 12,
+        },
+      }),
+    );
+  });
+
+  it("hides fluid motion chips when wallpaper is not fluid", async () => {
+    renderDisplaySection({
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "none",
+          customImagePath: null,
+          fluidPreset: "mist",
+          fluidMotion: "taiji",
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    expect(screen.queryByRole("radio", { name: "Tai Chi" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Fluid motion" })).toBeNull();
   });
 
   it("updates the wallpaper veil opacity from appearance settings", async () => {
@@ -1707,6 +1760,7 @@ describe("SettingsView Display", () => {
           mode: "fluid",
           customImagePath: null,
           fluidPreset: "mist",
+          fluidMotion: "drift",
           veilOpacity: 18,
         },
       }),

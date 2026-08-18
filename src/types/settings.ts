@@ -68,12 +68,21 @@ export type WorkspaceWallpaperFluidPreset =
   | "dusk"
   | "orchid"
   | "ember"
-  | "ink";
+  | "ink"
+  | "ash";
+
+export type WorkspaceWallpaperFluidMotion =
+  | "drift"
+  | "taiji"
+  | "storm"
+  | "tornado"
+  | "chase";
 
 export type WorkspaceWallpaperSettings = {
   mode: WorkspaceWallpaperMode;
   customImagePath: string | null;
   fluidPreset?: WorkspaceWallpaperFluidPreset;
+  fluidMotion?: WorkspaceWallpaperFluidMotion;
   /** Frost blur in px, 0–20. Default 12. Reuses the old veil slider field. */
   veilOpacity?: number;
 };

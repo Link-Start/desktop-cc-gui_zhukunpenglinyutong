@@ -23,11 +23,25 @@ export const WORKSPACE_FLUID_PRESETS = [
   { id: "orchid", hue: 250, depth: 26 },
   { id: "ember", hue: 5, depth: 20 },
   { id: "ink", hue: 200, depth: 8 },
+  { id: "ash", hue: 3, depth: 46, chroma: 0.06 },
 ] as const;
 
 export type WorkspaceFluidPresetId = (typeof WORKSPACE_FLUID_PRESETS)[number]["id"];
+export type WorkspaceFluidPreset = (typeof WORKSPACE_FLUID_PRESETS)[number];
 
 export const DEFAULT_WORKSPACE_FLUID_PRESET: WorkspaceFluidPresetId = "mist";
+
+export const WORKSPACE_FLUID_MOTIONS = [
+  { id: "drift", mode: 0 },
+  { id: "taiji", mode: 1 },
+  { id: "storm", mode: 2 },
+  { id: "tornado", mode: 3 },
+  { id: "chase", mode: 4 },
+] as const;
+
+export type WorkspaceFluidMotionId = (typeof WORKSPACE_FLUID_MOTIONS)[number]["id"];
+
+export const DEFAULT_WORKSPACE_FLUID_MOTION: WorkspaceFluidMotionId = "drift";
 
 export function isWorkspaceFluidPresetId(
   value: unknown,
@@ -40,10 +54,46 @@ export function isWorkspaceFluidPresetId(
 
 export function resolveWorkspaceFluidPreset(
   value: unknown,
-): (typeof WORKSPACE_FLUID_PRESETS)[number] {
+): WorkspaceFluidPreset {
   return (
     WORKSPACE_FLUID_PRESETS.find((preset) => preset.id === value) ??
     WORKSPACE_FLUID_PRESETS[0]
+  );
+}
+
+export function isWorkspaceFluidMotionId(
+  value: unknown,
+): value is WorkspaceFluidMotionId {
+  return (
+    typeof value === "string" &&
+    WORKSPACE_FLUID_MOTIONS.some((motion) => motion.id === value)
+  );
+}
+
+export function resolveWorkspaceFluidMotion(
+  value: unknown,
+): (typeof WORKSPACE_FLUID_MOTIONS)[number] {
+  return (
+    WORKSPACE_FLUID_MOTIONS.find((motion) => motion.id === value) ??
+    WORKSPACE_FLUID_MOTIONS[0]
+  );
+}
+
+export function fluidPresetChroma(
+  preset: WorkspaceFluidPreset,
+): number | undefined {
+  return "chroma" in preset ? preset.chroma : undefined;
+}
+
+export function fluidPresetToneColors(
+  dark: boolean,
+  preset: WorkspaceFluidPreset,
+): FluidToneColors {
+  return fluidToneColors(
+    dark,
+    preset.hue,
+    preset.depth,
+    fluidPresetChroma(preset),
   );
 }
 
@@ -88,6 +138,7 @@ export function fluidToneColors(
   dark: boolean,
   hue: number,
   depth: number,
+  chroma?: number,
 ): FluidToneColors {
   const h = (((hue + HUE_BASE) % 360) + 360) % 360;
   const d = Math.min(1, Math.max(0, depth / 100));
@@ -95,16 +146,18 @@ export function fluidToneColors(
     d < 0.5
       ? deep + ((mid - deep) * d) / 0.5
       : mid + ((pale - mid) * (d - 0.5)) / 0.5;
+  const sat = (full: number): number =>
+    chroma === undefined ? full : Math.min(full, Math.max(0, chroma));
   if (dark) {
     return {
-      color1: hsl(h, 0.85, ramp(0, 0.46, 0.62)),
-      color2: hsl(h, 0.9, ramp(0, 0.305, 0.45)),
-      color3: hsl(h, 0.5, ramp(0, 0.075, 0.1)),
+      color1: hsl(h, sat(0.85), ramp(0, 0.46, 0.62)),
+      color2: hsl(h, sat(0.9), ramp(0, 0.305, 0.45)),
+      color3: hsl(h, sat(0.5), ramp(0, 0.075, 0.1)),
     };
   }
   return {
-    color1: hsl(h, 1, ramp(0.27, 0.45, 0.9)),
-    color2: hsl(h, 0.55, 0.86),
-    color3: hsl(h, 0.25, 0.955),
+    color1: hsl(h, sat(1), ramp(0.27, 0.45, 0.9)),
+    color2: hsl(h, sat(0.55), 0.86),
+    color3: hsl(h, sat(0.25), 0.955),
   };
 }

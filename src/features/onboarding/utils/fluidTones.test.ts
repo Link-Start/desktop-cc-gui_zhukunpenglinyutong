@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   FIRST_RUN_FLUID_DEPTH,
   FIRST_RUN_FLUID_HUE,
+  WORKSPACE_FLUID_MOTIONS,
   WORKSPACE_FLUID_PRESETS,
+  fluidPresetChroma,
+  fluidPresetToneColors,
   fluidToneColors,
+  resolveWorkspaceFluidMotion,
   resolveWorkspaceFluidPreset,
 } from "./fluidTones";
 
@@ -41,6 +45,39 @@ describe("fluidToneColors", () => {
       "orchid",
       "ember",
       "ink",
+      "ash",
+    ]);
+  });
+
+  it("keeps ash as a low-chroma gray wash distinct from ink", () => {
+    const ash = resolveWorkspaceFluidPreset("ash");
+    const ink = resolveWorkspaceFluidPreset("ink");
+    const ashLight = fluidPresetToneColors(false, ash);
+    const inkLight = fluidPresetToneColors(false, ink);
+    const ashDark = fluidPresetToneColors(true, ash);
+    const channelSpread = (hex: string): number => {
+      const value = parseInt(hex.slice(1), 16);
+      const r = (value >> 16) & 255;
+      const g = (value >> 8) & 255;
+      const b = value & 255;
+      return Math.max(r, g, b) - Math.min(r, g, b);
+    };
+    expect(fluidPresetChroma(ash)).toBe(0.06);
+    expect(channelSpread(ashLight.color1)).toBeLessThan(
+      channelSpread(inkLight.color1),
+    );
+    expect(channelSpread(ashDark.color1)).toBeLessThan(40);
+    expect(ashLight.color1).not.toBe(inkLight.color1);
+  });
+
+  it("falls unknown motion back to drift", () => {
+    expect(resolveWorkspaceFluidMotion("nope").id).toBe("drift");
+    expect(WORKSPACE_FLUID_MOTIONS.map((motion) => motion.id)).toEqual([
+      "drift",
+      "taiji",
+      "storm",
+      "tornado",
+      "chase",
     ]);
   });
 });

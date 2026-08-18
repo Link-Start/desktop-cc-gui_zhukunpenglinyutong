@@ -12,30 +12,42 @@ import {
   type FluidShaderProfile,
 } from "../utils/fluidShader";
 import {
+  DEFAULT_WORKSPACE_FLUID_MOTION,
   DEFAULT_WORKSPACE_FLUID_PRESET,
-  fluidToneColors,
+  fluidPresetToneColors,
+  resolveWorkspaceFluidMotion,
   resolveWorkspaceFluidPreset,
+  type WorkspaceFluidMotionId,
   type WorkspaceFluidPresetId,
 } from "../utils/fluidTones";
 
 function buildFluidParams(
   dark: boolean,
   presetId: WorkspaceFluidPresetId,
+  motionId: WorkspaceFluidMotionId,
+  speed: number,
 ): FluidParams {
   const preset = resolveWorkspaceFluidPreset(presetId);
+  const motion = resolveWorkspaceFluidMotion(motionId);
   return {
     ...SITE_FLUID_PARAMS,
-    ...fluidToneColors(dark, preset.hue, preset.depth),
+    ...fluidPresetToneColors(dark, preset),
+    motionMode: motion.mode,
+    speed,
   };
 }
 
 export function FirstRunFluidBackdrop({
   paused = false,
   presetId = DEFAULT_WORKSPACE_FLUID_PRESET,
+  motionId = DEFAULT_WORKSPACE_FLUID_MOTION,
+  speed = SITE_FLUID_PARAMS.speed,
   profile = "full",
 }: {
   paused?: boolean;
   presetId?: WorkspaceFluidPresetId;
+  motionId?: WorkspaceFluidMotionId;
+  speed?: number;
   profile?: FluidShaderProfile;
 } = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -45,8 +57,8 @@ export function FirstRunFluidBackdrop({
     () => readDocumentThemeAppearance() === "dark",
   );
   const params = useMemo(
-    () => buildFluidParams(dark, presetId),
-    [dark, presetId],
+    () => buildFluidParams(dark, presetId, motionId, speed),
+    [dark, presetId, motionId, speed],
   );
 
   useEffect(() => {

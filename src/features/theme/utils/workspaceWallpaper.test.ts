@@ -27,6 +27,7 @@ describe("workspaceWallpaper", () => {
       mode: "none",
       customImagePath: "/Users/me/Wall.png",
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -39,6 +40,54 @@ describe("workspaceWallpaper", () => {
       mode: "fluid",
       customImagePath: "C:\\Pictures\\bg.webp",
       fluidPreset: "orchid",
+      fluidMotion: "drift",
+      veilOpacity: 12,
+    });
+  });
+
+  it("keeps a valid motion and falls unknown motion back to drift", () => {
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        fluidMotion: "tornado",
+      }),
+    ).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "ash",
+      fluidMotion: "tornado",
+      veilOpacity: 12,
+    });
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        fluidMotion: "chase",
+      }).fluidMotion,
+    ).toBe("chase");
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "mist",
+        fluidMotion: "typhoon" as never,
+      }).fluidMotion,
+    ).toBe("drift");
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "nope" as never,
+        fluidMotion: "storm",
+      }),
+    ).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "mist",
+      fluidMotion: "storm",
       veilOpacity: 12,
     });
   });
@@ -53,6 +102,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -64,6 +114,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -75,6 +126,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -86,6 +138,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
   });
