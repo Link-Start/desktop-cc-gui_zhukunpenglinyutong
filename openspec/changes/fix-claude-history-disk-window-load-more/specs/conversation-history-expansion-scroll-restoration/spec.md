@@ -6,7 +6,7 @@
 
 #### Scenario: disk page prepend keeps the current reading slice stable
 
-- **WHEN** 用户通过芯片或滑顶加载 Claude 磁盘上一页
+- **WHEN** 用户通过芯片或 All 加载 Claude 磁盘上一页
 - **AND** 更早 items 被 `prependThreadItems` 插入当前历史窗上方
 - **THEN** 系统 MUST 在插入后按 scrollHeight 增量恢复 `scrollTop`
 - **AND** 插入前正在阅读的内容 MUST 仍留在大约同一视口区域

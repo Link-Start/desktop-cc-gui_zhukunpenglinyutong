@@ -1,4 +1,11 @@
-type OlderHistoryBeforePrependListener = (threadId: string) => void;
+export type OlderHistoryBeforePrependDetail = {
+  prependedCount: number;
+};
+
+type OlderHistoryBeforePrependListener = (
+  threadId: string,
+  detail?: OlderHistoryBeforePrependDetail,
+) => void;
 
 let olderHistoryBeforePrependListener: OlderHistoryBeforePrependListener | null =
   null;
@@ -9,9 +16,12 @@ export function setOlderHistoryBeforePrependListener(
   olderHistoryBeforePrependListener = listener;
 }
 
-export function notifyOlderHistoryBeforePrepend(threadId: string) {
+export function notifyOlderHistoryBeforePrepend(
+  threadId: string,
+  detail?: OlderHistoryBeforePrependDetail,
+) {
   if (!threadId) {
     return;
   }
-  olderHistoryBeforePrependListener?.(threadId);
+  olderHistoryBeforePrependListener?.(threadId, detail);
 }

@@ -279,6 +279,7 @@ const messages = {
     "backToBottom": "Volver abajo",
     "showEarlierMessages": "Mostrar {{count}} mensajes anteriores",
     "loadEarlierMessages": "Cargar mensajes anteriores",
+    "loadAllEarlierMessages": "All",
     "liveControls": "Controles del lienzo en vivo",
     "liveAutoFollowToggle": "Seguimiento de foco",
     "liveAutoFollowEnable": "Activar el seguimiento de foco para la salida más reciente",

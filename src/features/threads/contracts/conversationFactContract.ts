@@ -74,13 +74,27 @@ const COMPACT_CONTROL_REASONS = [
 
 const COMPACT_CONTROL_TOOL_TYPES = new Set(["modeblocked", "mode_blocked"]);
 
+/** Control markers live in type / title / the first lines — never scan megabyte tool output. */
+export const CONTROL_PROBE_SCAN_LIMIT = 2048;
+
+function takeControlProbeHead(value: string) {
+  if (value.length <= CONTROL_PROBE_SCAN_LIMIT) {
+    return value;
+  }
+  return value.slice(0, CONTROL_PROBE_SCAN_LIMIT);
+}
+
 function normalizeControlProbe(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function resolveControlScanText(rawText: string | null | undefined) {
+  return takeControlProbeHead(rawText ?? "");
+}
+
 function isExactOrControlLine(rawText: string | null | undefined, marker: string) {
   const normalizedMarker = marker.toLowerCase();
-  return (rawText ?? "")
+  return resolveControlScanText(rawText)
     .split(/\r?\n/)
     .map((line) => normalizeControlProbe(line).toLowerCase())
     .some((line) => line === normalizedMarker || line.startsWith(`${normalizedMarker}:`));
@@ -91,7 +105,7 @@ function isDeveloperInstructionsControlObservation(observation: ConversationObse
   if (rawType === "developer_instructions") {
     return true;
   }
-  return (observation.rawText ?? "")
+  return resolveControlScanText(observation.rawText)
     .split(/\r?\n/)
     .map((line) => normalizeControlProbe(line).toLowerCase())
     .some(
@@ -133,13 +147,21 @@ export function isRequestUserInputSettled(state: RequestUserInputState | null | 
   );
 }
 
+function resolveClassifyProbeSource(observation: ConversationObservation): string {
+  return [
+    observation.rawType,
+    takeControlProbeHead(observation.rawText ?? ""),
+    observation.item?.kind,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export function classifyConversationObservation(
   observation: ConversationObservation,
 ): ConversationFact {
   const item = observation.item ?? undefined;
-  const rawProbe = normalizeControlProbe(
-    [observation.rawType, observation.rawText, item?.kind].filter(Boolean).join(" "),
-  );
+  const rawProbe = normalizeControlProbe(resolveClassifyProbeSource(observation));
   const rawProbeLower = rawProbe.toLowerCase();
 
   const base = {

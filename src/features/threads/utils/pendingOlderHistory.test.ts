@@ -7,6 +7,7 @@ import {
   hasPendingOlderHistory,
   rememberFullHistoryForWindow,
   replacePendingOlderHistoryItems,
+  takeAllRemainingOlderHistory,
   takeNextOlderHistoryBatch,
 } from "./pendingOlderHistory";
 
@@ -54,5 +55,29 @@ describe("pendingOlderHistory", () => {
     expect(pending?.displayedCount).toBeGreaterThanOrEqual(8);
     expect(getPendingOlderHistory("shared:2")?.items).toHaveLength(merged.length);
     clearPendingOlderHistory("shared:2");
+  });
+
+  it("defaults the paged helper to 500 items", () => {
+    const items = makeItems(900);
+    rememberFullHistoryForWindow("shared:page", items, 300);
+    const first = takeNextOlderHistoryBatch("shared:page");
+    expect(first).toHaveLength(500);
+    expect(first.map((item) => item.id)).toEqual(
+      items.slice(100, 600).map((item) => item.id),
+    );
+    expect(getPendingOlderHistoryRemainingCount("shared:page")).toBe(100);
+    clearPendingOlderHistory("shared:page");
+  });
+
+  it("drains every remaining older item when asked", () => {
+    const items = makeItems(900);
+    rememberFullHistoryForWindow("shared:all", items, 300);
+    const all = takeAllRemainingOlderHistory("shared:all");
+    expect(all).toHaveLength(600);
+    expect(all.map((item) => item.id)).toEqual(
+      items.slice(0, 600).map((item) => item.id),
+    );
+    expect(hasPendingOlderHistory("shared:all")).toBe(false);
+    clearPendingOlderHistory("shared:all");
   });
 });

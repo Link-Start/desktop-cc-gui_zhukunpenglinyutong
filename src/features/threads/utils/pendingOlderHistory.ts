@@ -1,7 +1,7 @@
 import type { ConversationItem } from "../../../types";
 import {
+  OLDER_HISTORY_REVEAL_PAGE_SIZE,
   THREAD_ITEMS_FIRST_PAINT_COUNT,
-  THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE,
 } from "./dispatchThreadItemsProgressively";
 
 type PendingOlderHistory = {
@@ -49,7 +49,7 @@ export function getPendingOlderHistoryRemainingCount(threadId: string) {
 
 export function takeNextOlderHistoryBatch(
   threadId: string,
-  batchSize = THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE,
+  batchSize = OLDER_HISTORY_REVEAL_PAGE_SIZE,
 ): ConversationItem[] {
   const pending = pendingOlderHistoryByThread.get(threadId);
   if (!pending) {
@@ -68,6 +68,13 @@ export function takeNextOlderHistoryBatch(
     pendingOlderHistoryByThread.delete(threadId);
   }
   return batch;
+}
+
+export function takeAllRemainingOlderHistory(threadId: string): ConversationItem[] {
+  return takeNextOlderHistoryBatch(
+    threadId,
+    Number.MAX_SAFE_INTEGER,
+  );
 }
 
 export function replacePendingOlderHistoryItems(

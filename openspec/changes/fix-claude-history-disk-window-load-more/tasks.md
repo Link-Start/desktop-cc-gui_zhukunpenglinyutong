@@ -18,7 +18,7 @@
 
 ## 4. 滑顶同一路径 + 视口恢复
 
-- [x] 4.1 [P0][depends:3.3] `handleCanvasScroll` 在接近顶部且（pending 或 hasMore）且非 in-flight 时走 `tryLoadOlderHistoryPage`。Input: `MessagesCore.tsx` L1419–1421。Output: 滑顶与芯片同一 requester；回顶按钮仍只 `scrollTo(0)`。Validation: scroll handler 单测或抽取纯函数测阈值。
+- [x] 4.1 [P0][depends:3.3] **已回写（2026-08-18）**：`handleCanvasScroll` 不再因接近顶部自动翻页。Input: `MessagesCore.tsx` scroll handler。Output: 上翻只更新锚点；芯片 / All 才走 `tryLoadOlderHistoryPage`；回顶按钮仍只 `scrollTo(0)`。Validation: 生产路径无 `shouldRequestOlderHistoryNearTop`；`isNewTailUserMessage` 单测覆盖 prepend 不吸底。
 - [x] 4.2 [P0][depends:3.1] 磁盘页 prepend 复用 expansion snapshot，禁止吸底。Input: `readHistoryExpansionScrollSnapshot` / `restoreHistoryExpansionScrollPosition`。Output: 磁盘完成前/后按同一套恢复；先 `pauseFollow`。Validation: 现有 history-expansion 测试不回退；补磁盘页 restore 用例。
 
 ## 5. 回归与手测

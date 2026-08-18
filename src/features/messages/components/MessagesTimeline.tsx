@@ -112,6 +112,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     onConversationDetailHydrationRequest,
     onConversationLightweightModeEnable,
     onShowAllHistoryItems,
+    onLoadAllEarlierHistory,
   } = interactions;
   const {
     codeBlockCopyUseModifier,
@@ -579,18 +580,31 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           visible={shouldShowConversationLightweightPrompt}
         />
         {(visibleCollapsedHistoryItemCount > 0 || hasUncountedEarlierHistory) && (
-          <div
-            className="messages-collapsed-indicator"
-            {...(visibleCollapsedHistoryItemCount > 0
-              ? { "data-collapsed-count": visibleCollapsedHistoryItemCount }
-              : { "data-has-uncounted-earlier": "true" })}
-            onClick={onShowAllHistoryItems}
-          >
-            {visibleCollapsedHistoryItemCount > 0
-              ? t("messages.showEarlierMessages", {
-                  count: visibleCollapsedHistoryItemCount,
-                })
-              : t("messages.loadEarlierMessages")}
+          <div className="messages-collapsed-indicator-row">
+            <button
+              type="button"
+              className="messages-collapsed-indicator"
+              {...(visibleCollapsedHistoryItemCount > 0
+                ? { "data-collapsed-count": visibleCollapsedHistoryItemCount }
+                : { "data-has-uncounted-earlier": "true" })}
+              onClick={onShowAllHistoryItems}
+            >
+              {visibleCollapsedHistoryItemCount > 0
+                ? t("messages.showEarlierMessages", {
+                    count: visibleCollapsedHistoryItemCount,
+                  })
+                : t("messages.loadEarlierMessages")}
+            </button>
+            {visibleCollapsedHistoryItemCount > 0 ? (
+              <button
+                type="button"
+                className="messages-collapsed-indicator-all"
+                data-testid="messages-load-all-earlier"
+                onClick={onLoadAllEarlierHistory}
+              >
+                {t("messages.loadAllEarlierMessages")}
+              </button>
+            ) : null}
           </div>
         )}
         <TimelineProjectionViewport

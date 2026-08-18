@@ -91,6 +91,19 @@ import { createOlderHistoryRequester } from "../utils/createOlderHistoryRequeste
 import { publishThreadDiskHistoryWindows } from "../utils/threadDiskHistoryWindowStore";
 import { notifyOlderHistoryBeforePrepend } from "../utils/olderHistoryScrollRestoreBridge";
 
+function buildHistorySnapshotPaintKey(snapshot: {
+  threadId?: string;
+  items: Array<{ id?: string }>;
+}): string {
+  const items = snapshot.items;
+  return [
+    snapshot.threadId ?? "",
+    String(items.length),
+    items[0]?.id ?? "",
+    items[items.length - 1]?.id ?? "",
+  ].join(":");
+}
+
 export type ResumeThreadForWorkspaceOptions = {
   preferLocalCodexHistory?: boolean;
 };
@@ -466,6 +479,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       }
       if (useUnifiedHistoryLoader) {
         // hydrateHistorySnapshot is assigned below; Shared soft-timeout merge calls it late.
+        let phaseAPaintedSnapshotKey: string | null = null;
         let hydrateHistorySnapshot: (
           effectiveThreadId: string,
           snapshot: Awaited<
@@ -500,6 +514,12 @@ export function useThreadActionsResumeThreadForWorkspace(
               // so we do not mark loaded before projection settles.
               if (!isCurrentResumeRequest()) {
                 return;
+              }
+              // Stamp before the first await so load() cannot re-hydrate the
+              // same V0 on the same turn (projection skip / fast return).
+              if (phaseASnapshot.items.length > 0) {
+                phaseAPaintedSnapshotKey =
+                  buildHistorySnapshotPaintKey(phaseASnapshot);
               }
               void (async () => {
                 if (phaseASnapshot.items.length > 0) {
@@ -759,7 +779,9 @@ export function useThreadActionsResumeThreadForWorkspace(
           if (!isCurrentResumeRequest()) {
             return firstSnapshot;
           }
-          if (hydrateHistory(firstSnapshot).items.length > 0) {
+          // Raw items already mean this snapshot is not an empty-loader miss.
+          // Do not classify the full transcript just to decide whether to retry.
+          if (firstSnapshot.items.length > 0) {
             return firstSnapshot;
           }
           if (targetThreadId.startsWith("shared:")) {
@@ -1144,6 +1166,12 @@ export function useThreadActionsResumeThreadForWorkspace(
           const snapshot =
             await loadHistorySnapshotWithBoundedEmptyRecovery(threadId);
           if (!isCurrentResumeRequest()) {
+            return threadId;
+          }
+          if (
+            phaseAPaintedSnapshotKey &&
+            buildHistorySnapshotPaintKey(snapshot) === phaseAPaintedSnapshotKey
+          ) {
             return threadId;
           }
           await hydrateHistorySnapshot(threadId, snapshot);

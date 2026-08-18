@@ -952,6 +952,75 @@ describe("conversationAssembler", () => {
     expect(state.meta.threadId).toBe("claude:session-1");
   });
 
+  it("hydrates thousands of unique history items in source order", () => {
+    const itemCount = 3000;
+    const items = Array.from({ length: itemCount }, (_, index) =>
+      index % 2 === 0
+        ? {
+            id: `user-${index}`,
+            kind: "message" as const,
+            role: "user" as const,
+            text: `unique user prompt ${index}`,
+          }
+        : {
+            id: `assistant-${index}`,
+            kind: "message" as const,
+            role: "assistant" as const,
+            text: `unique assistant reply ${index}`,
+          },
+    );
+    const snapshot: NormalizedHistorySnapshot = {
+      engine: "claude",
+      workspaceId: "ws-large",
+      threadId: "claude:session-large",
+      items,
+      plan: null,
+      userInputQueue: [],
+      meta: {
+        workspaceId: "ws-large",
+        threadId: "claude:session-large",
+        engine: "claude",
+        activeTurnId: null,
+        isThinking: false,
+        heartbeatPulse: null,
+        historyRestoredAtMs: null,
+      },
+      fallbackWarnings: [],
+    };
+
+    const state = hydrateHistory(snapshot);
+
+    expect(state.items).toHaveLength(itemCount);
+    expect(state.items[0]?.id).toBe("user-0");
+    expect(state.items[itemCount - 1]?.id).toBe(`assistant-${itemCount - 1}`);
+    expect(state.items.map((item) => item.id)).toEqual(
+      items.map((item) => item.id),
+    );
+  });
+
+  it("keeps live upsert immutable and separate from batch hydrate", () => {
+    const previous = createState();
+    const next = appendEvent(
+      previous,
+      createEvent({
+        operation: "itemCompleted",
+        item: {
+          id: "live-1",
+          kind: "message",
+          role: "assistant",
+          text: "live reply",
+        },
+      }),
+    );
+
+    expect(next.items).not.toBe(previous.items);
+    expect(previous.items).toHaveLength(0);
+    expect(next.items).toHaveLength(1);
+    expect(next.items[0]).toEqual(
+      expect.objectContaining({ id: "live-1", text: "live reply" }),
+    );
+  });
+
   it("hydrates history without collapsing same-id items across different kinds", () => {
     const snapshot: NormalizedHistorySnapshot = {
       engine: "claude" as const,

@@ -25,10 +25,22 @@ export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
   copyTextByAssistantId: Map<string, string>;
   latestFinalAssistantMessageId: string | null;
+  latestUserMessageId: string | null;
   // 最近一条用户消息之后尚无最终回复 = 有新回合正在进行中。
   hasPendingUserTurn: boolean;
   userMessageCount: number;
 };
+
+/** 只有尾部最新用户消息 id 变了才算新发送。prepend 旧历史会涨 count，不得当发送。 */
+export function isNewTailUserMessage(
+  previousLatestUserMessageId: string | null,
+  nextLatestUserMessageId: string | null,
+): boolean {
+  return (
+    nextLatestUserMessageId != null &&
+    nextLatestUserMessageId !== previousLatestUserMessageId
+  );
+}
 
 export type HistoryExpansionScrollSnapshot = {
   scrollHeight: number;
@@ -252,6 +264,7 @@ export function buildMessageActionTargets(items: ConversationItem[]): MessageAct
     targetByAssistantId,
     copyTextByAssistantId,
     latestFinalAssistantMessageId,
+    latestUserMessageId,
     hasPendingUserTurn,
     userMessageCount,
   };

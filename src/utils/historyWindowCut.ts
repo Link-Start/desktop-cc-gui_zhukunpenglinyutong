@@ -18,6 +18,8 @@ export function turnIdOf(item: ConversationItem | undefined): string | null {
  * live 行 / 待审批行天然在最新尾部窗口内；审批行由独立 store 渲染，不经 items。
  *
  * 本函数同时服务 DOM 800 窗与内存首屏 300 窗，禁止在调用方复制 while 回退。
+ * 首屏可传 `maxDisplayed`：普通 turn 仍回退到段首，超大 turn 不得把整份
+ * transcript 打进第一次 store 写入。`activeTurnId` 钉住仍可超过该顶。
  *
  * @returns 收起条数；0 = 不裁。
  */
@@ -26,11 +28,13 @@ export function resolveHistoryWindowCutIndex({
   windowSize,
   revealedItemCount,
   activeTurnId,
+  maxDisplayed,
 }: {
   items: readonly ConversationItem[];
   windowSize: number;
   revealedItemCount: number;
   activeTurnId: string | null;
+  maxDisplayed?: number;
 }): number {
   if (windowSize <= 0) {
     return 0;
@@ -48,8 +52,13 @@ export function resolveHistoryWindowCutIndex({
       cut = firstActiveTurnIndex;
     }
   }
+  const retreatFloor =
+    maxDisplayed !== undefined && maxDisplayed > 0
+      ? Math.max(0, items.length - maxDisplayed)
+      : 0;
   // 不把同一 turn 切成两半：切口回退到该 turn 段首（段内全保留）。
-  while (cut > 0) {
+  // 首屏硬顶：回退不得越过 retreatFloor；直播 activeTurn 钉住可低于该线。
+  while (cut > retreatFloor) {
     const turnId = turnIdOf(items[cut]);
     if (turnId && turnIdOf(items[cut - 1]) === turnId) {
       cut -= 1;

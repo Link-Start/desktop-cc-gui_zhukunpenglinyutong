@@ -209,5 +209,13 @@ describe("useThreadActions Shared history", () => {
       await resumePromise;
     });
     expect(resumeThread).not.toHaveBeenCalled();
+    const setThreadItemsCalls = dispatch.mock.calls.filter(
+      (call) =>
+        typeof call[0] === "object" &&
+        call[0] !== null &&
+        "type" in call[0] &&
+        call[0].type === "setThreadItems",
+    );
+    expect(setThreadItemsCalls).toHaveLength(1);
   });
 });

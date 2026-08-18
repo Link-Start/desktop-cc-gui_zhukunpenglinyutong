@@ -279,6 +279,7 @@ const messages = {
     "backToBottom": "नीचे वापस जाएँ",
     "showEarlierMessages": "{{count}} पुराने संदेश दिखाएँ",
     "loadEarlierMessages": "पुराने संदेश लोड करें",
+    "loadAllEarlierMessages": "All",
     "liveControls": "लाइव कैनवास नियंत्रण",
     "liveAutoFollowToggle": "फ़ोकस फ़ॉलो",
     "liveAutoFollowEnable": "नवीनतम आउटपुट के लिए फ़ोकस फ़ॉलो सक्षम करें",

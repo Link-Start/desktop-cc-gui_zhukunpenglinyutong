@@ -138,6 +138,7 @@ export type TimelineInteractionModel = {
   onRetryHistory?: () => void;
   onRewindFromMessage?: (messageId: string) => void;
   onShowAllHistoryItems: () => void;
+  onLoadAllEarlierHistory: () => void;
   onThreadRecoveryFork?: () =>
     | Promise<RuntimeReconnectRecoveryCallbackResult>
     | RuntimeReconnectRecoveryCallbackResult;

@@ -36,7 +36,7 @@
 #### Scenario: memory pending is consumed before any disk before request
 
 - **WHEN** 同一 `threadId` 同时存在内存 pending 与磁盘 `hasMore`
-- **AND** 用户激活芯片或滑近顶部触发同一 requester
+- **AND** 用户激活芯片或 All 触发同一 requester
 - **THEN** 本次请求 MUST 只 `prependThreadItems` 内存 batch
 - **AND** 系统 MUST NOT 在同一次请求里调用 `loadClaudeSession({ before })`
 
@@ -57,7 +57,7 @@
 - **AND** 内存 pending 已空
 - **AND** DOM 历史窗不再裁剪
 - **THEN** 芯片 MUST 消失
-- **AND** 后续滑顶 / 点击 MUST NOT 再打 `before` 请求
+- **AND** 后续点击 MUST NOT 再打 `before` 请求
 
 ### Requirement: Disk Page Requests MUST Be In-Flight Locked, Cancellable, And Retryable
 
@@ -66,7 +66,7 @@
 #### Scenario: repeated clicks while a disk page is in flight do not double-load
 
 - **WHEN** 一次 `loadClaudeSession({ before })` 仍在飞行
-- **AND** 用户再次点击芯片或滑顶再次触发 requester
+- **AND** 用户再次点击芯片或 All 再次触发 requester
 - **THEN** 第二次请求 MUST 被拒绝或合并为同一 in-flight
 - **AND** 系统 MUST NOT 对同一 cursor 发出第二份磁盘请求
 
@@ -86,17 +86,17 @@
 - **AND** 芯片 MUST 仍然可见
 - **AND** 用户再次触发 MUST 允许重试同一 cursor
 
-### Requirement: Near-Top Scroll MUST Reuse The Same Older-History Path
+### Requirement: Near-Top Scroll MUST NOT Auto-Load Older History
 
-滑近幕布顶部 MUST 触发与芯片相同的 `requestOlderHistory`，不得另开第二条加载通道。回顶按钮可以只滚到顶并让 scroll handler 接着翻，或显式触发一次同一 requester。
+滑近幕布顶部 MUST NOT 触发 `requestOlderHistory`。翻页只走芯片 / All 显式点击。回顶按钮可以只滚到 `scrollTop = 0`，不得接着翻页。芯片与磁盘页仍走同一 requester，不得另开第二条加载通道。
 
-#### Scenario: scrolling near the top loads the next older page through the shared requester
+#### Scenario: scrolling near the top does not load the next older page
 
 - **WHEN** 幕布 `scrollTop` 接近 0
 - **AND** 存在内存 pending 或磁盘 `hasMore`
 - **AND** 当前没有 in-flight 磁盘页
-- **THEN** 系统 MUST 调用与芯片相同的 older-history requester
-- **AND** MUST NOT 另起平行的 loader / IPC 路径
+- **THEN** 系统 MUST NOT 调用 older-history requester
+- **AND** 芯片 / All 仍可显式走同一 requester
 
 #### Scenario: scrolling near the top with nothing older does not request
 

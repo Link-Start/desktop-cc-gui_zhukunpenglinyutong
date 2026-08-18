@@ -4,12 +4,10 @@ import type { ConversationItem } from "../../../../types";
 import {
   DEFAULT_HISTORY_WINDOW_SIZE,
   HISTORY_WINDOW_SIZE_FLAG_KEY,
-  NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX,
   __resetHistoryWindowSizeCacheForTests,
   readHistoryWindowSize,
   resolveEarlierHistoryChip,
   resolveHistoryWindowCutIndex,
-  shouldRequestOlderHistoryNearTop,
 } from "./messagesHistoryWindow";
 
 function userMessage(id: string, turnId?: string): ConversationItem {
@@ -161,6 +159,73 @@ describe("resolveHistoryWindowCutIndex", () => {
       }),
     ).toBe(200);
   });
+
+  it("stops turn retreat at maxDisplayed unless the active turn is pinned", () => {
+    const items: ConversationItem[] = Array.from({ length: 2000 }, (_, index) =>
+      assistantMessage(`mega-${index}`, "mega-turn"),
+    );
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 300,
+        revealedItemCount: 0,
+        activeTurnId: null,
+        maxDisplayed: 400,
+      }),
+    ).toBe(1600);
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 300,
+        revealedItemCount: 0,
+        activeTurnId: "mega-turn",
+        maxDisplayed: 400,
+      }),
+    ).toBe(0);
+  });
+
+  it("keeps a prepended page inside the window when reveal budget is retained", () => {
+    const items: ConversationItem[] = Array.from({ length: 880 }, (_, index) =>
+      assistantMessage(`row-${index}`),
+    );
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 800,
+        revealedItemCount: 80,
+        activeTurnId: null,
+      }),
+    ).toBe(0);
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 800,
+        revealedItemCount: 0,
+        activeTurnId: null,
+      }),
+    ).toBe(80);
+  });
+
+  it("still retreats a small turn that stays within maxDisplayed", () => {
+    const items: ConversationItem[] = [
+      ...Array.from({ length: 250 }, (_, index) => userMessage(`u-${index}`)),
+      ...Array.from({ length: 20 }, (_, index) =>
+        assistantMessage(`turn-${index}`, "turn-cut"),
+      ),
+      ...Array.from({ length: 290 }, (_, index) =>
+        assistantMessage(`tail-${index}`),
+      ),
+    ];
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 300,
+        revealedItemCount: 0,
+        activeTurnId: null,
+        maxDisplayed: 400,
+      }),
+    ).toBe(250);
+  });
 });
 
 describe("resolveEarlierHistoryChip", () => {
@@ -204,18 +269,4 @@ describe("resolveEarlierHistoryChip", () => {
   });
 });
 
-describe("shouldRequestOlderHistoryNearTop", () => {
-  it("requests when scrollTop is near zero", () => {
-    expect(shouldRequestOlderHistoryNearTop(0)).toBe(true);
-    expect(
-      shouldRequestOlderHistoryNearTop(NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX - 1),
-    ).toBe(true);
-  });
 
-  it("does not request when the viewport is away from the top", () => {
-    expect(
-      shouldRequestOlderHistoryNearTop(NEAR_TOP_OLDER_HISTORY_THRESHOLD_PX),
-    ).toBe(false);
-    expect(shouldRequestOlderHistoryNearTop(240)).toBe(false);
-  });
-});

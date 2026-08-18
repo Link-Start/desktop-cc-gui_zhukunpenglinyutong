@@ -58,11 +58,13 @@
 
 切走：generation++，清该 thread 的 in-flight。不要用全局单飞锁误伤切回来的重试。
 
-### D4. 滑近顶部复用芯片路径，回顶只滚到 0
+### D4. 上翻不自动翻页（2026-08-18 用户反馈回写）
 
-**选择**：`handleCanvasScroll` 在 `scrollTop < threshold`（建议 24–48px，与现有锚点更新同回调，不新开 rAF 风暴）且（pending 或 hasMore）且非 in-flight 时调用 `tryLoadOlderHistoryPage()`。回顶按钮保持 `scrollTo({ top: 0 })`，由 scroll handler 接着翻。
+原选择是滑顶自动走芯片同一 requester。手测后：到顶自动翻页，翻完视口被钉到底，用户必须重新往上拉。
 
-**备选**：回顶显式触发 requester。可做，但不是必须；先让 scroll 路径覆盖，避免双触发。
+**现行选择**：`handleCanvasScroll` 只更新锚点，MUST NOT 在 `scrollTop` 接近 0 时调用 `tryLoadOlderHistoryPage`。回顶按钮只 `scrollTo({ top: 0 })`，不得接着翻页。翻页只走芯片 / All。prepend 保视口仍走 expansion snapshot；send-boundary 不得把涨 `userMessageCount` 当成新发送。
+
+**备选**：保留滑顶自动翻、只修吸底。否决：用户明确要求上翻不自动翻页。
 
 ### D5. 不改 loader limit，只消费已有 meta
 

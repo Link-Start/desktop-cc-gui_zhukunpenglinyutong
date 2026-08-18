@@ -29,7 +29,10 @@ function createHarness(options?: {
     { cursor: string; epoch: number }
   >();
   let epoch = options?.epoch ?? 0;
-  const beforePrepend: string[] = [];
+  const beforePrepend: Array<{
+    threadId: string;
+    prependedCount?: number;
+  }> = [];
   const loadPage =
     options?.loadPage ??
     vi.fn().mockResolvedValue({
@@ -51,8 +54,11 @@ function createHarness(options?: {
     getDiskPageEpoch: () => epoch,
     inFlightByThread,
     loadPage,
-    notifyBeforePrepend: (threadId) => {
-      beforePrepend.push(threadId);
+    notifyBeforePrepend: (threadId, detail) => {
+      beforePrepend.push({
+        threadId,
+        prependedCount: detail?.prependedCount,
+      });
     },
   });
 
@@ -100,6 +106,75 @@ describe("createOlderHistoryRequester", () => {
         nextCursor: "80",
       },
     ]);
+    expect(harness.beforePrepend).toEqual([
+      { threadId: THREAD_ID, prependedCount: 2 },
+    ]);
+  });
+
+  it("prepends one viewport page of memory pending, not the full remainder", () => {
+    const items = Array.from({ length: 1200 }, (_, index) =>
+      userMessage(`hist-${index}`),
+    );
+    rememberFullHistoryForWindow(THREAD_ID, items, 300);
+    const harness = createHarness({
+      window: { hasMore: false, nextCursor: null },
+    });
+
+    expect(harness.requester(THREAD_ID)).toBe(true);
+    expect(harness.loadPage).not.toHaveBeenCalled();
+    const prepend = harness.dispatched[0] as {
+      type: string;
+      items: ConversationItem[];
+    };
+    expect(prepend.type).toBe("prependThreadItems");
+    expect(prepend.items).toHaveLength(500);
+    expect(prepend.items[0]?.id).toBe("hist-400");
+    expect(prepend.items[499]?.id).toBe("hist-899");
+    expect(harness.beforePrepend).toEqual([
+      { threadId: THREAD_ID, prependedCount: 500 },
+    ]);
+    expect(harness.dispatched[1]).toEqual({
+      type: "setThreadHistoryWindow",
+      threadId: THREAD_ID,
+      hasMore: true,
+      nextCursor: "memory",
+    });
+  });
+
+  it("drains every remaining memory item when All is requested", () => {
+    const items = Array.from({ length: 1200 }, (_, index) =>
+      userMessage(`hist-${index}`),
+    );
+    rememberFullHistoryForWindow(THREAD_ID, items, 300);
+    const harness = createHarness({
+      window: { hasMore: true, nextCursor: "80" },
+    });
+
+    expect(harness.requester(THREAD_ID, { drainAll: true })).toBe(true);
+    expect(harness.loadPage).not.toHaveBeenCalled();
+    const prepend = harness.dispatched[0] as {
+      type: string;
+      items: ConversationItem[];
+    };
+    expect(prepend.items).toHaveLength(900);
+    expect(prepend.items[0]?.id).toBe("hist-0");
+    expect(prepend.items[899]?.id).toBe("hist-899");
+    expect(harness.dispatched[1]).toEqual({
+      type: "setThreadHistoryWindow",
+      threadId: THREAD_ID,
+      hasMore: true,
+      nextCursor: "80",
+    });
+  });
+
+  it("does not start a disk page when All finds no memory remainder", () => {
+    const harness = createHarness({
+      window: { hasMore: true, nextCursor: "80" },
+    });
+
+    expect(harness.requester(THREAD_ID, { drainAll: true })).toBe(false);
+    expect(harness.loadPage).not.toHaveBeenCalled();
+    expect(harness.dispatched).toEqual([]);
   });
 
   it("loads the previous disk page when pending is empty", async () => {
@@ -121,7 +196,9 @@ describe("createOlderHistoryRequester", () => {
         "setThreadHistoryWindow",
       ]);
     });
-    expect(harness.beforePrepend).toEqual([THREAD_ID]);
+    expect(harness.beforePrepend).toEqual([
+      { threadId: THREAD_ID, prependedCount: 1 },
+    ]);
     expect(harness.dispatched[0]).toEqual({
       type: "prependThreadItems",
       threadId: THREAD_ID,

@@ -2,8 +2,10 @@ import type { ConversationItem } from "../../../types";
 import { CLAUDE_UI_HISTORY_WINDOW } from "../loaders/claudeHistoryLoader";
 import {
   hasPendingOlderHistory,
+  takeAllRemainingOlderHistory,
   takeNextOlderHistoryBatch,
 } from "./pendingOlderHistory";
+import type { OlderHistoryRequestOptions } from "./olderHistoryRequestBridge";
 import { notifyOlderHistoryBeforePrepend } from "./olderHistoryScrollRestoreBridge";
 import {
   loadClaudeOlderHistoryPage,
@@ -47,7 +49,10 @@ export type OlderHistoryRequesterDeps = {
   loadPage?: (
     input: Parameters<typeof loadClaudeOlderHistoryPage>[0],
   ) => Promise<LoadClaudeOlderHistoryPageResult>;
-  notifyBeforePrepend?: (threadId: string) => void;
+  notifyBeforePrepend?: (
+    threadId: string,
+    detail?: { prependedCount: number },
+  ) => void;
 };
 
 function isConsumableDiskCursor(cursor: string | null | undefined): cursor is string {
@@ -77,19 +82,21 @@ function resolveWindowAfterMemoryDrain(
 
 export function createOlderHistoryRequester(
   deps: OlderHistoryRequesterDeps,
-): (threadId: string) => boolean {
+): (threadId: string, options?: OlderHistoryRequestOptions) => boolean {
   const loadPage = deps.loadPage ?? loadClaudeOlderHistoryPage;
   const notifyBeforePrepend =
     deps.notifyBeforePrepend ?? notifyOlderHistoryBeforePrepend;
 
-  return (threadId: string): boolean => {
+  return (threadId: string, options?: OlderHistoryRequestOptions): boolean => {
     if (!threadId) {
       return false;
     }
 
-    const memoryBatch = takeNextOlderHistoryBatch(threadId);
+    const memoryBatch = options?.drainAll
+      ? takeAllRemainingOlderHistory(threadId)
+      : takeNextOlderHistoryBatch(threadId);
     if (memoryBatch.length > 0) {
-      notifyBeforePrepend(threadId);
+      notifyBeforePrepend(threadId, { prependedCount: memoryBatch.length });
       deps.dispatch({
         type: "prependThreadItems",
         threadId,
@@ -106,6 +113,11 @@ export function createOlderHistoryRequester(
         nextCursor: nextWindow.nextCursor,
       });
       return true;
+    }
+
+    // All only drains memory. Disk pages stay on the paged chip.
+    if (options?.drainAll) {
+      return false;
     }
 
     if (deps.inFlightByThread.has(threadId)) {
@@ -146,7 +158,7 @@ export function createOlderHistoryRequester(
         if (!flight || flight.epoch !== epoch || flight.cursor !== cursor) {
           return;
         }
-        notifyBeforePrepend(threadId);
+        notifyBeforePrepend(threadId, { prependedCount: page.items.length });
         if (page.items.length > 0) {
           deps.dispatch({
             type: "prependThreadItems",

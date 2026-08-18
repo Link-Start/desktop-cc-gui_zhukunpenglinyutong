@@ -1,4 +1,11 @@
-type OlderHistoryRequester = (threadId: string) => boolean;
+export type OlderHistoryRequestOptions = {
+  drainAll?: boolean;
+};
+
+type OlderHistoryRequester = (
+  threadId: string,
+  options?: OlderHistoryRequestOptions,
+) => boolean;
 
 let olderHistoryRequester: OlderHistoryRequester | null = null;
 
@@ -8,9 +15,12 @@ export function setOlderHistoryRequester(
   olderHistoryRequester = requester;
 }
 
-export function requestOlderHistory(threadId: string): boolean {
+export function requestOlderHistory(
+  threadId: string,
+  options?: OlderHistoryRequestOptions,
+): boolean {
   if (!threadId) {
     return false;
   }
-  return olderHistoryRequester?.(threadId) === true;
+  return olderHistoryRequester?.(threadId, options) === true;
 }

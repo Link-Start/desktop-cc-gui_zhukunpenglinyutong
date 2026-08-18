@@ -73,16 +73,12 @@ import {
   shouldDisplayWorkingActivityLabel,
   shouldHideClaudeReasoningModule,
   STREAMING_VISIBLE_WINDOW,
-  VISIBLE_MESSAGE_WINDOW,
 } from "../utils/messagesRenderUtils";
-import {
-  readHistoryWindowSize,
-  resolveEarlierHistoryChip,
-  shouldRequestOlderHistoryNearTop,
-} from "../orchestration/presentation/messagesHistoryWindow";
+import { resolveEarlierHistoryChip } from "../orchestration/presentation/messagesHistoryWindow";
 import {
   buildMessageActionTargets,
   buildMessagesScrollKey,
+  isNewTailUserMessage,
   resolveActiveUserInputRequest,
   resolveActiveMessageAnchor,
   resolveCollapsedTimelineItems,
@@ -92,6 +88,7 @@ import {
   type HistoryExpansionScrollSnapshot,
   type MessageActionTargets,
 } from "../orchestration/presentation/messagesViewModel";
+import { OLDER_HISTORY_REVEAL_PAGE_SIZE } from "../../threads/utils/dispatchThreadItemsProgressively";
 import {
   getPendingOlderHistoryRemainingCount,
   hasPendingOlderHistory,
@@ -283,7 +280,7 @@ export const MessagesCore = memo(function MessagesCore({
     revealNextHistoryPage,
     revealedHistoryItemCount,
     showAllHistoryItems,
-  } = useMessagesHistoryWindow({ firstItemId: items[0]?.id ?? null });
+  } = useMessagesHistoryWindow({ scopeKey: renderScopeKey });
   const renderStartedAt =
     typeof performance === "undefined" ? 0 : performance.now();
   const messageNodeByIdRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -444,7 +441,7 @@ export const MessagesCore = memo(function MessagesCore({
     isWorking,
     pendingWorkingStartCovered: false,
     renderScopeKey,
-    userMessageCount: messageActionTargets.userMessageCount,
+    latestUserMessageId: messageActionTargets.latestUserMessageId,
   });
   const liveTailWorkingSet = useMemo(
     () =>
@@ -561,7 +558,7 @@ export const MessagesCore = memo(function MessagesCore({
     () => (threadId ? hasThreadDiskHistoryMore(threadId) : false),
     () => false,
   );
-  const tryLoadOlderHistoryPage = useCallback(() => {
+  const tryLoadOlderHistoryPage = useCallback((drainAll = false) => {
     if (!threadId) {
       return false;
     }
@@ -573,7 +570,10 @@ export const MessagesCore = memo(function MessagesCore({
     olderHistoryRestoreRef.current = readHistoryExpansionScrollSnapshot(
       containerRef.current,
     );
-    const applied = requestOlderHistory(threadId);
+    const applied = requestOlderHistory(
+      threadId,
+      drainAll ? { drainAll: true } : undefined,
+    );
     if (!applied) {
       olderHistoryRestoreRef.current = null;
       return false;
@@ -594,7 +594,7 @@ export const MessagesCore = memo(function MessagesCore({
     restoreHistoryExpansionScrollPosition(container, snapshot);
   }, [containerRef, olderHistoryRestoreToken]);
   useEffect(() => {
-    setOlderHistoryBeforePrependListener((targetThreadId) => {
+    setOlderHistoryBeforePrependListener((targetThreadId, detail) => {
       if (!threadId || targetThreadId !== threadId) {
         return;
       }
@@ -602,12 +602,15 @@ export const MessagesCore = memo(function MessagesCore({
       olderHistoryRestoreRef.current = readHistoryExpansionScrollSnapshot(
         containerRef.current,
       );
+      if (detail && detail.prependedCount > 0) {
+        revealNextHistoryPage(detail.prependedCount);
+      }
       setOlderHistoryRestoreToken((token) => token + 1);
     });
     return () => {
       setOlderHistoryBeforePrependListener(null);
     };
-  }, [containerRef, pauseFollow, threadId]);
+  }, [containerRef, pauseFollow, revealNextHistoryPage, threadId]);
   const historyOpenedScopeRef = useRef<string | null>(null);
   const {
     closeFileLinkMenu,
@@ -1373,7 +1376,7 @@ export const MessagesCore = memo(function MessagesCore({
       threadId,
     ],
   );
-  // 历史分页（03 号清单）：chip 点击 = 按页多展开一页，屏幕不跳。
+  // 历史展开：chip 一次挂 500，旁边 All 抽干内存余量。
   // 快照 → 展开 → useLayoutEffect 按 scrollHeight 增量恢复 scrollTop；
   // 锚点思路对照 deepseek-harness ChatView.tsx:237-249（prepend 后相对 top 恢复）。
   const pendingHistoryPageScrollRef = useRef<{
@@ -1393,14 +1396,28 @@ export const MessagesCore = memo(function MessagesCore({
     }
     // 展开期间暂停钉底，防止 RO/高度变化把视口拽回底；用户阅读旧历史时保持释放。
     pauseFollow();
-    // 页大小 = 窗口大小；flag 关闭时窗口即 VISIBLE_MESSAGE_WINDOW（等价一次全展）。
-    const flagWindowSize = readHistoryWindowSize();
-    revealNextHistoryPage(
-      flagWindowSize > 0
-        ? Math.min(flagWindowSize, VISIBLE_MESSAGE_WINDOW)
-        : VISIBLE_MESSAGE_WINDOW,
-    );
+    revealNextHistoryPage(OLDER_HISTORY_REVEAL_PAGE_SIZE);
   }, [containerRef, pauseFollow, revealNextHistoryPage, tryLoadOlderHistoryPage]);
+  const handleLoadAllEarlierHistory = useCallback(() => {
+    if (tryLoadOlderHistoryPage(true)) {
+      revealAllHistoryItems("manual");
+      return;
+    }
+    const container = containerRef.current;
+    if (container) {
+      pendingHistoryPageScrollRef.current = {
+        scrollHeight: container.scrollHeight,
+        scrollTop: container.scrollTop,
+      };
+    }
+    pauseFollow();
+    revealAllHistoryItems("manual");
+  }, [
+    containerRef,
+    pauseFollow,
+    revealAllHistoryItems,
+    tryLoadOlderHistoryPage,
+  ]);
   useLayoutEffect(() => {
     const snapshot = pendingHistoryPageScrollRef.current;
     if (!snapshot) {
@@ -1435,8 +1452,8 @@ export const MessagesCore = memo(function MessagesCore({
       return;
     }
     if (pendingExpansionMode === "manual") {
+      // 只停跟随。视口由 expansion snapshot 保住阅读位置，禁止跳顶/跳底。
       pauseFollow();
-      container.scrollTop = 0;
     }
     scheduleAnchorUpdate("sync");
   }, [
@@ -1449,18 +1466,10 @@ export const MessagesCore = memo(function MessagesCore({
     showAllHistoryItems,
   ]);
   // 跟随/释放/re-arm 全部由 useMessagesCanvasFollow 的容器监听自持；
-  // 这里的 onScroll 只驱动锚点轨道高亮。
+  // 这里的 onScroll 只驱动锚点轨道高亮。上翻到顶不自动翻页，只点芯片 / All。
   const handleCanvasScroll = useCallback(() => {
     scheduleAnchorUpdate("scroll");
-    const container = containerRef.current;
-    if (
-      !container ||
-      !shouldRequestOlderHistoryNearTop(container.scrollTop)
-    ) {
-      return;
-    }
-    tryLoadOlderHistoryPage();
-  }, [containerRef, scheduleAnchorUpdate, tryLoadOlderHistoryPage]);
+  }, [scheduleAnchorUpdate]);
   // ScrollControl 浮标：回顶 / 回底均为用户主动导航，对称 smooth；
   // 回底结束后再硬钉一次并 re-arm follow。send / history-open 仍走瞬时 resumeFollowAndPin。
   const handleScrollControlRequest = useCallback(
@@ -1646,14 +1655,18 @@ export const MessagesCore = memo(function MessagesCore({
         isWorking,
         pendingWorkingStartCovered: false,
         renderScopeKey,
-        userMessageCount: messageActionTargets.userMessageCount,
+        latestUserMessageId: messageActionTargets.latestUserMessageId,
       };
       return;
     }
-    // 对齐 jetbrains useMessageSender：任何新用户气泡都强制清暂停并回底。
+    // 对齐 jetbrains useMessageSender：尾部新用户气泡才回底。
+    // prepend 旧历史会涨 userMessageCount，不得当发送。
     const userMessageAdded =
       !previous.isHistoryLoading &&
-      messageActionTargets.userMessageCount > previous.userMessageCount;
+      isNewTailUserMessage(
+        previous.latestUserMessageId,
+        messageActionTargets.latestUserMessageId,
+      );
     const enteredWorking = !previous.isWorking && isWorking;
     const exitedWorking = previous.isWorking && !isWorking;
     let pendingWorkingStartCovered = previous.pendingWorkingStartCovered;
@@ -1681,13 +1694,13 @@ export const MessagesCore = memo(function MessagesCore({
       isWorking,
       pendingWorkingStartCovered,
       renderScopeKey,
-      userMessageCount: messageActionTargets.userMessageCount,
+      latestUserMessageId: messageActionTargets.latestUserMessageId,
     };
   }, [
     isHistoryLoading,
     isWorking,
     messageActionTargets.hasPendingUserTurn,
-    messageActionTargets.userMessageCount,
+    messageActionTargets.latestUserMessageId,
     renderScopeKey,
     resumeFollowAndPin,
     settleFollow,
@@ -1849,6 +1862,7 @@ export const MessagesCore = memo(function MessagesCore({
       onRetryHistory,
       onRewindFromMessage,
       onShowAllHistoryItems: handleShowAllHistoryItems,
+      onLoadAllEarlierHistory: handleLoadAllEarlierHistory,
       onThreadRecoveryFork,
       onToggleProcessPhaseExpanded: handleToggleProcessPhaseExpanded,
       openFileLink,
