@@ -1061,7 +1061,7 @@ export function attachFluidShader(
 
   const shouldAnimate = (): boolean => forceAnimate || !prefersReducedMotion();
 
-  const draw = (now: number): void => {
+  const draw = (): void => {
     const p = current;
     const mode = clampFluidMotionMode(p.motionMode);
     const display = ensureDisplay(mode);
@@ -1145,7 +1145,7 @@ export function attachFluidShader(
     const step = 1000 / fpsFor(clampFluidMotionMode(current.motionMode));
     if (now - previous < step) return;
     previous = now - ((now - previous) % step);
-    draw(now);
+    draw();
   };
 
   const stopLoop = (): void => {
@@ -1177,7 +1177,7 @@ export function attachFluidShader(
       current = { ...next };
       ensureDisplay(clampFluidMotionMode(next.motionMode));
       previous = 0;
-      draw(performance.now());
+      draw();
       startLoop();
     },
     stir: () => undefined,
@@ -1212,7 +1212,7 @@ export function attachFluidShader(
         });
   resizeObserver?.observe(canvas);
 
-  draw(performance.now());
+  draw();
   startLoop();
   return handle;
 }
