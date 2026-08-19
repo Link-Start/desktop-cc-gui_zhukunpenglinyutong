@@ -23,6 +23,7 @@ import {
 import {
   asString,
   normalizeDshSessionStats,
+  normalizeDshTodos,
   normalizePlanUpdate,
   normalizeRateLimits,
   normalizeTokenUsage,
@@ -645,6 +646,22 @@ export function useThreadTurnEvents({
           type: "setThreadSessionStats",
           threadId,
           sessionStats,
+        });
+        return;
+      }
+      if (!hasTokenEnvelope && tokenUsage.dshTodos !== undefined) {
+        dispatch({
+          type: "setThreadDshTodos",
+          threadId,
+          todos: normalizeDshTodos(tokenUsage.dshTodos) ?? [],
+        });
+        return;
+      }
+      if (!hasTokenEnvelope && tokenUsage.dshContextPatch) {
+        dispatch({
+          type: "patchThreadDshContextUsage",
+          threadId,
+          patch: tokenUsage.dshContextPatch as never,
         });
         return;
       }

@@ -2947,6 +2947,72 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.workspaceId]: action.cursor,
         },
       };
+    case "setThreadDshTodos": {
+      const previousTokenUsage = state.tokenUsageByThread[action.threadId];
+      const nextUsage: ThreadTokenUsage = previousTokenUsage
+        ? { ...previousTokenUsage, dshTodos: action.todos ?? [] }
+        : {
+            total: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            last: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            modelContextWindow: null,
+            dshTodos: action.todos ?? [],
+          };
+      if (isThreadTokenUsageEqual(previousTokenUsage, nextUsage)) {
+        return state;
+      }
+      return {
+        ...state,
+        tokenUsageByThread: {
+          ...state.tokenUsageByThread,
+          [action.threadId]: nextUsage,
+        },
+      };
+    }
+    case "patchThreadDshContextUsage": {
+      const previousTokenUsage = state.tokenUsageByThread[action.threadId];
+      const nextUsage: ThreadTokenUsage = previousTokenUsage
+        ? { ...previousTokenUsage, ...action.patch }
+        : {
+            total: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            last: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            modelContextWindow: action.patch.modelContextWindow ?? null,
+            ...action.patch,
+          };
+      if (isThreadTokenUsageEqual(previousTokenUsage, nextUsage)) {
+        return state;
+      }
+      return {
+        ...state,
+        tokenUsageByThread: {
+          ...state.tokenUsageByThread,
+          [action.threadId]: nextUsage,
+        },
+      };
+    }
     case "setThreadSessionStats": {
       const previousTokenUsage = state.tokenUsageByThread[action.threadId];
       const nextUsage: ThreadTokenUsage = previousTokenUsage
@@ -2985,6 +3051,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         state.threadStatusById[action.threadId],
       );
       const previousTokenUsage = state.tokenUsageByThread[action.threadId] ?? null;
+      const preserveDshOccupancy =
+        previousTokenUsage?.contextUsageSource === "dsh-context-pressure" &&
+        action.tokenUsage.contextUsageSource !== "dsh-context-pressure" &&
+        action.tokenUsage.contextUsedTokens == null;
       const nextTokenUsage = {
         ...action.tokenUsage,
         sessionStats:
@@ -2996,6 +3066,52 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           previousTokenUsage?.cacheWriteInputTokens != null
             ? previousTokenUsage.cacheWriteInputTokens
             : action.tokenUsage.cacheWriteInputTokens,
+        dshTodos:
+          action.tokenUsage.dshTodos == null && previousTokenUsage?.dshTodos != null
+            ? previousTokenUsage.dshTodos
+            : action.tokenUsage.dshTodos,
+        contextUsedTokens: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsedTokens
+          : action.tokenUsage.contextUsedTokens == null &&
+              previousTokenUsage?.contextUsedTokens != null
+            ? previousTokenUsage.contextUsedTokens
+            : action.tokenUsage.contextUsedTokens,
+        modelContextWindow: preserveDshOccupancy
+          ? previousTokenUsage?.modelContextWindow ?? null
+          : action.tokenUsage.modelContextWindow == null &&
+              previousTokenUsage?.modelContextWindow != null
+            ? previousTokenUsage.modelContextWindow
+            : action.tokenUsage.modelContextWindow,
+        contextUsedPercent: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsedPercent
+          : action.tokenUsage.contextUsedPercent == null &&
+              previousTokenUsage?.contextUsedPercent != null
+            ? previousTokenUsage.contextUsedPercent
+            : action.tokenUsage.contextUsedPercent,
+        contextRemainingPercent: preserveDshOccupancy
+          ? previousTokenUsage?.contextRemainingPercent
+          : action.tokenUsage.contextRemainingPercent == null &&
+              previousTokenUsage?.contextRemainingPercent != null
+            ? previousTokenUsage.contextRemainingPercent
+            : action.tokenUsage.contextRemainingPercent,
+        contextCategoryUsages: preserveDshOccupancy
+          ? previousTokenUsage?.contextCategoryUsages
+          : action.tokenUsage.contextCategoryUsages == null &&
+              previousTokenUsage?.contextCategoryUsages != null
+            ? previousTokenUsage.contextCategoryUsages
+            : action.tokenUsage.contextCategoryUsages,
+        contextUsageSource: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsageSource
+          : action.tokenUsage.contextUsageSource == null &&
+              previousTokenUsage?.contextUsageSource
+            ? previousTokenUsage.contextUsageSource
+            : action.tokenUsage.contextUsageSource,
+        contextUsageFreshness: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsageFreshness
+          : action.tokenUsage.contextUsageFreshness == null &&
+              previousTokenUsage?.contextUsageFreshness
+            ? previousTokenUsage.contextUsageFreshness
+            : action.tokenUsage.contextUsageFreshness,
       };
       const usageSnapshotChanged = !isThreadTokenUsageEqual(
         previousTokenUsage,

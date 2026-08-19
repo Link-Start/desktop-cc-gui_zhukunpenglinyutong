@@ -1664,7 +1664,7 @@ function ComposerImpl({
     runStatusItemsForStrip,
   ]);
   const {
-    todos: statusTodos,
+    todos: scannedStatusTodos,
     subagents: statusSubagents,
     todoTotal,
     commandTotal,
@@ -1679,6 +1679,13 @@ function ComposerImpl({
     childSubagentThreadIds: stripChildThreads.map((thread) => thread.id),
     deferSummary: shouldDeferStatusSummary,
   });
+  const statusTodos = useMemo(() => {
+    if (selectedEngine !== "dsh") {
+      return scannedStatusTodos;
+    }
+    const projected = contextUsage?.dshTodos;
+    return projected == null ? scannedStatusTodos : projected;
+  }, [contextUsage?.dshTodos, scannedStatusTodos, selectedEngine]);
   // 已编辑：ledger 合成主线∪agent-canvas（Shared/协作 fan-in），用未 deferred items 保证实时
   const sessionToolFileChanges = useMemo(() => {
     return ingestFileEditsFromConversationItems({
@@ -2906,14 +2913,17 @@ function ComposerImpl({
   }, [insertText, onInsertHandled, setComposerText]);
 
   const claudeContextUsage = useMemo<ClaudeContextUsageViewModel | null>(() => {
-    if (!contextUsage || selectedEngine !== "claude") {
+    if (!contextUsage || (selectedEngine !== "claude" && selectedEngine !== "dsh")) {
       return null;
     }
-    const usedTokens = resolveClaudeWindowUsedTokens(contextUsage);
+    const usedTokens =
+      selectedEngine === "dsh"
+        ? finiteNonNegative(contextUsage.contextUsedTokens)
+        : resolveClaudeWindowUsedTokens(contextUsage);
     // CLI 没上报窗口总量时按模型估算兜底，让占用百分比可以计算。
     const contextWindow =
       finitePositive(contextUsage.modelContextWindow) ??
-      (usedTokens !== null
+      (selectedEngine === "claude" && usedTokens !== null
         ? estimateClaudeContextWindow(selectedModelId)
         : null);
     const totalTokens = finiteNonNegative(contextUsage.total.totalTokens);
@@ -2960,12 +2970,17 @@ function ComposerImpl({
     if (!contextUsage) {
       return null;
     }
-    if (selectedEngine === "claude") {
-      const usedTokens = resolveClaudeWindowUsedTokens(contextUsage);
+    if (selectedEngine === "claude" || selectedEngine === "dsh") {
+      const usedTokens =
+        selectedEngine === "dsh"
+          ? finiteNonNegative(contextUsage.contextUsedTokens)
+          : resolveClaudeWindowUsedTokens(contextUsage);
       const contextWindow =
         finitePositive(contextUsage.modelContextWindow) ??
-        estimateClaudeContextWindow(selectedModelId);
-      return usedTokens !== null
+        (selectedEngine === "claude"
+          ? estimateClaudeContextWindow(selectedModelId)
+          : null);
+      return usedTokens !== null && contextWindow !== null
         ? { used: usedTokens, total: contextWindow }
         : null;
     }
@@ -3772,7 +3787,8 @@ function ComposerImpl({
                             usedTokens={resolvedLegacyContextUsage?.used}
                             maxTokens={resolvedLegacyContextUsage?.total}
                             claudeContextUsage={
-                              selectedEngine === "claude"
+                              selectedEngine === "claude" ||
+                              selectedEngine === "dsh"
                                 ? resolvedClaudeContextUsage
                                 : null
                             }

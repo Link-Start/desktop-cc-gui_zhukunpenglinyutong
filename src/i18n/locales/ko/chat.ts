@@ -76,6 +76,11 @@ const chat = {
     "claudeContextCategoryTitle": "카테고리 세부 정보",
     "claudeContextMcpToolsTitle": "MCP 도구",
     "claudeContextUnavailable": "CLI 텔레메트리 대기 중",
+    "dshContextTooltipTitle": "컨텍스트 사용량",
+    "dshContextUnavailable": "점유율 대기 중",
+    "dshContextSystem": "시스템 프롬프트",
+    "dshContextTools": "도구",
+    "dshContextMessages": "대화 메시지",
     "claudeContextFreshness": {
       "live": "실시간 Claude CLI 컨텍스트 사용량",
       "restored": "기록에서 복원된 컨텍스트 사용량",

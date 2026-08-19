@@ -80,6 +80,11 @@ const chat = {
     claudeContextCategoryTitle: "Category details",
     claudeContextMcpToolsTitle: "MCP tools",
     claudeContextUnavailable: "Waiting for CLI telemetry",
+    dshContextTooltipTitle: "Context used",
+    dshContextUnavailable: "Waiting for occupancy",
+    dshContextSystem: "System prompt",
+    dshContextTools: "Tools",
+    dshContextMessages: "Conversation",
     claudeContextFreshness: {
       live: "Live Claude CLI context usage",
       restored: "Context usage restored from history",

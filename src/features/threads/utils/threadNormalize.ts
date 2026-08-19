@@ -1,5 +1,6 @@
 import type {
   DshSessionStats,
+  DshTodoItem,
   RateLimitSnapshot,
   ReviewTarget,
   ThreadTokenUsage,
@@ -161,7 +162,42 @@ export function normalizeTokenUsage(raw: Record<string, unknown>): ThreadTokenUs
     cacheWriteInputTokens: optionalNumber(
       raw.cacheWriteInputTokens ?? raw.cache_write_input_tokens,
     ),
+    dshTodos: normalizeDshTodos(raw.dshTodos ?? raw.dsh_todos ?? raw.todos),
   };
+}
+
+export function normalizeDshTodos(value: unknown): DshTodoItem[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+      const record = entry as Record<string, unknown>;
+      const content =
+        typeof record.content === "string" ? record.content.trim() : "";
+      if (!content) {
+        return null;
+      }
+      const statusRaw =
+        typeof record.status === "string" ? record.status.toLowerCase() : "";
+      const status: DshTodoItem["status"] =
+        statusRaw === "completed" || statusRaw === "complete"
+          ? "completed"
+          : statusRaw === "in_progress" || statusRaw === "in-progress"
+            ? "in_progress"
+            : "pending";
+      const activeForm =
+        typeof record.activeForm === "string"
+          ? record.activeForm
+          : typeof record.active_form === "string"
+            ? record.active_form
+            : undefined;
+      return { content, status, ...(activeForm ? { activeForm } : {}) };
+    })
+    .filter((item): item is DshTodoItem => item !== null);
 }
 
 export function normalizeDshSessionStats(value: unknown): DshSessionStats | null {

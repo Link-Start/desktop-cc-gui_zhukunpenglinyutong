@@ -57,6 +57,56 @@ describe("threadReducer context compaction lifecycle", () => {
     expect(next.tokenUsageByThread["dsh:session-1"]?.total.inputTokens).toBe(10);
   });
 
+  it("keeps DSH occupancy and todos when a billed tokenUsage frame arrives", () => {
+    const withOccupancy = threadReducer(initialState, {
+      type: "patchThreadDshContextUsage",
+      threadId: "dsh:session-1",
+      patch: {
+        contextUsedTokens: 209_000,
+        modelContextWindow: 262_000,
+        contextUsedPercent: 80,
+        contextCategoryUsages: [
+          { name: "system", tokens: 1_500 },
+          { name: "tools", tokens: 6_400 },
+          { name: "messages", tokens: 196_000 },
+        ],
+        contextUsageSource: "dsh-context-pressure",
+        contextUsageFreshness: "live",
+      },
+    });
+    const withTodos = threadReducer(withOccupancy, {
+      type: "setThreadDshTodos",
+      threadId: "dsh:session-1",
+      todos: [{ content: "step", status: "in_progress" }],
+    });
+    const next = threadReducer(withTodos, {
+      type: "setThreadTokenUsage",
+      threadId: "dsh:session-1",
+      tokenUsage: sampleTokenUsage,
+    });
+
+    expect(next.tokenUsageByThread["dsh:session-1"]?.contextUsedTokens).toBe(209_000);
+    expect(next.tokenUsageByThread["dsh:session-1"]?.modelContextWindow).toBe(262_000);
+    expect(next.tokenUsageByThread["dsh:session-1"]?.dshTodos).toEqual([
+      { content: "step", status: "in_progress" },
+    ]);
+    expect(next.tokenUsageByThread["dsh:session-1"]?.total.inputTokens).toBe(10);
+  });
+
+  it("treats an empty DSH todos projection as an explicit clear", () => {
+    const withTodos = threadReducer(initialState, {
+      type: "setThreadDshTodos",
+      threadId: "dsh:session-1",
+      todos: [{ content: "old", status: "completed" }],
+    });
+    const cleared = threadReducer(withTodos, {
+      type: "setThreadDshTodos",
+      threadId: "dsh:session-1",
+      todos: [],
+    });
+    expect(cleared.tokenUsageByThread["dsh:session-1"]?.dshTodos).toEqual([]);
+  });
+
   it("appends a deduped context compacted message", () => {
     const withCompacted = threadReducer(initialState, {
       type: "appendContextCompacted",

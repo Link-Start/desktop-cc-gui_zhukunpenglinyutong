@@ -76,6 +76,11 @@ const chat = {
     "claudeContextCategoryTitle": "श्रेणी विवरण",
     "claudeContextMcpToolsTitle": "MCP टूल",
     "claudeContextUnavailable": "CLI टेलीमेट्री की प्रतीक्षा",
+    "dshContextTooltipTitle": "प्रयुक्त संदर्भ",
+    "dshContextUnavailable": "अधिभोग की प्रतीक्षा",
+    "dshContextSystem": "सिस्टम प्रॉम्प्ट",
+    "dshContextTools": "टूल्स",
+    "dshContextMessages": "वार्तालाप",
     "claudeContextFreshness": {
       "live": "लाइव Claude CLI संदर्भ उपयोग",
       "restored": "इतिहास से संदर्भ उपयोग पुनर्स्थापित",

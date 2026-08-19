@@ -909,6 +909,41 @@ describe("history loaders", () => {
     });
   });
 
+  it("hydrates dsh todos and occupancy from history projections", async () => {
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession: vi.fn().mockResolvedValue({
+        messages: [],
+        todos: [{ content: "step", status: "completed" }],
+        usage: {
+          contextUsedTokens: 209000,
+          modelContextWindow: 262000,
+          contextUsedPercent: 80,
+          contextCategoryUsages: [
+            { name: "system", tokens: 1500 },
+            { name: "tools", tokens: 6400 },
+            { name: "messages", tokens: 196000 },
+          ],
+        },
+      }),
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(snapshot.tokenUsage).toMatchObject({
+      dshTodos: [{ content: "step", status: "completed" }],
+      contextUsedTokens: 209000,
+      modelContextWindow: 262000,
+      contextUsageSource: "dsh-context-pressure",
+      contextUsageFreshness: "restored",
+      contextCategoryUsages: [
+        { name: "system", tokens: 1500 },
+        { name: "tools", tokens: 6400 },
+        { name: "messages", tokens: 196000 },
+      ],
+    });
+  });
+
   it("reports DSH page progress before loadDshSession resolves", async () => {
     const { subscribeDshHistoryLoadProgress } = await import(
       "../../../services/events"

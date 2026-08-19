@@ -1411,6 +1411,27 @@ go lang`,
     expectToolItem(prepared[0]);
   });
 
+  it("keeps todo_write arguments when a host mislabels the item as fileChange", () => {
+    const item = buildConversationItem({
+      type: "fileChange",
+      id: "todo-1",
+      title: "todo_write",
+      tool: "todo_write",
+      status: "completed",
+      arguments: {
+        todos: [{ content: "step", status: "in_progress" }],
+      },
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("mcpToolCall");
+      expect(item.title).toBe("todo_write");
+      expect(JSON.parse(item.detail)).toEqual({
+        todos: [{ content: "step", status: "in_progress" }],
+      });
+    }
+  });
+
   it("builds file change items with summary details", () => {
     const item = buildConversationItem({
       type: "fileChange",

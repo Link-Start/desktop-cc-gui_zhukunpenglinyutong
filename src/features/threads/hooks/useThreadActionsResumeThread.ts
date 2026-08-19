@@ -28,6 +28,7 @@ import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
 import {
   DSH_UI_HISTORY_WINDOW,
+  extractDshHistoryTodos,
   extractDshHistoryTokenUsage,
 } from "../loaders/dshHistoryLoader";
 import { parseDshHistoryMessages } from "../loaders/dshHistoryParser";
@@ -1689,6 +1690,15 @@ export function useThreadActionsResumeThreadForWorkspace(
                 threadId,
                 tokenUsage: restoredTokenUsage,
               });
+            } else {
+              const restoredTodos = extractDshHistoryTodos(staged?.result ?? null);
+              if (restoredTodos !== undefined) {
+                dispatch({
+                  type: "setThreadDshTodos",
+                  threadId,
+                  todos: restoredTodos,
+                });
+              }
             }
             const dshWindow = staged?.result as
               | { hasMore?: boolean; nextCursor?: string | null }

@@ -1,7 +1,11 @@
 import type { ThreadTokenUsage } from "../../../types";
 import type { HistoryLoader } from "../contracts/conversationCurtainContracts";
 import { normalizeHistorySnapshot } from "../contracts/conversationCurtainContracts";
-import { asNumber, normalizeDshSessionStats } from "../utils/threadNormalize";
+import {
+  asNumber,
+  normalizeDshSessionStats,
+  normalizeDshTodos,
+} from "../utils/threadNormalize";
 import type { HistoryLoadingProgressListener } from "../utils/historyLoadingProgress";
 import { runNativeHistoryFetchAndParse } from "../utils/runNativeHistoryOpenStages";
 import { subscribeMappedDshHistoryLoadProgress } from "../utils/subscribeMappedDshHistoryLoadProgress";
@@ -108,28 +112,65 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
 
+export function extractDshHistoryTodos(result: unknown): ThreadTokenUsage["dshTodos"] | undefined {
+  const record = asRecord(result);
+  if (!record || !Object.prototype.hasOwnProperty.call(record, "todos")) {
+    return undefined;
+  }
+  return normalizeDshTodos(record.todos) ?? [];
+}
+
 export function extractDshHistoryTokenUsage(result: unknown): ThreadTokenUsage | null {
-  const usage = asRecord(asRecord(result)?.usage);
-  if (!usage) {
+  const record = asRecord(result);
+  const usage = asRecord(record?.usage);
+  const historyTodos = extractDshHistoryTodos(result);
+  if (!usage && historyTodos === undefined) {
     return null;
   }
-  const inputTokens = asNumber(usage.inputTokens ?? usage.input_tokens);
-  const outputTokens = asNumber(usage.outputTokens ?? usage.output_tokens);
+  const inputTokens = asNumber(usage?.inputTokens ?? usage?.input_tokens);
+  const outputTokens = asNumber(usage?.outputTokens ?? usage?.output_tokens);
   const cachedInputTokens = asNumber(
-    usage.cacheReadInputTokens ?? usage.cache_read_input_tokens,
+    usage?.cacheReadInputTokens ?? usage?.cache_read_input_tokens,
   );
   const cacheWriteTokens = asNumber(
-    usage.cacheWriteInputTokens ?? usage.cache_write_input_tokens,
+    usage?.cacheWriteInputTokens ?? usage?.cache_write_input_tokens,
   );
   const sessionStats = normalizeDshSessionStats(
-    usage.sessionStats ?? usage.session_stats,
+    usage?.sessionStats ?? usage?.session_stats,
   );
+  const contextUsedTokens = asNumber(
+    usage?.contextUsedTokens ?? usage?.context_used_tokens,
+  );
+  const modelContextWindow = asNumber(
+    usage?.modelContextWindow ?? usage?.model_context_window,
+  );
+  const contextUsedPercentRaw = usage
+    ? Number(usage.contextUsedPercent ?? usage.context_used_percent)
+    : Number.NaN;
+  const contextUsedPercent = Number.isFinite(contextUsedPercentRaw)
+    ? contextUsedPercentRaw
+    : modelContextWindow > 0 && contextUsedTokens > 0
+      ? (contextUsedTokens / modelContextWindow) * 100
+      : null;
+  const categoryUsages = Array.isArray(usage?.contextCategoryUsages)
+    ? (usage?.contextCategoryUsages as Array<Record<string, unknown>>)
+        .map((row) => {
+          const name = typeof row.name === "string" ? row.name : "";
+          const tokens = asNumber(row.tokens);
+          return name ? { name, tokens } : null;
+        })
+        .filter((row): row is { name: string; tokens: number } => row !== null)
+    : null;
   if (
     inputTokens <= 0 &&
     outputTokens <= 0 &&
     cachedInputTokens <= 0 &&
     cacheWriteTokens <= 0 &&
-    !sessionStats
+    !sessionStats &&
+    contextUsedTokens <= 0 &&
+    modelContextWindow <= 0 &&
+    !categoryUsages &&
+    historyTodos === undefined
   ) {
     return null;
   }
@@ -140,13 +181,20 @@ export function extractDshHistoryTokenUsage(result: unknown): ThreadTokenUsage |
     totalTokens: inputTokens + outputTokens,
     reasoningOutputTokens: 0,
   };
+  const hasOccupancy = contextUsedTokens > 0 || modelContextWindow > 0 || Boolean(categoryUsages);
   return {
     total: breakdown,
     last: breakdown,
-    modelContextWindow: null,
-    contextUsageSource: "dsh_history",
+    modelContextWindow: modelContextWindow > 0 ? modelContextWindow : null,
+    contextUsedTokens: contextUsedTokens > 0 ? contextUsedTokens : null,
+    contextUsedPercent,
+    contextRemainingPercent:
+      contextUsedPercent !== null ? Math.max(100 - contextUsedPercent, 0) : null,
+    contextCategoryUsages: categoryUsages,
+    contextUsageSource: hasOccupancy ? "dsh-context-pressure" : "dsh_history",
     contextUsageFreshness: "restored",
     sessionStats,
     cacheWriteInputTokens: cacheWriteTokens > 0 ? cacheWriteTokens : null,
+    ...(historyTodos !== undefined ? { dshTodos: historyTodos } : {}),
   };
 }

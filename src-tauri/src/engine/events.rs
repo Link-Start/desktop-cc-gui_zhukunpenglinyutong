@@ -290,6 +290,20 @@ fn input_looks_like_command(input: Option<&Value>) -> bool {
     .is_some()
 }
 
+fn compact_tool_name(tool_name: &str) -> String {
+    tool_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "")
+}
+
+/// Checklist tools (`todo_write` / `TodoWrite` / `mcp__x__TodoWrite`) contain
+/// "write" but MUST stay generic tool calls so Composer can read `{ todos }`.
+fn is_checklist_tool_name(tool_name: &str) -> bool {
+    let compact = compact_tool_name(tool_name);
+    compact == "todowrite" || compact.ends_with("todowrite")
+}
+
 fn resolve_tool_item_kind(tool_name: Option<&str>, input: Option<&Value>) -> ToolItemKind {
     let lower = tool_name.unwrap_or_default().trim().to_ascii_lowercase();
     // DSH `tool/result` / later `tool-call-delta` chunks often omit `name`.
@@ -299,6 +313,9 @@ fn resolve_tool_item_kind(tool_name: Option<&str>, input: Option<&Value>) -> Too
         if input_looks_like_command(input) {
             return ToolItemKind::CommandExecution;
         }
+        return ToolItemKind::MpcToolCall;
+    }
+    if is_checklist_tool_name(&lower) {
         return ToolItemKind::MpcToolCall;
     }
     // Command-like tools can contain "write" in their name (for example write_stdin).
@@ -774,6 +791,8 @@ pub fn engine_event_to_app_server_event_with_turn_context(
                 || tool_name_lower.contains("directorygrant")
             {
                 "item/directoryGrant/requestApproval"
+            } else if is_checklist_tool_name(&tool_name_lower) {
+                "approval/request"
             } else if tool_name_lower.contains("apply")
                 || tool_name_lower.contains("patch")
                 || tool_name_lower.contains("write")
@@ -1690,6 +1709,79 @@ mod tests {
         assert_eq!(
             mapped.message["method"],
             Value::String("item/fileChange/outputDelta".to_string())
+        );
+    }
+
+    #[test]
+    fn tool_started_maps_todo_write_to_mcp_item_and_keeps_todos() {
+        let todos = json!([{ "content": "step", "status": "in_progress" }]);
+        for tool_name in ["todo_write", "TodoWrite", "mcp__agent__TodoWrite"] {
+            let event = EngineEvent::ToolStarted {
+                workspace_id: "ws-live".to_string(),
+                tool_id: format!("tool-{tool_name}"),
+                tool_name: tool_name.to_string(),
+                input: Some(json!({ "todos": todos })),
+            };
+            let mapped = engine_event_to_app_server_event(&event, "thread-1", "item-1")
+                .expect("mapped event");
+            assert_eq!(
+                mapped.message["method"],
+                Value::String("item/started".to_string()),
+                "{tool_name}"
+            );
+            assert_eq!(
+                mapped.message["params"]["item"]["type"],
+                Value::String("mcpToolCall".to_string()),
+                "{tool_name}"
+            );
+            assert_eq!(
+                mapped.message["params"]["item"]["title"],
+                Value::String(tool_name.to_string()),
+                "{tool_name}"
+            );
+            assert_eq!(
+                mapped.message["params"]["item"]["arguments"]["todos"],
+                todos,
+                "{tool_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn tool_started_maps_real_write_tools_to_file_change() {
+        for tool_name in ["write", "write_file", "Write"] {
+            let event = EngineEvent::ToolStarted {
+                workspace_id: "ws-live".to_string(),
+                tool_id: format!("tool-{tool_name}"),
+                tool_name: tool_name.to_string(),
+                input: Some(json!({ "path": "src/a.ts", "content": "ok" })),
+            };
+            let mapped = engine_event_to_app_server_event(&event, "thread-1", "item-1")
+                .expect("mapped event");
+            assert_eq!(
+                mapped.message["params"]["item"]["type"],
+                Value::String("fileChange".to_string()),
+                "{tool_name}"
+            );
+        }
+    }
+
+    #[test]
+    fn approval_request_maps_todo_write_to_generic_approval() {
+        let event = EngineEvent::ApprovalRequest {
+            workspace_id: "ws-approval".to_string(),
+            request_id: json!("req-todo"),
+            tool_name: "todo_write".to_string(),
+            input: Some(json!({
+                "todos": [{ "content": "step", "status": "pending" }]
+            })),
+            message: Some("update todos".to_string()),
+        };
+        let mapped =
+            engine_event_to_app_server_event(&event, "thread-1", "item-1").expect("mapped event");
+        assert_eq!(
+            mapped.message["method"],
+            Value::String("approval/request".to_string())
         );
     }
 

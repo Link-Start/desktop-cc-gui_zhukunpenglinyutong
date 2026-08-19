@@ -187,7 +187,8 @@ export function isThreadTokenUsageEqual(
     JSON.stringify(left.contextToolUsages ?? null) === JSON.stringify(right.contextToolUsages ?? null) &&
     JSON.stringify(left.contextCategoryUsages ?? null) === JSON.stringify(right.contextCategoryUsages ?? null) &&
     JSON.stringify(left.sessionStats ?? null) === JSON.stringify(right.sessionStats ?? null) &&
-    (left.cacheWriteInputTokens ?? null) === (right.cacheWriteInputTokens ?? null)
+    (left.cacheWriteInputTokens ?? null) === (right.cacheWriteInputTokens ?? null) &&
+    JSON.stringify(left.dshTodos ?? null) === JSON.stringify(right.dshTodos ?? null)
   );
 }
 

@@ -18,6 +18,12 @@ export type DshSessionStats = {
   decodeTokens: number;
 };
 
+export type DshTodoItem = {
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm?: string;
+};
+
 export type ThreadTokenUsage = {
   total: TokenUsageBreakdown;
   last: TokenUsageBreakdown;
@@ -25,6 +31,11 @@ export type ThreadTokenUsage = {
   sessionStats?: DshSessionStats | null;
   /** Optional DSH billed cache-write bucket used only for cache-hit %. */
   cacheWriteInputTokens?: number | null;
+  /**
+   * DSH host `todos` snapshot. `undefined` / omitted = never received
+   * (Composer may scan TodoWrite tools). `[]` = host cleared the standing plan.
+   */
+  dshTodos?: DshTodoItem[] | null;
   modelContextWindow: number | null;
   contextUsageSource?: string | null;
   contextUsageFreshness?:

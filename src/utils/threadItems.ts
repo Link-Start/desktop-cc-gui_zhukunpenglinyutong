@@ -105,6 +105,14 @@ function asNumber(value: unknown) {
   return null;
 }
 
+function isChecklistToolName(value: unknown): boolean {
+  const compact = asString(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-\s]/g, "");
+  return compact === "todowrite" || compact.endsWith("todowrite");
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -1247,6 +1255,14 @@ export function buildConversationItem(
   }
   if (type === "fileChange") {
     const namedTitle = asString(item.title ?? item.tool ?? item.name ?? "").trim();
+    if (isChecklistToolName(namedTitle)) {
+      return buildConversationItem({
+        ...item,
+        type: "mcpToolCall",
+        tool: namedTitle,
+        title: namedTitle,
+      });
+    }
     const changes = Array.isArray(item.changes)
       ? item.changes
       : Array.isArray(item.files)

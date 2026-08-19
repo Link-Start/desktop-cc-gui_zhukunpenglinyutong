@@ -76,6 +76,11 @@ const chat = {
     "claudeContextCategoryTitle": "Detalhes por categoria",
     "claudeContextMcpToolsTitle": "Ferramentas MCP",
     "claudeContextUnavailable": "Aguardando telemetria do CLI",
+    "dshContextTooltipTitle": "Contexto usado",
+    "dshContextUnavailable": "Aguardando ocupação",
+    "dshContextSystem": "Prompt do sistema",
+    "dshContextTools": "Ferramentas",
+    "dshContextMessages": "Conversas",
     "claudeContextFreshness": {
       "live": "Uso de contexto ao vivo do Claude CLI",
       "restored": "Uso de contexto restaurado do histórico",

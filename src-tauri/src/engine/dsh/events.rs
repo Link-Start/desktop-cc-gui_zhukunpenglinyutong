@@ -601,6 +601,33 @@ fn project_session_projection(
                 "sessionStats": value,
             }),
         }],
+        "todos" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-todos",
+                "threadId": binding.thread_id,
+                "todos": if value.is_array() { value } else { Value::Array(vec![]) },
+            }),
+        }],
+        "contextPressure" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-context-usage",
+                "threadId": binding.thread_id,
+                "contextPressure": value,
+            }),
+        }],
+        "contextBreakdown" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-context-usage",
+                "threadId": binding.thread_id,
+                "contextBreakdown": value,
+            }),
+        }],
         _ => Vec::new(),
     }
 }
@@ -1412,6 +1439,117 @@ mod tests {
                 assert_eq!(*cached_tokens, Some(400));
             }
             other => panic!("expected UsageUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_todos_projection_as_raw() {
+        let todos = json!([
+            { "content": "step", "status": "in_progress" }
+        ]);
+        let events = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "sessionId": "session-1",
+                "key": "todos",
+                "value": todos,
+                "seq": 11
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match events.first() {
+            Some(EngineEvent::Raw { engine, data, .. }) => {
+                assert_eq!(*engine, EngineType::Dsh);
+                assert_eq!(data.get("kind").and_then(Value::as_str), Some("dsh-todos"));
+                assert_eq!(data.get("todos"), Some(&todos));
+            }
+            other => panic!("expected Raw todos, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_empty_todos_projection_as_cleared_list() {
+        let events = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "sessionId": "session-1",
+                "key": "todos",
+                "value": [],
+                "seq": 12
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match events.first() {
+            Some(EngineEvent::Raw { data, .. }) => {
+                assert_eq!(data.get("kind").and_then(Value::as_str), Some("dsh-todos"));
+                assert_eq!(data.get("todos"), Some(&json!([])));
+            }
+            other => panic!("expected Raw empty todos, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_context_pressure_and_breakdown_as_raw() {
+        let pressure = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "key": "contextPressure",
+                "value": { "projectedTokens": 209000, "contextWindow": 262000 }
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match pressure.first() {
+            Some(EngineEvent::Raw { data, .. }) => {
+                assert_eq!(
+                    data.get("kind").and_then(Value::as_str),
+                    Some("dsh-context-usage")
+                );
+                assert_eq!(
+                    data.pointer("/contextPressure/projectedTokens")
+                        .and_then(Value::as_i64),
+                    Some(209000)
+                );
+            }
+            other => panic!("expected Raw contextPressure, got {other:?}"),
+        }
+
+        let breakdown = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "key": "contextBreakdown",
+                "value": {
+                    "systemTokens": 1500,
+                    "toolsTokens": 6400,
+                    "messageTokens": 196000
+                }
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match breakdown.first() {
+            Some(EngineEvent::Raw { data, .. }) => {
+                assert_eq!(
+                    data.get("kind").and_then(Value::as_str),
+                    Some("dsh-context-usage")
+                );
+                assert_eq!(
+                    data.pointer("/contextBreakdown/messageTokens")
+                        .and_then(Value::as_i64),
+                    Some(196000)
+                );
+            }
+            other => panic!("expected Raw contextBreakdown, got {other:?}"),
         }
     }
 

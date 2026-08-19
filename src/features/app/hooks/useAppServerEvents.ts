@@ -859,6 +859,70 @@ function hasAgentMessageSnapshotText(item: Record<string, unknown>): boolean {
   return text.length > 0;
 }
 
+function optionalFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function buildDshContextUsagePatch(
+  params: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const pressure =
+    params.contextPressure && typeof params.contextPressure === "object"
+      ? (params.contextPressure as Record<string, unknown>)
+      : null;
+  const breakdown =
+    params.contextBreakdown && typeof params.contextBreakdown === "object"
+      ? (params.contextBreakdown as Record<string, unknown>)
+      : null;
+  if (!pressure && !breakdown) {
+    return null;
+  }
+  const patch: Record<string, unknown> = {
+    contextUsageSource: "dsh-context-pressure",
+    contextUsageFreshness: "live",
+  };
+  if (pressure) {
+    const used =
+      optionalFiniteNumber(pressure.projectedTokens) ??
+      optionalFiniteNumber(pressure.pressureTokens);
+    const window = optionalFiniteNumber(pressure.contextWindow);
+    if (used !== null) {
+      patch.contextUsedTokens = used;
+    }
+    if (window !== null && window > 0) {
+      patch.modelContextWindow = window;
+    }
+    if (used !== null && window !== null && window > 0) {
+      const percent = (used / window) * 100;
+      patch.contextUsedPercent = percent;
+      patch.contextRemainingPercent = Math.max(100 - percent, 0);
+    }
+  }
+  if (breakdown) {
+    const rows = [
+      ["system", breakdown.systemTokens],
+      ["tools", breakdown.toolsTokens],
+      ["messages", breakdown.messageTokens],
+    ]
+      .map(([name, tokens]) => {
+        const value = optionalFiniteNumber(tokens);
+        return value === null ? null : { name, tokens: value };
+      })
+      .filter((row): row is { name: string; tokens: number } => row !== null);
+    if (rows.length > 0) {
+      patch.contextCategoryUsages = rows;
+    }
+  }
+  return Object.keys(patch).length > 2 ? patch : patch;
+}
+
 function extractTokenUsageFromNormalizedEvent(
   event: NormalizedThreadEvent,
 ): Record<string, unknown> | null {
@@ -1591,20 +1655,39 @@ export function dispatchAppServerEvent(
   const method = String(message.method ?? "");
   const earlyParams = (message.params as Record<string, unknown>) ?? {};
 
-  if (
-    method === "dsh/raw" &&
-    String(earlyParams.kind ?? "") === "dsh-session-stats"
-  ) {
+  if (method === "dsh/raw") {
+    const kind = String(earlyParams.kind ?? "");
     const threadId = String(earlyParams.threadId ?? earlyParams.thread_id ?? "");
-    const sessionStats =
-      (earlyParams.sessionStats as Record<string, unknown> | undefined) ??
-      (earlyParams.session_stats as Record<string, unknown> | undefined);
-    if (threadId && sessionStats) {
-      handlers.onThreadTokenUsageUpdated?.(workspace_id, threadId, {
-        sessionStats,
-      });
+    if (kind === "dsh-session-stats") {
+      const sessionStats =
+        (earlyParams.sessionStats as Record<string, unknown> | undefined) ??
+        (earlyParams.session_stats as Record<string, unknown> | undefined);
+      if (threadId && sessionStats) {
+        handlers.onThreadTokenUsageUpdated?.(workspace_id, threadId, {
+          sessionStats,
+        });
+      }
+      return;
     }
-    return;
+    if (kind === "dsh-todos") {
+      if (threadId) {
+        handlers.onThreadTokenUsageUpdated?.(workspace_id, threadId, {
+          dshTodos: Array.isArray(earlyParams.todos) ? earlyParams.todos : [],
+        });
+      }
+      return;
+    }
+    if (kind === "dsh-context-usage") {
+      if (threadId) {
+        const patch = buildDshContextUsagePatch(earlyParams);
+        if (patch) {
+          handlers.onThreadTokenUsageUpdated?.(workspace_id, threadId, {
+            dshContextPatch: patch,
+          });
+        }
+      }
+      return;
+    }
   }
 
   if (method === "codex/connected") {

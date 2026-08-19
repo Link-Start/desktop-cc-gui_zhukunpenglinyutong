@@ -447,4 +447,75 @@ describe("useAppServerEvents token usage", () => {
       root.unmount();
     });
   });
+
+  it("routes dsh todos and context occupancy raw frames", async () => {
+    const handlers: Handlers = {
+      onThreadTokenUsageUpdated: vi.fn(),
+    };
+    const { root } = await mount(handlers, {
+      useNormalizedRealtimeAdapters: true,
+    });
+
+    await act(async () => {
+      listener?.({
+        workspace_id: "ws-dsh",
+        message: {
+          method: "dsh/raw",
+          params: {
+            kind: "dsh-todos",
+            threadId: "dsh:session-1",
+            todos: [{ content: "step", status: "in_progress" }],
+          },
+        },
+      });
+      listener?.({
+        workspace_id: "ws-dsh",
+        message: {
+          method: "dsh/raw",
+          params: {
+            kind: "dsh-context-usage",
+            threadId: "dsh:session-1",
+            contextPressure: {
+              projectedTokens: 209000,
+              contextWindow: 262000,
+            },
+            contextBreakdown: {
+              systemTokens: 1500,
+              toolsTokens: 6400,
+              messageTokens: 196000,
+            },
+          },
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(handlers.onThreadTokenUsageUpdated).toHaveBeenCalledWith(
+      "ws-dsh",
+      "dsh:session-1",
+      {
+        dshTodos: [{ content: "step", status: "in_progress" }],
+      },
+    );
+    expect(handlers.onThreadTokenUsageUpdated).toHaveBeenCalledWith(
+      "ws-dsh",
+      "dsh:session-1",
+      {
+        dshContextPatch: expect.objectContaining({
+          contextUsedTokens: 209000,
+          modelContextWindow: 262000,
+          contextUsageSource: "dsh-context-pressure",
+          contextCategoryUsages: [
+            { name: "system", tokens: 1500 },
+            { name: "tools", tokens: 6400 },
+            { name: "messages", tokens: 196000 },
+          ],
+        }),
+      },
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

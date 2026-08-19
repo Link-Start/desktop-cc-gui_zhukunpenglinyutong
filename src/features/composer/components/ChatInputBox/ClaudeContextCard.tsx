@@ -14,6 +14,22 @@ import type { ClaudeContextUsageViewModel } from './types';
  * 渲染在 ai-elements Context 的 HoverCard 里，只保留 header：
  * 百分比 + 已用/总量 + 进度条。数据取自 ClaudeContextUsageViewModel。
  */
+function dshCategoryLabel(
+  name: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  switch (name) {
+    case "system":
+      return t("chat.dshContextSystem");
+    case "tools":
+      return t("chat.dshContextTools");
+    case "messages":
+      return t("chat.dshContextMessages");
+    default:
+      return name;
+  }
+}
+
 export const ClaudeContextCard = ({
   usage,
 }: {
@@ -24,6 +40,8 @@ export const ClaudeContextCard = ({
   const usedPercentLabel = formatContextPercent(usage.usedPercent);
   const usedTokensText = formatContextTokens(usage.usedTokens);
   const contextWindowText = formatContextTokens(usage.contextWindow);
+  const isDshOccupancy = usage.source === "dsh-context-pressure";
+  const dshCategories = isDshOccupancy ? usage.categoryUsages ?? [] : [];
 
   const barValue =
     typeof usage.usedPercent === 'number' && Number.isFinite(usage.usedPercent)
@@ -32,7 +50,7 @@ export const ClaudeContextCard = ({
 
   // header 右侧的窗口用量：优先 已用/总量；退化到"估算 tokens"或"等待回传"
   const windowText = usedTokensText && contextWindowText
-    ? `${usedTokensText} / ${contextWindowText}`
+    ? `${isDshOccupancy ? "~" : ""}${usedTokensText} / ${contextWindowText}`
     : usedTokensText
       ? t(
         usage.freshness === 'live'
@@ -40,7 +58,7 @@ export const ClaudeContextCard = ({
           : 'chat.claudeContextWindowEstimatedTokens',
         { tokens: usedTokensText },
       )
-      : t('chat.claudeContextUnavailable');
+      : t(isDshOccupancy ? 'chat.dshContextUnavailable' : 'chat.claudeContextUnavailable');
 
   return (
     <ContextContentHeader>
@@ -48,13 +66,30 @@ export const ClaudeContextCard = ({
         {usedPercentLabel ? (
           <p className="font-medium">{usedPercentLabel}</p>
         ) : (
-          <p className="text-muted-foreground">{t('chat.claudeContextTooltipTitle')}</p>
+          <p className="text-muted-foreground">
+            {t(isDshOccupancy ? "chat.dshContextTooltipTitle" : "chat.claudeContextTooltipTitle")}
+          </p>
         )}
         <p className="font-mono text-muted-foreground">{windowText}</p>
       </div>
       {barValue !== null ? (
         <div className="space-y-2">
           <Progress className="bg-muted" value={barValue} />
+        </div>
+      ) : null}
+      {dshCategories.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          {dshCategories.map((row) => (
+            <div
+              key={row.name}
+              className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground"
+            >
+              <span>{dshCategoryLabel(row.name, t)}</span>
+              <span className="font-mono">
+                ~{formatContextTokens(row.tokens) ?? row.tokens}
+              </span>
+            </div>
+          ))}
         </div>
       ) : null}
     </ContextContentHeader>

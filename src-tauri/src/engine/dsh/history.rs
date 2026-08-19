@@ -59,6 +59,13 @@ pub struct DshSessionStats {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
+pub struct DshContextCategoryUsage {
+    pub name: String,
+    pub tokens: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct DshSessionUsage {
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
@@ -67,6 +74,14 @@ pub struct DshSessionUsage {
     pub cache_write_input_tokens: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub session_stats: Option<DshSessionStats>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_used_tokens: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_context_window: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_used_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_category_usages: Option<Vec<DshContextCategoryUsage>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +90,9 @@ pub struct DshSessionLoadResult {
     pub messages: Vec<DshSessionMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub usage: Option<DshSessionUsage>,
+    /// Host `todos` snapshot when present, including an explicit empty list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub todos: Option<Value>,
     #[serde(default)]
     pub has_more: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -214,10 +232,11 @@ where
     let window = resolve_dsh_history_load_window(limit, before);
     let loaded = load_history_pages(client, &session_id, window, on_progress.as_mut()).await?;
     let messages = fold_history_events(&loaded.events);
-    let usage = usage_from_history_page(&loaded.last_page);
+    let (usage, todos) = snapshots_from_history_page(&loaded.last_page);
     Ok(DshSessionLoadResult {
         messages,
         usage,
+        todos,
         has_more: loaded.has_more,
         next_cursor: next_cursor_from_events(&loaded.events, loaded.has_more),
     })
@@ -715,21 +734,86 @@ fn flush_assistant(
     }
 }
 
+fn snapshots_from_history_page(page: &Value) -> (Option<DshSessionUsage>, Option<Value>) {
+    let Some(values) = page.pointer("/projections/values") else {
+        return (None, None);
+    };
+    let todos = values.get("todos").filter(|value| value.is_array()).cloned();
+    (usage_from_history_values(values), todos)
+}
+
 fn usage_from_history_page(page: &Value) -> Option<DshSessionUsage> {
-    let values = page.pointer("/projections/values")?;
+    snapshots_from_history_page(page).0
+}
+
+fn usage_from_history_values(values: &Value) -> Option<DshSessionUsage> {
     let token_usage = values.get("tokenUsage").and_then(usage_from_projection);
     let session_stats = values.get("sessionStats").and_then(session_stats_from_projection);
-    match (token_usage, session_stats) {
-        (None, None) => None,
-        (Some(mut usage), stats) => {
-            usage.session_stats = stats;
+    let occupancy = occupancy_from_projections(values);
+    match (token_usage, session_stats, occupancy) {
+        (None, None, None) => None,
+        (token_usage, session_stats, occupancy) => {
+            let mut usage = token_usage.unwrap_or_default();
+            if session_stats.is_some() {
+                usage.session_stats = session_stats;
+            }
+            if let Some(occupancy) = occupancy {
+                usage.context_used_tokens = occupancy.context_used_tokens;
+                usage.model_context_window = occupancy.model_context_window;
+                usage.context_used_percent = occupancy.context_used_percent;
+                usage.context_category_usages = occupancy.context_category_usages;
+            }
             Some(usage)
         }
-        (None, Some(stats)) => Some(DshSessionUsage {
-            session_stats: Some(stats),
-            ..DshSessionUsage::default()
-        }),
     }
+}
+
+fn occupancy_from_projections(values: &Value) -> Option<DshSessionUsage> {
+    let pressure = values.get("contextPressure");
+    let breakdown = values.get("contextBreakdown");
+    if pressure.is_none() && breakdown.is_none() {
+        return None;
+    }
+    let numerator = pressure.and_then(|value| {
+        value
+            .get("projectedTokens")
+            .or_else(|| value.get("pressureTokens"))
+            .and_then(Value::as_i64)
+    });
+    let window = pressure.and_then(|value| value.get("contextWindow").and_then(Value::as_i64));
+    let percent = match (numerator, window) {
+        (Some(used), Some(total)) if total > 0 => Some((used as f64 / total as f64) * 100.0),
+        _ => None,
+    };
+    let categories = breakdown.and_then(categories_from_breakdown);
+    if numerator.is_none() && window.is_none() && categories.is_none() {
+        return None;
+    }
+    Some(DshSessionUsage {
+        context_used_tokens: numerator,
+        model_context_window: window,
+        context_used_percent: percent,
+        context_category_usages: categories,
+        ..DshSessionUsage::default()
+    })
+}
+
+fn categories_from_breakdown(value: &Value) -> Option<Vec<DshContextCategoryUsage>> {
+    let rows = [
+        ("system", value.get("systemTokens").and_then(Value::as_i64)),
+        ("tools", value.get("toolsTokens").and_then(Value::as_i64)),
+        ("messages", value.get("messageTokens").and_then(Value::as_i64)),
+    ];
+    let categories = rows
+        .into_iter()
+        .filter_map(|(name, tokens)| {
+            tokens.map(|tokens| DshContextCategoryUsage {
+                name: name.to_string(),
+                tokens,
+            })
+        })
+        .collect::<Vec<_>>();
+    (!categories.is_empty()).then_some(categories)
 }
 
 fn usage_from_projection(value: &Value) -> Option<DshSessionUsage> {
@@ -745,6 +829,10 @@ fn usage_from_projection(value: &Value) -> Option<DshSessionUsage> {
             .and_then(Value::as_i64),
         cache_write_input_tokens: value.get("cacheWriteTokens").and_then(Value::as_i64),
         session_stats: None,
+        context_used_tokens: None,
+        model_context_window: None,
+        context_used_percent: None,
+        context_category_usages: None,
     };
     if usage.input_tokens.is_none()
         && usage.output_tokens.is_none()
@@ -1149,7 +1237,8 @@ mod tests {
                 }
             }
         });
-        let usage = usage_from_history_page(&page).expect("usage");
+        let (usage, todos) = snapshots_from_history_page(&page);
+        let usage = usage.expect("usage");
         assert_eq!(usage.input_tokens, Some(744288));
         assert_eq!(usage.output_tokens, Some(34735));
         assert_eq!(usage.cache_read_input_tokens, Some(4017920));
@@ -1159,6 +1248,59 @@ mod tests {
         assert_eq!(stats.ttft_steps, 3);
         assert_eq!(stats.decode_ms, 3000);
         assert_eq!(stats.decode_tokens, 216);
+        assert!(todos.is_none());
+    }
+
+    #[test]
+    fn history_page_maps_todos_and_context_occupancy() {
+        let page = json!({
+            "projections": {
+                "values": {
+                    "todos": [
+                        { "content": "step", "status": "completed" }
+                    ],
+                    "contextPressure": {
+                        "projectedTokens": 209000,
+                        "pressureTokens": 180000,
+                        "contextWindow": 262000
+                    },
+                    "contextBreakdown": {
+                        "systemTokens": 1500,
+                        "toolsTokens": 6400,
+                        "messageTokens": 196000
+                    }
+                }
+            }
+        });
+        let (usage, todos) = snapshots_from_history_page(&page);
+        let usage = usage.expect("usage");
+        assert_eq!(usage.context_used_tokens, Some(209000));
+        assert_eq!(usage.model_context_window, Some(262000));
+        assert!(usage.context_used_percent.expect("percent") > 79.0);
+        assert_eq!(
+            usage
+                .context_category_usages
+                .as_ref()
+                .map(|rows| rows
+                    .iter()
+                    .map(|row| (row.name.as_str(), row.tokens))
+                    .collect::<Vec<_>>()),
+            Some(vec![("system", 1500), ("tools", 6400), ("messages", 196000)])
+        );
+        assert_eq!(
+            todos,
+            Some(json!([{ "content": "step", "status": "completed" }]))
+        );
+    }
+
+    #[test]
+    fn history_page_empty_todos_is_explicit_clear() {
+        let page = json!({
+            "projections": { "values": { "todos": [] } }
+        });
+        let (usage, todos) = snapshots_from_history_page(&page);
+        assert!(usage.is_none());
+        assert_eq!(todos, Some(json!([])));
     }
 
     #[test]

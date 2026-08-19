@@ -299,6 +299,23 @@ export type ThreadAction =
     }
   | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
   | { type: "setThreadSessionStats"; threadId: string; sessionStats: ThreadTokenUsage["sessionStats"] }
+  | { type: "setThreadDshTodos"; threadId: string; todos: ThreadTokenUsage["dshTodos"] }
+  | {
+      type: "patchThreadDshContextUsage";
+      threadId: string;
+      patch: Partial<
+        Pick<
+          ThreadTokenUsage,
+          | "contextUsedTokens"
+          | "modelContextWindow"
+          | "contextUsedPercent"
+          | "contextRemainingPercent"
+          | "contextCategoryUsages"
+          | "contextUsageSource"
+          | "contextUsageFreshness"
+        >
+      >;
+    }
   | {
       type: "setRateLimits";
       workspaceId: string;
