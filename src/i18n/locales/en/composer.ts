@@ -305,6 +305,31 @@ const composer = {
     dshStatsTtftAverage: "TTFT avg {{duration}}",
     dshStatsTokensPerSecond: "{{throughput}} tok/s",
     dshStatsCacheHit: "Cache hit {{percent}}%",
+    dshAgentPreset: {
+      entry: "Agent assembly: {{preset}}",
+      lockedTitle: "Assembly locked",
+      lockedHint: "This session already started. Open a new session to change the preset.",
+      standard: {
+        short: "Std",
+        label: "Standard",
+        description: "Files, shell, search, skills, plan, goals, subagents, and workflows.",
+      },
+      code: {
+        short: "PTC",
+        label: "PTC",
+        description: "Standard tools plus the Code Mode SDK so the model can script multi-step work.",
+      },
+      minimal: {
+        short: "Min",
+        label: "Minimal",
+        description: "Persistent bash and str_replace_editor only. No skills, goals, or subagents.",
+      },
+      cordis: {
+        short: "Create",
+        label: "Create",
+        description: "Standard tools plus runtime inspection, plugin experiments, and preset authoring.",
+      },
+    },
     runStatus: {
       label: "Turn run status",
       panel: "Run status details",

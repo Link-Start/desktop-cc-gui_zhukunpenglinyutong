@@ -310,6 +310,7 @@ type SendMessageOptions = {
   memoryReferenceMode?: LegacyMemoryReferenceMode;
   selectedNoteCardIds?: string[];
   selectedAgent?: SelectedAgentOption | null;
+  dshAgentPreset?: string | null;
   browserContextAttachment?: BrowserContextSendAttachment | null;
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
   codexInvalidThreadRetryAttempted?: boolean;
@@ -1732,6 +1733,12 @@ export function useThreadMessaging({
         accessModeForSend,
         resolvedEngine,
       );
+      const resolvedDshAgentPreset =
+        resolvedEngine === "dsh"
+          ? options?.dshAgentPreset?.trim() ||
+            getComposerEnginePrefForEngine("dsh").dshAgentPreset ||
+            null
+          : null;
       const resolvedOpenCodeAgent =
         resolvedEngine === "opencode"
           ? (resolveOpenCodeAgent?.(threadId) ?? null)
@@ -2687,6 +2694,7 @@ export function useThreadMessaging({
               threadId: threadId,
               agent: resolvedOpenCodeAgent,
               variant: resolvedOpenCodeVariant,
+              dshAgentPreset: resolvedDshAgentPreset,
               providerProfileId,
               forkSessionId:
                 resolvedEngine === "claude"

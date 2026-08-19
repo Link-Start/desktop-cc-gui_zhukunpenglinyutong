@@ -1851,6 +1851,7 @@ mod tests {
                 message_count: 0,
                 engine: Some("dsh".into()),
                 canonical_session_id: Some("session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into()),
+                agent_preset: None,
             }],
         );
         assert_eq!(rows.len(), 1);

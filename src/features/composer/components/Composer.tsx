@@ -69,6 +69,15 @@ import {
   hadRecentInteractiveInput,
 } from "../../../utils/interactiveMainThread";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
+import {
+  displayDshAgentPreset,
+  normalizeDshAgentPreset,
+  type DshAgentPresetId,
+} from "./ChatInputBox/selectors/dshAgentPresets";
+import {
+  getComposerEnginePrefForEngine,
+  setComposerEnginePref,
+} from "../hooks/composerEnginePrefsStore";
 import { ComposerLight } from "./ComposerLight";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import { isSameProviderExecutionProfile } from "./ChatInputBox/selectors/ModelSelect";
@@ -275,6 +284,8 @@ export type ComposerProps = {
   providerProfileId?: string | null;
   /** 当前会话创建时的供应商显示名（切老会话时底栏渠道芯片用，避免回落到列表首项 DeepSeek） */
   providerProfileName?: string | null;
+  /** Existing DSH session header preset; used only after first user turn. */
+  dshAgentPreset?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -561,6 +572,7 @@ function ComposerImpl({
   providerModelCatalogs,
   providerProfileId,
   providerProfileName,
+  dshAgentPreset: sessionDshAgentPreset = null,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -866,6 +878,50 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : nativeSessionTarget;
+  const isDshConversationThread =
+    typeof activeThreadId === "string" &&
+    (activeThreadId.startsWith("dsh:") ||
+      activeThreadId.startsWith("dsh-pending-"));
+  const hasDshUserMessages = items.some(
+    (item) => item.kind === "message" && item.role === "user",
+  );
+  const dshAgentPresetLocked =
+    (selectedAtomicTarget?.engine ?? selectedEngine) === "dsh" &&
+    isDshConversationThread &&
+    hasDshUserMessages;
+  const [draftDshAgentPreset, setDraftDshAgentPreset] =
+    useState<DshAgentPresetId>(() =>
+      normalizeDshAgentPreset(
+        getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+      ),
+    );
+  useEffect(() => {
+    if (dshAgentPresetLocked) {
+      return;
+    }
+    setDraftDshAgentPreset(
+      normalizeDshAgentPreset(
+        getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+      ),
+    );
+  }, [activeThreadId, dshAgentPresetLocked, selectedEngine]);
+  const resolvedDshAgentPreset = dshAgentPresetLocked
+    ? displayDshAgentPreset(
+        sessionDshAgentPreset ??
+          getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+      )
+    : draftDshAgentPreset;
+  const handleDshAgentPresetSelect = useCallback(
+    (preset: string) => {
+      if (dshAgentPresetLocked) {
+        return;
+      }
+      const next = normalizeDshAgentPreset(preset);
+      setDraftDshAgentPreset(next);
+      setComposerEnginePref("dsh", { dshAgentPreset: next });
+    },
+    [dshAgentPresetLocked],
+  );
   const [agentArmed, setAgentArmed] = useState(false);
   const agentProjection = useAgentProjection(activeWorkspaceId, activeThreadId);
   const agentTargetSupported = isMultiAgentTargetSupported(
@@ -2604,8 +2660,12 @@ function ComposerImpl({
         shouldPassMemoryReference ||
         hasBrowserContextAttachment ||
         createSessionTarget !== null ||
-        isAgentSubmission
+        isAgentSubmission ||
+        (selectedAtomicTarget?.engine ?? selectedEngine) === "dsh"
           ? {
+              ...((selectedAtomicTarget?.engine ?? selectedEngine) === "dsh"
+                ? { dshAgentPreset: resolvedDshAgentPreset }
+                : {}),
               ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
               ...(shouldPassMemoryReference
                 ? {
@@ -2790,6 +2850,7 @@ function ComposerImpl({
       agentArmed,
       isSharedSessionResolved,
       selectedAtomicTarget,
+      resolvedDshAgentPreset,
       carryOverContextChipKeys,
       carryOverManualMemoryIds,
       carryOverNoteCardIds,
@@ -3620,6 +3681,9 @@ function ComposerImpl({
               isModelConfigRefreshing={isModelConfigRefreshing}
               permissionMode={selectedPermissionMode}
               onModeSelect={handleModeSelect}
+              dshAgentPreset={resolvedDshAgentPreset}
+              dshAgentPresetLocked={dshAgentPresetLocked}
+              onDshAgentPresetSelect={handleDshAgentPresetSelect}
               sendReadiness={composerSendReadiness}
               onJumpToRequest={
                 activeUserInputRequest

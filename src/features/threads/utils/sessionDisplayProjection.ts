@@ -173,6 +173,7 @@ export function mergeSessionDisplaySummary(
       nativeTitle: options.nativeTitle,
     }),
     parentThreadId: next.parentThreadId ?? previous.parentThreadId ?? null,
+    dshAgentPreset: next.dshAgentPreset ?? previous.dshAgentPreset,
     folderId: next.folderId ?? previous.folderId ?? null,
     autoSession: next.autoSession ?? previous.autoSession ?? null,
     sizeBytes: next.sizeBytes ?? previous.sizeBytes,

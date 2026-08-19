@@ -1699,6 +1699,7 @@ pub async fn engine_send_message(
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
     skill_invocations: Option<Vec<crate::types::SkillInvocation>>,
+    dsh_agent_preset: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
@@ -1747,6 +1748,7 @@ pub async fn engine_send_message(
                 "customSpecRoot": custom_spec_root,
                 "autoSession": auto_session,
                 "skillInvocations": skill_invocations,
+                "dshAgentPreset": dsh_agent_preset,
             }),
         )
         .await;
@@ -1759,7 +1761,7 @@ pub async fn engine_send_message(
     // Capability gate follows EngineFeatures; all current engines allow images.
     require_image_support(effective_engine, &images)?;
     log::info!(
-        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?} provider_profile_id={:?}",
+        "[engine_send_message] engine={:?} active_engine={:?} workspace_id={} model={:?} continue_session={} thread_id={:?} session_id={:?} fork_session_id={:?} agent={:?} variant={:?} provider_profile_id={:?} dsh_agent_preset={:?}",
         effective_engine,
         active_engine,
         workspace_id,
@@ -1770,7 +1772,8 @@ pub async fn engine_send_message(
         fork_session_id,
         agent,
         variant,
-        provider_profile_id
+        provider_profile_id,
+        dsh_agent_preset
     );
     if let Some(explicit_engine) = requested_engine {
         if explicit_engine != active_engine {
@@ -3452,6 +3455,7 @@ pub async fn engine_send_message(
                 images.as_deref(),
                 resume_id,
                 continue_session,
+                dsh_agent_preset.as_deref(),
             )
             .await?;
             record_auto_session_metadata_if_present(
@@ -3498,6 +3502,7 @@ pub async fn engine_send_message_sync(
     variant: Option<String>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
+    dsh_agent_preset: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
@@ -3524,6 +3529,7 @@ pub async fn engine_send_message_sync(
             variant,
             custom_spec_root,
             auto_session,
+            dsh_agent_preset,
         );
         return remote_backend::call_remote(&*state, app, method, params).await;
     }
@@ -4164,6 +4170,7 @@ pub async fn engine_send_message_sync(
                 images.as_deref(),
                 resume_id,
                 continue_session,
+                dsh_agent_preset.as_deref(),
             )
             .await?;
             let (_snapshot, client) = crate::engine::dsh::ensure_ready(&runtime).await?;

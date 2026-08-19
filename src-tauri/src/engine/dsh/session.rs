@@ -58,15 +58,31 @@ pub fn workspace_id_from_create(value: &Value) -> Result<String, String> {
         .ok_or_else(|| "dsh workspace.create missing workspaceId".to_string())
 }
 
-pub async fn create_session(
-    client: &DshHostClient,
+pub fn create_session_payload(
     workspace_id: &str,
     session_id: Option<&str>,
-) -> Result<String, String> {
+    agent_preset: Option<&str>,
+) -> Value {
     let mut payload = json!({ "workspaceId": workspace_id });
     if let Some(session_id) = session_id.map(str::trim).filter(|value| !value.is_empty()) {
         payload["sessionId"] = json!(session_id);
     }
+    if let Some(agent_preset) = agent_preset
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["agentPreset"] = json!(agent_preset);
+    }
+    payload
+}
+
+pub async fn create_session(
+    client: &DshHostClient,
+    workspace_id: &str,
+    session_id: Option<&str>,
+    agent_preset: Option<&str>,
+) -> Result<String, String> {
+    let payload = create_session_payload(workspace_id, session_id, agent_preset);
     let value = client.call("session.create", payload).await?;
     value
         .get("sessionId")
@@ -451,6 +467,22 @@ mod tests {
         assert_eq!(session_id_from_thread("dsh:session-abc"), "session-abc");
         assert!(is_pending_thread("dsh-pending-1"));
         assert_eq!(thread_id_for_session("session-abc"), "dsh:session-abc");
+    }
+
+    #[test]
+    fn create_session_payload_omits_blank_preset() {
+        let payload = create_session_payload("ws-1", None, Some("  "));
+        assert_eq!(payload["workspaceId"], "ws-1");
+        assert!(payload.get("agentPreset").is_none());
+        assert!(payload.get("sessionId").is_none());
+    }
+
+    #[test]
+    fn create_session_payload_includes_preset() {
+        let payload = create_session_payload("ws-1", Some("sess-1"), Some("minimal"));
+        assert_eq!(payload["workspaceId"], "ws-1");
+        assert_eq!(payload["sessionId"], "sess-1");
+        assert_eq!(payload["agentPreset"], "minimal");
     }
 
     #[test]

@@ -277,6 +277,7 @@ export function mergeSessionIndexRowsIntoSummaries(
             providerProfileName:
               prev.providerProfileName ?? summary.providerProfileName,
             parentThreadId: prev.parentThreadId ?? summary.parentThreadId,
+            dshAgentPreset: prev.dshAgentPreset ?? summary.dshAgentPreset,
             createdAt: pickStableCreatedAt(
               prev.createdAt,
               summary.createdAt,

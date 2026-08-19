@@ -4311,6 +4311,7 @@ pub(crate) async fn shared_session_v2_dispatch_turn(
                 custom_spec_root,
                 None,
                 None,
+                None,
                 app.clone(),
                 state.clone(),
             )
@@ -4376,6 +4377,7 @@ pub(crate) async fn shared_session_v2_dispatch_turn(
                 None,
                 runtime_provider_profile_id,
                 custom_spec_root,
+                None,
                 None,
                 None,
                 app.clone(),

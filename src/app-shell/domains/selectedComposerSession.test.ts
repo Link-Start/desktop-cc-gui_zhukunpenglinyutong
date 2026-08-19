@@ -187,6 +187,7 @@ describe("selectedComposerSession", () => {
         effort: "high",
         accessMode: null,
         collaborationModeId: null,
+        dshAgentPreset: null,
       });
     });
 
@@ -221,6 +222,7 @@ describe("selectedComposerSession", () => {
         effort: "high",
         accessMode: null,
         collaborationModeId: null,
+        dshAgentPreset: null,
       });
       // gemini normalizes effort away; fill still runs only when prefEffort is truthy
       // but normalize strips unsupported effort → stays null for model-only selection.
@@ -238,6 +240,7 @@ describe("selectedComposerSession", () => {
         effort: null,
         accessMode: null,
         collaborationModeId: null,
+        dshAgentPreset: null,
       });
       expect(
         fillPendingComposerSelectionEffortFromEnginePref(

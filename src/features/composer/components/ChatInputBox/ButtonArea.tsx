@@ -20,7 +20,8 @@ import type {
   PermissionMode,
   ReasoningEffort,
 } from './types';
-import { ConfigSelect, ModeSelect, ReasoningSelect } from './selectors';
+import { ConfigSelect, DshAgentPresetSelect, ModeSelect, ReasoningSelect } from './selectors';
+import { displayDshAgentPreset, type DshAgentPresetId } from './selectors/dshAgentPresets';
 import { SessionControlQuotaPane } from './selectors/SessionControlQuotaPane';
 import { useCodingPlanQuota } from '../../../status-panel/hooks/useCodingPlanQuota';
 import { resolveCodingPlanQuotaVendorId } from '../../../status-panel/utils/codingPlanQuotaVendor';
@@ -127,6 +128,9 @@ export const ButtonArea = ({
   isEnhancing = false,
   streamActivityPhase = 'idle',
   permissionMode = 'bypassPermissions',
+  dshAgentPreset = null,
+  dshAgentPresetLocked = false,
+  onDshAgentPresetSelect,
   selectedModel = '',
   currentProvider = 'claude',
   currentProviderProfileId = null,
@@ -558,6 +562,14 @@ export const ButtonArea = ({
             selectedCollaborationModeId={selectedCollaborationModeId}
             onSelectCollaborationMode={onSelectCollaborationMode}
           />
+          {currentProvider === 'dsh' &&
+          (onDshAgentPresetSelect || dshAgentPresetLocked) ? (
+            <DshAgentPresetSelect
+              value={displayDshAgentPreset(dshAgentPreset)}
+              locked={dshAgentPresetLocked}
+              onChange={(preset: DshAgentPresetId) => onDshAgentPresetSelect?.(preset)}
+            />
+          ) : null}
           {(currentProvider === 'codex' ||
             currentProvider === 'claude' ||
             currentProvider === 'grok') && (

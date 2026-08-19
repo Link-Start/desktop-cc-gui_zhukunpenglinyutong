@@ -19,6 +19,8 @@ pub struct DshSessionSummary {
     pub engine: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub canonical_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_preset: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -392,6 +394,12 @@ fn summary_from_list_item(item: &Value) -> Option<DshSessionSummary> {
         message_count: 0,
         engine: Some("dsh".to_string()),
         canonical_session_id: Some(session_id.clone()),
+        agent_preset: item
+            .get("agentPreset")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string),
         session_id,
     })
 }

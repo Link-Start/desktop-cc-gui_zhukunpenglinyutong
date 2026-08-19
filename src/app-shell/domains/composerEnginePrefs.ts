@@ -18,6 +18,7 @@ export const EMPTY_COMPOSER_ENGINE_PREF: ComposerEnginePrefs = {
   effort: null,
   accessMode: null,
   collaborationModeId: null,
+  dshAgentPreset: null,
 };
 
 function normalizeNullableString(value: unknown): string | null {
@@ -44,12 +45,14 @@ function normalizeEnginePref(value: unknown): ComposerEnginePrefs | null {
     effort: normalizeNullableString(record.effort),
     accessMode: normalizeAccessMode(record.accessMode),
     collaborationModeId: normalizeNullableString(record.collaborationModeId),
+    dshAgentPreset: normalizeNullableString(record.dshAgentPreset),
   };
   const isEmpty =
     pref.modelId === null &&
     pref.effort === null &&
     pref.accessMode === null &&
-    pref.collaborationModeId === null;
+    pref.collaborationModeId === null &&
+    pref.dshAgentPreset === null;
   return isEmpty ? null : pref;
 }
 
@@ -67,6 +70,7 @@ export function getComposerEnginePref(
     effort: stored.effort ?? null,
     accessMode: stored.accessMode ?? null,
     collaborationModeId: stored.collaborationModeId ?? null,
+    dshAgentPreset: stored.dshAgentPreset ?? null,
   };
 }
 
@@ -90,12 +94,17 @@ export function upsertComposerEnginePref(
       patch.collaborationModeId !== undefined
         ? patch.collaborationModeId
         : current.collaborationModeId,
+    dshAgentPreset:
+      patch.dshAgentPreset !== undefined
+        ? patch.dshAgentPreset
+        : current.dshAgentPreset,
   };
   if (
     next.modelId === current.modelId &&
     next.effort === current.effort &&
     next.accessMode === current.accessMode &&
-    next.collaborationModeId === current.collaborationModeId
+    next.collaborationModeId === current.collaborationModeId &&
+    next.dshAgentPreset === current.dshAgentPreset
   ) {
     return base;
   }

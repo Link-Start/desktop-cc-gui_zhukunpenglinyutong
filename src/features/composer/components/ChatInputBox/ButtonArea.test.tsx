@@ -42,6 +42,18 @@ function openMemoryReferenceMenu() {
 vi.mock("./selectors", () => ({
   ConfigSelect: () => <div data-testid="config-select" />,
   ModeSelect: () => <div data-testid="mode-select" />,
+  DshAgentPresetSelect: ({
+    value,
+    locked,
+  }: {
+    value: string;
+    locked?: boolean;
+  }) => (
+    <div data-testid="dsh-agent-preset-select">
+      {value}
+      {locked ? "-locked" : ""}
+    </div>
+  ),
   ProviderSelect: () => <div data-testid="provider-select" />,
   ReasoningSelect: ({
     value,
@@ -143,6 +155,38 @@ describe("ButtonArea custom model storage refresh", () => {
     openToolDock();
 
     expect(screen.queryByTestId("reasoning-select")).toBeNull();
+  });
+
+  it("renders the DSH agent preset pill only for DSH", () => {
+    const { rerender } = render(
+      <ButtonArea
+        currentProvider="dsh"
+        dshAgentPreset="minimal"
+        dshAgentPresetLocked
+        models={[]}
+        selectedModel=""
+        hasInputContent
+        onSubmit={vi.fn()}
+        shortcutActions={[]}
+      />,
+    );
+
+    expect(screen.getByTestId("dsh-agent-preset-select").textContent).toBe(
+      "minimal-locked",
+    );
+
+    rerender(
+      <ButtonArea
+        currentProvider="claude"
+        dshAgentPreset="minimal"
+        models={[]}
+        selectedModel=""
+        hasInputContent
+        onSubmit={vi.fn()}
+        shortcutActions={[]}
+      />,
+    );
+    expect(screen.queryByTestId("dsh-agent-preset-select")).toBeNull();
   });
 
   it("keeps the existing Codex reasoning selector without a default reset option", () => {

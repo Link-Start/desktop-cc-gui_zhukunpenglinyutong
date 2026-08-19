@@ -134,6 +134,36 @@ describe("sessionIndexThreadSummaries", () => {
     expect(merged[0]?.providerProfileName).toBe("xmapi.cc");
   });
 
+  it("keeps a live DSH header preset when a newer index row has none", () => {
+    const live: ThreadSummary[] = [
+      {
+        id: "dsh:sess-preset",
+        name: "hello from dsh",
+        updatedAt: 100,
+        engineSource: "dsh",
+        threadKind: "native",
+        dshAgentPreset: "code",
+      },
+    ];
+    const merged = mergeSessionIndexRowsIntoSummaries(
+      live,
+      [
+        {
+          engine: "dsh",
+          sessionId: "sess-preset",
+          title: "hello from dsh",
+          updatedAt: 200,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(merged[0]?.dshAgentPreset).toBe("code");
+  });
+
   it("maps explicit createdAt and does not let a later updatedAt replace it", () => {
     const rows = sessionIndexRowsToThreadSummaries(
       [

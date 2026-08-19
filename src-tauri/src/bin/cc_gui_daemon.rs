@@ -2006,6 +2006,7 @@ async fn handle_rpc_request(
                     params.get("autoSession").cloned().unwrap_or(Value::Null),
                 )
                 .map_err(|err| err.to_string())?;
+            let dsh_agent_preset = parse_optional_string(&params, "dshAgentPreset");
             state
                 .engine_send_message(
                     workspace_id,
@@ -2025,6 +2026,7 @@ async fn handle_rpc_request(
                     provider_profile_id,
                     custom_spec_root,
                     auto_session,
+                    dsh_agent_preset,
                 )
                 .await
         }
@@ -2050,6 +2052,7 @@ async fn handle_rpc_request(
                     params.get("autoSession").cloned().unwrap_or(Value::Null),
                 )
                 .map_err(|err| err.to_string())?;
+            let dsh_agent_preset = parse_optional_string(&params, "dshAgentPreset");
             state
                 .engine_send_message_sync(
                     workspace_id,
@@ -2067,6 +2070,7 @@ async fn handle_rpc_request(
                     variant,
                     custom_spec_root,
                     auto_session,
+                    dsh_agent_preset,
                 )
                 .await
         }

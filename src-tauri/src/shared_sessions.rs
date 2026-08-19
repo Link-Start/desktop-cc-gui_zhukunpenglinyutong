@@ -1833,6 +1833,7 @@ pub async fn send_shared_session_message(
                 custom_spec_root,
                 None,
                 None,
+                None,
                 app,
                 state,
             )

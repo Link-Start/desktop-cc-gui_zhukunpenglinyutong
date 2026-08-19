@@ -13,6 +13,7 @@ const emptyComposerEnginePref: ComposerEnginePrefs = {
   effort: null,
   accessMode: null,
   collaborationModeId: null,
+  dshAgentPreset: null,
 };
 
 const {
@@ -41,6 +42,7 @@ const {
         effort: null,
         accessMode: null,
         collaborationModeId: null,
+        dshAgentPreset: null,
       }),
     ),
   };
@@ -698,6 +700,7 @@ describe("useSelectedComposerSession", () => {
       effort: "high",
       accessMode: null,
       collaborationModeId: null,
+      dshAgentPreset: null,
     });
 
     type HookProps = {
@@ -745,6 +748,7 @@ describe("useSelectedComposerSession", () => {
       effort: "medium",
       accessMode: null,
       collaborationModeId: null,
+      dshAgentPreset: null,
     });
     composerStore["selectedModelByThread.ws-a:grok-pending-2"] = {
       modelId: "grok-4.5",

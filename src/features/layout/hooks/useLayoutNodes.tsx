@@ -1786,6 +1786,7 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
               : null
           }
           providerProfileName={activeThreadSummary?.providerProfileName ?? null}
+          dshAgentPreset={activeThreadSummary?.dshAgentPreset ?? null}
           selectedModelId={options.selectedModelId}
           onSelectModel={options.onSelectModel}
           reasoningOptions={options.reasoningOptions}

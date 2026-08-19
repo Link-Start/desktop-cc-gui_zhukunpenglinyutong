@@ -1533,6 +1533,55 @@ describe("useThreadActions.helpers", () => {
     });
   });
 
+  it("carries DSH agentPreset onto ThreadSummary", () => {
+    const merged = mergeDshSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "sess-preset",
+          firstMessage: "hello from dsh",
+          updatedAt: 30,
+          agentPreset: "minimal",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-preset",
+      dshAgentPreset: "minimal",
+    });
+  });
+
+  it("keeps a later DSH list preset when the live row is newer", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:sess-preset",
+          name: "hello from dsh",
+          updatedAt: 80,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "sess-preset",
+          firstMessage: "hello from dsh",
+          updatedAt: 30,
+          agentPreset: "code",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-preset",
+      dshAgentPreset: "code",
+    });
+  });
+
   it("lets a later DSH first-message title upgrade an older Agent N row", () => {
     const merged = mergeDshSessionSummaries(
       [

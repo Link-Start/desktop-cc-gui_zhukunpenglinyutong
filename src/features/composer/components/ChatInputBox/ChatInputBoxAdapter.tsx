@@ -463,6 +463,9 @@ export interface ChatInputBoxAdapterProps {
   // Permission mode
   permissionMode?: PermissionMode;
   onModeSelect?: (mode: PermissionMode) => void;
+  dshAgentPreset?: string | null;
+  dshAgentPresetLocked?: boolean;
+  onDshAgentPresetSelect?: (preset: string) => void;
 
   // Model/Engine
   selectedModelId: string | null;
@@ -1032,6 +1035,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
       onStop,
       permissionMode,
       onModeSelect,
+      dshAgentPreset,
+      dshAgentPresetLocked,
+      onDshAgentPresetSelect,
       selectedModelId,
       selectedEngine,
       isSharedSession = false,
@@ -2137,6 +2143,9 @@ export const ChatInputBoxAdapter = memo(forwardRef<ChatInputBoxHandle, ChatInput
         models={normalizedModels}
         providerModelCatalogs={normalizedProviderModelCatalogs}
         permissionMode={permissionMode}
+        dshAgentPreset={dshAgentPreset}
+        dshAgentPresetLocked={dshAgentPresetLocked}
+        onDshAgentPresetSelect={onDshAgentPresetSelect}
         currentProvider={engineToProvider(selectedEngine)}
         currentProviderProfileId={providerProfileId}
         executionTarget={executionTarget}

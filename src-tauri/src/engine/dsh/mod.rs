@@ -203,6 +203,7 @@ pub async fn send_user_turn(
     images: Option<&[String]>,
     resume_id: Option<&str>,
     continue_session: bool,
+    agent_preset: Option<&str>,
 ) -> Result<DshSendOutcome, String> {
     if let Some(handle) = app.as_ref() {
         events::set_app_handle(handle.clone()).await;
@@ -212,16 +213,17 @@ pub async fn send_user_turn(
     let dsh_workspace_id = session::workspace_id_from_create(&workspace)?;
 
     let resume_id = resume_id.map(str::trim).filter(|value| !value.is_empty());
+    let agent_preset = agent_preset.map(str::trim).filter(|value| !value.is_empty());
     let native_session_id = if continue_session {
         match resume_id {
             Some(value) if session::is_pending_thread(value) => {
-                session::create_session(&client, &dsh_workspace_id, None).await?
+                session::create_session(&client, &dsh_workspace_id, None, agent_preset).await?
             }
             Some(value) => session::session_id_from_thread(value),
-            None => session::create_session(&client, &dsh_workspace_id, None).await?,
+            None => session::create_session(&client, &dsh_workspace_id, None, agent_preset).await?,
         }
     } else {
-        session::create_session(&client, &dsh_workspace_id, None).await?
+        session::create_session(&client, &dsh_workspace_id, None, agent_preset).await?
     };
 
     let thread_id = session::thread_id_for_session(&native_session_id);

@@ -121,6 +121,24 @@ describe("sessionDisplayProjection", () => {
     ).toBe("你好");
   });
 
+  it("keeps a previous DSH header preset when the next row omits it", () => {
+    const previous: ThreadSummary = {
+      id: "dsh:session-1",
+      name: "你好",
+      updatedAt: 100,
+      engineSource: "dsh",
+      threadKind: "native",
+      dshAgentPreset: "minimal",
+    };
+    expect(
+      mergeSessionDisplaySummary(previous, {
+        ...previous,
+        updatedAt: 130,
+        dshAgentPreset: undefined,
+      }).dshAgentPreset,
+    ).toBe("minimal");
+  });
+
   it("treats context protocol titles as weak and ignores mapped protocol titles", () => {
     const protocolTitle =
       `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +

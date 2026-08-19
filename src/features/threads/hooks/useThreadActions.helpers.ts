@@ -75,7 +75,9 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
-export type DshSessionSummary = GeminiSessionSummary;
+export type DshSessionSummary = GeminiSessionSummary & {
+  agentPreset?: string | null;
+};
 
 // Grok：在 Gemini 形状上扩展 parent / sessionKind（子代理树）
 export type GrokSessionSummary = GeminiSessionSummary & {
@@ -1200,19 +1202,40 @@ export function normalizePiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+function normalizeDshSessionSummary(value: unknown): DshSessionSummary | null {
+  const base = normalizeGeminiSessionSummary(value);
+  if (!base) {
+    return null;
+  }
+  if (!value || typeof value !== "object") {
+    return base;
+  }
+  const record = value as Record<string, unknown>;
+  const agentPreset = asString(record.agentPreset ?? record.agent_preset).trim();
+  return agentPreset ? { ...base, agentPreset } : base;
+}
+
 export function normalizeDshSessionSummaries(
   value: unknown,
 ): DshSessionSummary[] {
-  if (Array.isArray(value)) {
-    return normalizeGeminiSessionSummaries(value);
-  }
-  if (!value || typeof value !== "object") {
+  const raw = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? ((value as Record<string, unknown>).sessions ??
+        (value as Record<string, unknown>).items ??
+        (value as Record<string, unknown>).data)
+      : [];
+  if (!Array.isArray(raw)) {
     return [];
   }
-  const record = value as Record<string, unknown>;
-  return normalizeGeminiSessionSummaries(
-    record.sessions ?? record.items ?? record.data,
-  );
+  const summaries: DshSessionSummary[] = [];
+  raw.forEach((entry) => {
+    const summary = normalizeDshSessionSummary(entry);
+    if (summary) {
+      summaries.push(summary);
+    }
+  });
+  return summaries;
 }
 
 function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
@@ -1414,6 +1437,7 @@ function mergeNativeCliSessionSummaries(params: {
     GeminiSessionSummary & {
       parentSessionId?: string | null;
       sessionKind?: string | null;
+      agentPreset?: string | null;
     }
   >;
   idPrefix: "gemini" | "grok" | "kimi" | "pi" | "dsh";
@@ -1518,6 +1542,9 @@ function mergeNativeCliSessionSummaries(params: {
       sizeBytes: session.fileSizeBytes,
       engineSource,
       ...(parentThreadId ? { parentThreadId } : {}),
+      ...(typeof session.agentPreset === "string" && session.agentPreset.trim()
+        ? { dshAgentPreset: session.agentPreset.trim() }
+        : {}),
     };
     if (
       !prev ||
@@ -1536,12 +1563,18 @@ function mergeNativeCliSessionSummaries(params: {
         ...merged,
         parentThreadId:
           next.parentThreadId ?? merged.parentThreadId ?? prev?.parentThreadId ?? null,
+        dshAgentPreset:
+          next.dshAgentPreset ?? merged.dshAgentPreset ?? prev?.dshAgentPreset,
       });
-    } else if (parentThreadId && !prev.parentThreadId) {
-      // 本地 live 线程 updatedAt 更新时，仍要把 list 扫到的 parent 补回去
+    } else if (
+      (parentThreadId && !prev.parentThreadId) ||
+      (next.dshAgentPreset && !prev.dshAgentPreset)
+    ) {
+      // 本地 live 线程 updatedAt 更新时，仍要把 list 扫到的 parent / preset 补回去
       mergedById.set(id, {
         ...prev,
-        parentThreadId,
+        ...(parentThreadId ? { parentThreadId } : {}),
+        ...(next.dshAgentPreset ? { dshAgentPreset: next.dshAgentPreset } : {}),
       });
     }
   });

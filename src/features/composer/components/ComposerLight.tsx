@@ -15,7 +15,9 @@ import {
   permissionModeToAccessMode,
 } from "./ChatInputBox/types";
 import { useComposerDraft } from "../hooks/composerDraftStore";
+import { getComposerEnginePrefForEngine } from "../hooks/composerEnginePrefsStore";
 import { buildComposerSendReadiness } from "../utils/composerSendReadiness";
+import { normalizeDshAgentPreset } from "./ChatInputBox/selectors/dshAgentPresets";
 import type { ComposerProps } from "./Composer";
 
 type Props = ComposerProps;
@@ -89,13 +91,29 @@ export function ComposerLight({
       if (!content && images.length === 0) {
         return;
       }
+      const dshSendOptions =
+        selectedEngine === "dsh"
+          ? {
+              dshAgentPreset: normalizeDshAgentPreset(
+                getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+              ),
+            }
+          : undefined;
       if (isProcessing && !steerEnabled) {
-        void onQueue(content, images, undefined);
+        void onQueue(content, images, dshSendOptions);
         return;
       }
-      void onSend(content, images, undefined);
+      void onSend(content, images, dshSendOptions);
     },
-    [attachedImages, isProcessing, onQueue, onSend, text, steerEnabled],
+    [
+      attachedImages,
+      isProcessing,
+      onQueue,
+      onSend,
+      selectedEngine,
+      text,
+      steerEnabled,
+    ],
   );
 
   const handleModeSelect = useCallback(
