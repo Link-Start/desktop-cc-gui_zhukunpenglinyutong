@@ -68,8 +68,9 @@ const RIGHT_PANEL_PINNED_TABS_KEY = "rightPanelPinnedTabs";
 const DEFAULT_RIGHT_PANEL_PINNED_TABS: PanelToolbarTabId[] = [
   "files",
   "git",
-  "search",
 ];
+// 搜索 / 雷达始终留在「更多」列表里，默认不勾选，由用户自行钉上。
+const ALWAYS_LISTED_TAB_IDS = new Set<PanelToolbarTabId>(["search", "radar"]);
 
 function useRightPanelPinnedTabs() {
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
@@ -173,7 +174,11 @@ function PanelTabsImpl({
     [tabs, t],
   );
   const visibleResolvedTabs = useMemo(
-    () => resolvedTabs.filter((tab) => visibleTabs?.[tab.id] !== false),
+    () =>
+      resolvedTabs.filter(
+        (tab) =>
+          ALWAYS_LISTED_TAB_IDS.has(tab.id) || visibleTabs?.[tab.id] !== false,
+      ),
     [resolvedTabs, visibleTabs],
   );
   const toolbarItems = useMemo<ResponsiveIconToolbarItem[]>(

@@ -13,7 +13,7 @@ import { PanelTabs } from "./PanelTabs";
 
 describe("PanelTabs", () => {
   beforeEach(() => {
-    // 隔离每个用例的 pin 状态，回到默认外显 files/git/search
+    // 隔离每个用例的 pin 状态，回到默认外显 files/git
     resetClientStorageForTests();
     vi.useFakeTimers();
   });
@@ -141,15 +141,54 @@ describe("PanelTabs", () => {
     expect(onSelect).toHaveBeenNthCalledWith(4, "memory");
   });
 
-  it("externalizes the default pinned tabs (files, git, search) as toolbar buttons", () => {
+  it("externalizes the default pinned tabs (files, git) as toolbar buttons", () => {
     render(<PanelTabs active="files" onSelect={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: "panels.files" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "panels.git" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "panels.search" })).toBeTruthy();
-    // 未勾选的面板只留在「更多」菜单里，不外显
+    // 搜索 / 雷达默认不勾选，只留在「更多」菜单里
+    expect(screen.queryByRole("button", { name: "panels.search" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "panels.radar" })).toBeNull();
     expect(screen.queryByRole("button", { name: "panels.activity" })).toBeNull();
     expect(screen.queryByRole("button", { name: "panels.notes" })).toBeNull();
+  });
+
+  it("keeps search and radar in the overflow list unchecked by default", () => {
+    render(<PanelTabs active="files" onSelect={vi.fn()} />);
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "common.moreActions" }),
+      { button: 0, ctrlKey: false },
+    );
+
+    const searchMenuItem = screen.getByRole("menuitem", { name: "panels.search" });
+    const radarMenuItem = screen.getByRole("menuitem", { name: "panels.radar" });
+    expect(
+      (within(searchMenuItem).getByRole("checkbox") as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      (within(radarMenuItem).getByRole("checkbox") as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it("still lists search and radar when client visibility hides them", () => {
+    render(
+      <PanelTabs
+        active="files"
+        onSelect={vi.fn()}
+        visibleTabs={{ search: false, radar: false }}
+      />,
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "common.moreActions" }),
+      { button: 0, ctrlKey: false },
+    );
+
+    expect(screen.getByRole("menuitem", { name: "panels.search" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "panels.radar" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "panels.search" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "panels.radar" })).toBeNull();
   });
 
   it("does not externalize a live tab when it is neither active nor pinned", () => {
