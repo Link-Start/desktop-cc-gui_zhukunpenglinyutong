@@ -114,6 +114,36 @@ describe("useThreadMessaging", () => {
     },
   );
 
+  it("blocks Grok sends when a pasted data URL exceeds the 2MB cap", async () => {
+    // 3MiB decoded so size and limit stay distinguishable after formatByteSize.
+    const oversized =
+      "data:image/png;base64," + "A".repeat(Math.ceil((3 * 1024 * 1024) / 3) * 4);
+    const { result, pushThreadErrorMessage } = makeThreadMessagingHook("grok", {
+      activeThreadId: "grok:session-1",
+      threadEngineById: {
+        "grok:session-1": "grok",
+      },
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "grok:session-1",
+        "look at this screenshot",
+        [oversized],
+      );
+    });
+
+    expect(pushThreadErrorMessage).toHaveBeenCalledTimes(1);
+    const errorMessage = String(pushThreadErrorMessage.mock.calls[0]?.[2] ?? "");
+    expect(errorMessage).toContain("Grok CLI");
+    expect(errorMessage).toContain("2 MB");
+    expect(errorMessage).toContain("3 MB");
+    expect(errorMessage).not.toContain("data:image");
+    expect(errorMessage).not.toContain("AAAAAAAA");
+    expect(engineSendMessage).not.toHaveBeenCalled();
+  });
+
   it("does not block codex sends with non-empty images at client boundary", async () => {
     const { result, pushThreadErrorMessage } = makeThreadMessagingHook("codex", {
       activeThreadId: "thread-codex-1",

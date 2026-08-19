@@ -225,7 +225,10 @@ pub fn load_prompt_images(
     for raw in &raw_paths {
         match load_one_prompt_image(raw, workspace_path) {
             Ok(image) => loaded.push(image),
-            Err(error) => errors.push(format!("{}: {error}", describe_image_ref(raw))),
+            Err(error) => errors.push(format!(
+                "{}: {error}",
+                crate::engine::cli_image_input::describe_image_ref_for_error(raw)
+            )),
         }
     }
 
@@ -238,20 +241,6 @@ pub fn load_prompt_images(
         ));
     }
     Ok(loaded)
-}
-
-fn describe_image_ref(raw: &str) -> String {
-    if is_data_url(raw) {
-        let media = raw
-            .get(5..)
-            .and_then(|rest| rest.split_once(','))
-            .map(|(meta, _)| meta.split(';').next().unwrap_or("image").trim())
-            .filter(|value| !value.is_empty())
-            .unwrap_or("image");
-        format!("data URL ({media}, {} bytes)", raw.len())
-    } else {
-        raw.to_string()
-    }
 }
 
 fn load_one_prompt_image(raw: &str, workspace_path: &Path) -> Result<DshPromptImage, String> {

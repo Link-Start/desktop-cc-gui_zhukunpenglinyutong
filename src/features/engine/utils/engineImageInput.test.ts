@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { EngineType } from "../../../types";
 import {
+  acceptImagesWithinEngineLimit,
+  DSH_IMAGE_INPUT_MAX_BYTES,
   engineSupportsImageInput,
+  estimateImageAttachmentBytes,
+  findOversizedImageAttachment,
   formatEngineImageInputUnsupportedMessage,
+  formatEngineImageTooLargeMessage,
+  getEngineImageInputMaxBytes,
+  GROK_IMAGE_INPUT_MAX_BYTES,
   sanitizeImageAttachmentPaths,
 } from "./engineImageInput";
+
+function makePngDataUrl(decodedBytes: number): string {
+  const encodedLength = Math.ceil(decodedBytes / 3) * 4;
+  return `data:image/png;base64,${"A".repeat(encodedLength)}`;
+}
 
 describe("engineImageInput", () => {
   it.each([
@@ -50,6 +62,67 @@ describe("engineImageInput", () => {
         "\n",
       ]),
     ).toEqual(["/tmp/a.png", "/tmp/b.png"]);
+  });
+
+  it("exposes per-engine decoded-image caps only where backend fail-fasts", () => {
+    expect(getEngineImageInputMaxBytes("grok")).toBe(GROK_IMAGE_INPUT_MAX_BYTES);
+    expect(getEngineImageInputMaxBytes("dsh")).toBe(DSH_IMAGE_INPUT_MAX_BYTES);
+    expect(getEngineImageInputMaxBytes("claude")).toBeNull();
+    expect(getEngineImageInputMaxBytes(null)).toBeNull();
+  });
+
+  it("estimates data-URL decoded size and ignores filesystem paths", () => {
+    expect(estimateImageAttachmentBytes("/tmp/radar.png")).toBeNull();
+    expect(
+      estimateImageAttachmentBytes(
+        "data:image/png;base64,AQIDBAUGBwgJCgsMDQ4PEA==",
+      ),
+    ).toBe(16);
+  });
+
+  it("finds the largest data URL that exceeds the Grok cap", () => {
+    const oversized = makePngDataUrl(GROK_IMAGE_INPUT_MAX_BYTES + 1);
+    expect(
+      findOversizedImageAttachment(
+        [makePngDataUrl(64), oversized, "/tmp/ok.png"],
+        "grok",
+      ),
+    ).toEqual({
+      bytes: expect.any(Number),
+      maxBytes: GROK_IMAGE_INPUT_MAX_BYTES,
+    });
+    expect(
+      findOversizedImageAttachment([makePngDataUrl(64), "/tmp/ok.png"], "grok"),
+    ).toBeNull();
+    expect(findOversizedImageAttachment([oversized], "claude")).toBeNull();
+  });
+
+  it("keeps in-limit images when one pasted screenshot is over the cap", () => {
+    const oversized = makePngDataUrl(GROK_IMAGE_INPUT_MAX_BYTES + 1024);
+    const kept = "data:image/png;base64,AAAA";
+    expect(acceptImagesWithinEngineLimit([kept, oversized], "grok")).toEqual({
+      accepted: [kept],
+      rejected: {
+        bytes: expect.any(Number),
+        maxBytes: GROK_IMAGE_INPUT_MAX_BYTES,
+      },
+    });
+  });
+
+  it("formats oversized-image copy with size labels", () => {
+    expect(
+      formatEngineImageTooLargeMessage("grok", 3_200_000, 2 * 1024 * 1024),
+    ).toContain("Grok CLI");
+    const translate = (key: string, options?: Record<string, unknown>) =>
+      `${key}:${String(options?.engine ?? "")}:${String(options?.maxSize ?? "")}`;
+    expect(
+      formatEngineImageTooLargeMessage(
+        "grok",
+        3_200_000,
+        2 * 1024 * 1024,
+        translate,
+      ),
+    ).toMatch(/^messages\.imageInputTooLarge:Grok CLI:/);
   });
 
   it("marks every current engine as image-capable in the matrix projection", () => {

@@ -220,7 +220,9 @@ import {
 } from "../../shared-session/utils/sharedSessionEngines";
 import {
   engineSupportsImageInput,
+  findOversizedImageAttachment,
   formatEngineImageInputUnsupportedMessage,
+  formatEngineImageTooLargeMessage,
   sanitizeImageAttachmentPaths,
 } from "../../engine/utils/engineImageInput";
 import {
@@ -1006,6 +1008,20 @@ export function useThreadMessaging({
             `agent-request-images-unsupported: engine ${collabTarget.engine} does not support image input`,
           );
         }
+        const oversizedCollabImage = findOversizedImageAttachment(
+          finalImages,
+          collabTarget.engine,
+        );
+        if (oversizedCollabImage) {
+          throw new Error(
+            `agent-request-images-too-large: ${formatEngineImageTooLargeMessage(
+              collabTarget.engine,
+              oversizedCollabImage.bytes,
+              oversizedCollabImage.maxBytes,
+              t as (key: string, options?: Record<string, unknown>) => string,
+            )}`,
+          );
+        }
         // 按当前选中模板生成每段独立 stageBindings（CLI·模型·思考强度）。
         const stageBindings = templateToStageBindings(
           getSelectedTemplate(),
@@ -1415,6 +1431,24 @@ export function useThreadMessaging({
           threadId,
           formatEngineImageInputUnsupportedMessage(
             resolvedEngine,
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+        );
+        safeMessageActivity();
+        return;
+      }
+      const oversizedImage = findOversizedImageAttachment(
+        finalImages,
+        resolvedEngine,
+      );
+      if (oversizedImage) {
+        pushThreadErrorMessage(
+          workspace.id,
+          threadId,
+          formatEngineImageTooLargeMessage(
+            resolvedEngine,
+            oversizedImage.bytes,
+            oversizedImage.maxBytes,
             t as (key: string, options?: Record<string, unknown>) => string,
           ),
         );

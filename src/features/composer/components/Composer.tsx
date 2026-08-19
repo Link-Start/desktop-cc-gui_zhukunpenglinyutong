@@ -158,8 +158,11 @@ import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPha
 import { exportRewindFiles } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import {
+  acceptImagesWithinEngineLimit,
   engineSupportsImageInput,
+  findOversizedImageAttachment,
   formatEngineImageInputUnsupportedMessage,
+  formatEngineImageTooLargeMessage,
   getEngineImageInputLabel,
   sanitizeImageAttachmentPaths,
 } from "../../engine/utils/engineImageInput";
@@ -1066,15 +1069,51 @@ function ComposerImpl({
       durationMs: 3600,
     });
   }, [imageAttachEngine, t]);
+  const notifyImageTooLarge = useCallback(
+    (bytes: number, maxBytes: number) => {
+      if (!imageAttachEngine) {
+        return;
+      }
+      pushErrorToast({
+        title: t("composer.imageTooLargeTitle", {
+          defaultValue: "Image too large",
+        }),
+        message: formatEngineImageTooLargeMessage(
+          imageAttachEngine,
+          bytes,
+          maxBytes,
+          t as (key: string, options?: Record<string, unknown>) => string,
+        ),
+        durationMs: 4200,
+      });
+    },
+    [imageAttachEngine, t],
+  );
   const handleAttachImagesGuarded = useCallback(
     (paths: string[]) => {
       if (!imageInputSupported) {
         notifyImageInputUnsupported();
         return;
       }
-      onAttachImages?.(paths);
+      const { accepted, rejected } = acceptImagesWithinEngineLimit(
+        paths,
+        imageAttachEngine,
+      );
+      if (rejected) {
+        notifyImageTooLarge(rejected.bytes, rejected.maxBytes);
+      }
+      if (accepted.length === 0) {
+        return;
+      }
+      onAttachImages?.(accepted);
     },
-    [imageInputSupported, notifyImageInputUnsupported, onAttachImages],
+    [
+      imageAttachEngine,
+      imageInputSupported,
+      notifyImageInputUnsupported,
+      notifyImageTooLarge,
+      onAttachImages,
+    ],
   );
   const handlePickImagesGuarded = useCallback(() => {
     if (!imageInputSupported) {
@@ -2458,6 +2497,27 @@ function ComposerImpl({
         onAttachImages?.(mergedImages);
         return;
       }
+      const oversizedImage =
+        mergedImages.length > 0 && imageAttachEngine
+          ? findOversizedImageAttachment(mergedImages, imageAttachEngine)
+          : null;
+      if (oversizedImage && imageAttachEngine) {
+        pushErrorToast({
+          title: t("composer.imageTooLargeTitle", {
+            defaultValue: "Image too large",
+          }),
+          message: formatEngineImageTooLargeMessage(
+            imageAttachEngine,
+            oversizedImage.bytes,
+            oversizedImage.maxBytes,
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+          durationMs: 4200,
+        });
+        setComposerText(submittedText ?? text);
+        onAttachImages?.(mergedImages);
+        return;
+      }
       const browserNavigationUrl =
         mergedImages.length === 0 && !hasIntentCanvasAttachments
           ? resolveBrowserNavigationUrl(trimmed)
@@ -2642,6 +2702,13 @@ function ComposerImpl({
             diagnostic.startsWith("agent-request-images-unsupported:")
           ) {
             message = t("multiAgent.errors.attachments");
+          } else if (
+            diagnostic.startsWith("agent-request-images-too-large:")
+          ) {
+            message =
+              diagnostic
+                .slice("agent-request-images-too-large:".length)
+                .trim() || t("composer.imageTooLargeTitle");
           } else if (
             diagnostic.startsWith("agent-request-context-unsupported:")
           ) {

@@ -93,6 +93,8 @@ const messages = {
     opencodeModelSwitchMessage:
       "检测到同会话切换模型，已自动新建后端会话以避免超时。",
     imageInputUnsupported: "{{engine}} 当前版本不支持图片输入",
+    imageInputTooLarge:
+      "{{engine}} 单张上限 {{maxSize}}，当前约 {{size}}。请压缩或裁剪后再发送。",
     doneIn: "完成，用时 {{duration}}",
     totalDuration: "本次耗时",
     durationSeconds: "耗时{{duration}}",

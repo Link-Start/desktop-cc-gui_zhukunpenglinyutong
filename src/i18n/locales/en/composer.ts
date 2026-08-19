@@ -122,6 +122,7 @@ const composer = {
     imageInputUnsupportedTitle: "Image not supported",
     imageAttachUnsupported:
       "{{engine}} does not support image attachments in this release",
+    imageTooLargeTitle: "Image too large",
     removeAttachment: "Remove attachment",
     queue: "Queue",
     editQueued: "Edit",

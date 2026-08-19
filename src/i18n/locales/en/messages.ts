@@ -108,6 +108,8 @@ const messages = {
       "Model switch detected in the same session. A new backend session has been created to avoid timeouts.",
     imageInputUnsupported:
       "{{engine}} does not support image input in this release",
+    imageInputTooLarge:
+      "{{engine}} accepts images up to {{maxSize}}. This one is about {{size}}. Compress or crop it and try again.",
     doneIn: "Done in {{duration}}",
     totalDuration: "Duration",
     durationSeconds: "took {{duration}}",
