@@ -478,6 +478,70 @@ fn bounded_codex_scan_uses_recent_candidates_and_counts_unique_sessions() {
 }
 
 #[test]
+fn bounded_candidate_collection_does_not_starve_provider_home_roots() {
+    // P0 回归：主 home sessions/archived 填满候选 buffer 后提前 break，
+    // 靠后的 codex-provider-homes roots 永远扫不到，managed provider 会话
+    // 重启后从侧栏消失。per-root 公平收集后，每个 root 的最新文件都必须
+    // 进入全局 mtime 竞争。
+    let base = std::env::temp_dir().join(format!("ccgui-codex-fair-collect-{}", Uuid::new_v4()));
+    let disk_root = base.join("disk").join("sessions");
+    let provider_root = base
+        .join("codex-provider-homes")
+        .join("provider-a")
+        .join("sessions");
+    let day_key = "2026-01-19";
+    let mut disk_paths = Vec::new();
+    for index in 0..6 {
+        disk_paths.push(write_named_session_file(
+            &disk_root,
+            day_key,
+            &format!("disk-session-{index}"),
+            &[r#"{"timestamp":"2026-01-19T12:00:00.000Z","type":"session_meta","payload":{"id":"disk","cwd":"/tmp/project-alpha"}}"#.to_string()],
+        ));
+    }
+    let provider_newest = write_named_session_file(
+        &provider_root,
+        day_key,
+        "provider-session-new",
+        &[r#"{"timestamp":"2026-01-19T12:09:00.000Z","type":"session_meta","payload":{"id":"provider-new","cwd":"/tmp/project-alpha"}}"#.to_string()],
+    );
+    // 主 home 文件全部更旧；provider 文件最新。
+    for (offset, path) in disk_paths.iter().enumerate() {
+        File::open(path)
+            .expect("open disk candidate")
+            .set_modified(
+                std::time::UNIX_EPOCH + std::time::Duration::from_secs(100 + offset as u64),
+            )
+            .expect("set disk mtime");
+    }
+    File::open(&provider_newest)
+        .expect("open provider candidate")
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(10_000))
+        .expect("set provider mtime");
+
+    // cap=4 < 主 home 文件数（6）：旧实现会在第一个 root 填满后 break，
+    // provider root 根本不会被遍历。
+    let candidates = collect_codex_jsonl_candidates_recent_first(&[disk_root, provider_root], 4);
+    let paths = candidates
+        .iter()
+        .map(|candidate| candidate.path.clone())
+        .collect::<Vec<_>>();
+
+    assert!(
+        paths.contains(&provider_newest),
+        "provider-home root must be collected even when earlier roots fill the cap: {paths:?}"
+    );
+    assert_eq!(candidates.len(), 4, "global truncate keeps the cap");
+    assert_eq!(
+        candidates.first().map(|candidate| candidate.path.as_path()),
+        Some(provider_newest.as_path()),
+        "global mtime sort keeps the newest file first"
+    );
+
+    fs::remove_dir_all(base).ok();
+}
+
+#[test]
 fn full_codex_scan_merges_duplicate_evidence_before_truncation() {
     let base = std::env::temp_dir().join(format!("ccgui-codex-full-scan-{}", Uuid::new_v4()));
     let root = base.join("sessions");
