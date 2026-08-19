@@ -439,6 +439,16 @@ describe("threadReducer", () => {
     expect(patched.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe(
       "minimal",
     );
+
+    const ignoredEmpty = threadReducer(patched, {
+      type: "setThreadDshAgentPreset",
+      workspaceId: "ws-1",
+      threadId: "dsh:sess-code",
+      dshAgentPreset: null,
+    });
+    expect(ignoredEmpty.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe(
+      "minimal",
+    );
   });
 
   it("does not churn state for repeated thread list status values", () => {

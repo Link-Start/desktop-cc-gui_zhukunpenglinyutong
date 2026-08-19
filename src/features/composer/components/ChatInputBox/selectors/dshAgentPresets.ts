@@ -135,3 +135,19 @@ export function resolveDshComposerAgentPreset(input: {
     locked: false,
   };
 }
+
+/** Persist only a known header; never stamp a guessed default onto a live session. */
+export function persistableDshAgentPreset(
+  sessionHeader: string | null | undefined,
+  resolvedValue: string | null | undefined,
+): string | null {
+  const header = sessionHeader?.trim() || "";
+  if (header) {
+    return header;
+  }
+  const resolved = resolvedValue?.trim() || "";
+  if (!resolved || resolved === DEFAULT_DSH_AGENT_PRESET) {
+    return null;
+  }
+  return resolved;
+}

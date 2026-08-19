@@ -80,7 +80,10 @@ import {
 } from "../../composer/hooks/explicitComposerEngineSwitch";
 import { resolveSendProviderProfileId } from "./sessionLifecycleController";
 import { getComposerEnginePrefForEngine } from "../../composer/hooks/composerEnginePrefsStore";
-import { resolveDshComposerAgentPreset } from "../../composer/components/ChatInputBox/selectors/dshAgentPresets";
+import {
+  persistableDshAgentPreset,
+  resolveDshComposerAgentPreset,
+} from "../../composer/components/ChatInputBox/selectors/dshAgentPresets";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -1083,12 +1086,13 @@ export function useThreadMessaging({
               supportedStoredSharedTarget?.engine ?? activeEngine,
             )
           : resolvedThreadEngine;
+      const sessionDshAgentPreset =
+        getThreadDshAgentPreset?.(workspace.id, threadId) ?? null;
       const resolvedDshAgentPreset =
         resolvedEngine === "dsh"
           ? resolveDshComposerAgentPreset({
               threadId,
-              sessionHeader:
-                getThreadDshAgentPreset?.(workspace.id, threadId) ?? null,
+              sessionHeader: sessionDshAgentPreset,
               draftOrPref:
                 options?.dshAgentPreset?.trim() ||
                 getComposerEnginePrefForEngine("dsh").dshAgentPreset,
@@ -1097,13 +1101,20 @@ export function useThreadMessaging({
               ),
             }).value
           : null;
+      const persistableSessionPreset =
+        resolvedEngine === "dsh"
+          ? persistableDshAgentPreset(
+              sessionDshAgentPreset,
+              resolvedDshAgentPreset,
+            )
+          : null;
       dispatch({
         type: "ensureThread",
         workspaceId: workspace.id,
         threadId,
         engine: resolvedEngine,
-        ...(resolvedDshAgentPreset
-          ? { dshAgentPreset: resolvedDshAgentPreset }
+        ...(persistableSessionPreset
+          ? { dshAgentPreset: persistableSessionPreset }
           : {}),
       });
       dispatch({
@@ -1112,12 +1123,12 @@ export function useThreadMessaging({
         threadId,
         engine: resolvedEngine,
       });
-      if (resolvedEngine === "dsh" && resolvedDshAgentPreset) {
+      if (resolvedEngine === "dsh" && persistableSessionPreset) {
         dispatch({
           type: "setThreadDshAgentPreset",
           workspaceId: workspace.id,
           threadId,
-          dshAgentPreset: resolvedDshAgentPreset,
+          dshAgentPreset: persistableSessionPreset,
         });
       }
       // 首页首发 / 纯图：在任何 await 之前立刻上屏用户气泡，否则 pending→session

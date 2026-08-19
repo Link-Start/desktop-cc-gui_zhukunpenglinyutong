@@ -23,7 +23,7 @@ DSH 引擎时，composer 工具条在 ModeSelect 与 ReasoningSelect 之间放�
 
 锁定口径：已有 `dsh:` 会话一律按 header 锁定，不看当前 items 是否已 hydrate。`dsh-pending-*` 仅在已有 user message 后锁定。首页 create-session 仍算空白。切会话时不得回落到全局 `ComposerEnginePrefs.dshAgentPreset`。
 
-Resume 展示：`session.list.agentPreset` 写入 `ThreadSummary.dshAgentPreset` 后，index / live merge / rename 必须保留该字段。index 行没有 preset 时不得覆盖 live header。全局 prefs 只播种空白会话。
+Resume 展示：`session.list.agentPreset` 写入 `ThreadSummary.dshAgentPreset` 后，index / live merge / rename 必须保留该字段。index 行没有 preset 时不得覆盖 live header。全局 prefs 只播种空白会话。缺 header 时不得把猜的 `standard` 写回 live summary；本 change 不扩 session_index schema。
 
 ## 数据流
 

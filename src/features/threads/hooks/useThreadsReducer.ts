@@ -1377,7 +1377,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           return thread;
         }
         const current = thread.dshAgentPreset?.trim() || null;
-        if (current === preset) {
+        if (current === preset || (!preset && current)) {
           return thread;
         }
         changed = true;

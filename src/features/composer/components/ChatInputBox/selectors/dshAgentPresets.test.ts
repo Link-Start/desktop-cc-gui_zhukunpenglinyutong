@@ -4,6 +4,7 @@ import {
   displayDshAgentPreset,
   isDshAgentPresetId,
   normalizeDshAgentPreset,
+  persistableDshAgentPreset,
   resolveDshComposerAgentPreset,
 } from "./dshAgentPresets";
 
@@ -46,5 +47,12 @@ describe("dshAgentPresets", () => {
         draftOrPref: "minimal",
       }),
     ).toEqual({ value: "minimal", locked: false });
+  });
+
+  it("does not persist a guessed standard onto a headerless live session", () => {
+    expect(persistableDshAgentPreset(null, "standard")).toBeNull();
+    expect(persistableDshAgentPreset("", "standard")).toBeNull();
+    expect(persistableDshAgentPreset("code", "standard")).toBe("code");
+    expect(persistableDshAgentPreset(null, "minimal")).toBe("minimal");
   });
 });
