@@ -93,7 +93,15 @@ type ListThreadsForWorkspace = (
     /** When true mid-flight, list apply must no-op (workspace cancelled/switched). */
     isStale?: () => boolean;
   },
-) => Promise<void | { applied?: boolean; stale?: boolean }>;
+) => Promise<
+  | void
+  | {
+      applied?: boolean;
+      stale?: boolean;
+      visibleCount?: number;
+      authoritativeEmpty?: boolean;
+    }
+>;
 
 type UseWorkspaceThreadListHydrationOptions = {
   activeWorkspaceId: string | null;
@@ -114,7 +122,7 @@ type UseWorkspaceThreadListHydrationResult = {
       startupHydrationMode?: "full-catalog" | "first-paint";
       mergeExistingThreads?: boolean;
     },
-  ) => void;
+  ) => boolean;
   /** Immutable snapshot identity for UI (memo-safe). Prefer this over the ref for render props. */
   hydratedThreadListWorkspaceIds: ReadonlySet<string>;
   hydratedThreadListWorkspaceIdsRef: MutableRefObject<Set<string>>;
@@ -278,6 +286,8 @@ type ThreadListHydrationResult = void | {
   applied?: boolean;
   stale?: boolean;
   timeout?: boolean;
+  visibleCount?: number;
+  authoritativeEmpty?: boolean;
 };
 const ACTIVE_WORKSPACE_READY_MILESTONE: StartupMilestoneName =
   "active-workspace-ready";
@@ -433,6 +443,43 @@ export function useWorkspaceThreadListHydration({
             postFirstPaintIndexSoftResyncDeferCountRef.current = 0;
             postFirstPaintIndexSoftResyncFirstDeferAtRef.current = 0;
           }
+        });
+    },
+    [listThreadsForWorkspace, workspacesById],
+  );
+
+  const unconfirmedEmptySettleArmedIdsRef = useRef(new Set<string>());
+
+  const scheduleUnconfirmedEmptyFirstPaintSettle = useCallback(
+    (workspaceId: string) => {
+      const id = workspaceId.trim();
+      if (!id || unconfirmedEmptySettleArmedIdsRef.current.has(id)) {
+        return;
+      }
+      const workspace = workspacesById.get(id);
+      if (!workspace) {
+        return;
+      }
+      unconfirmedEmptySettleArmedIdsRef.current.add(id);
+      void Promise.resolve(
+        listThreadsForWorkspace(workspace, {
+          preserveState: true,
+          startupHydrationMode: "first-paint",
+          mergeExistingThreads: true,
+          allowRuntimeReconnect: false,
+          forceSessionIndexSync: true,
+        }),
+      )
+        .catch(() => undefined)
+        .finally(() => {
+          const nextHydrated = publishHydratedWorkspaceId(
+            hydratedThreadListWorkspaceIdsRef,
+            id,
+          );
+          publishHydrationUiState(
+            setHydratedThreadListWorkspaceIds,
+            nextHydrated,
+          );
         });
     },
     [listThreadsForWorkspace, workspacesById],
@@ -621,7 +668,9 @@ export function useWorkspaceThreadListHydration({
             }
             return listThreadsForWorkspace(workspace, {
               ...options,
-              startupHydrationMode: mode,
+              startupHydrationMode: options?.mergeExistingThreads
+                ? undefined
+                : mode,
               allowRuntimeReconnect: false,
               isStale: context.isStale,
             });
@@ -647,10 +696,32 @@ export function useWorkspaceThreadListHydration({
         hydrationPhaseByWorkspaceIdRef.current.delete(workspace.id);
         hydrationKindByWorkspaceIdRef.current.delete(workspace.id);
         if (!discardedAsStale) {
-          const nextHydrated = publishHydratedWorkspaceId(
-            hydratedThreadListWorkspaceIdsRef,
-            workspace.id,
-          );
+          const visibleCount =
+            typeof hydrationResult === "object" && hydrationResult
+              ? (hydrationResult.visibleCount ?? 0)
+              : 0;
+          const authoritativeEmpty =
+            typeof hydrationResult === "object" &&
+            hydrationResult?.authoritativeEmpty === true;
+          const firstPaintUnconfirmedEmpty =
+            finishedKind === "first-paint" &&
+            !settledAsTimeout &&
+            visibleCount <= 0 &&
+            !authoritativeEmpty;
+          if (firstPaintUnconfirmedEmpty) {
+            // Index 空还不是「暂无会话」：importer / 二次 sync 马上会填行。
+            // 保持 加载中，不要先闪空。
+            scheduleUnconfirmedEmptyFirstPaintSettle(workspace.id);
+          } else {
+            const nextHydrated = publishHydratedWorkspaceId(
+              hydratedThreadListWorkspaceIdsRef,
+              workspace.id,
+            );
+            publishHydrationUiState(
+              setHydratedThreadListWorkspaceIds,
+              nextHydrated,
+            );
+          }
           if (finishedKind !== "first-paint") {
             // Mark full attempted so sidebar drops loading; cooldown on timeout.
             publishHydratedWorkspaceId(
@@ -677,12 +748,10 @@ export function useWorkspaceThreadListHydration({
               workspace.id,
             );
             markFullCatalogFresh(workspace.id);
-            schedulePostFirstPaintIndexSoftResync(workspace.id);
+            if (!firstPaintUnconfirmedEmpty) {
+              schedulePostFirstPaintIndexSoftResync(workspace.id);
+            }
           }
-          publishHydrationUiState(
-            setHydratedThreadListWorkspaceIds,
-            nextHydrated,
-          );
         } else {
           // Stale discard: re-ensure first-paint only for the still-active owner.
           if (finishedKind === "first-paint") {
@@ -700,7 +769,11 @@ export function useWorkspaceThreadListHydration({
         }
       }
     },
-    [listThreadsForWorkspace, schedulePostFirstPaintIndexSoftResync],
+    [
+      listThreadsForWorkspace,
+      schedulePostFirstPaintIndexSoftResync,
+      scheduleUnconfirmedEmptyFirstPaintSettle,
+    ],
   );
 
   const ensureWorkspaceThreadListLoaded = useCallback(
@@ -716,7 +789,7 @@ export function useWorkspaceThreadListHydration({
     ) => {
       const workspace = workspacesById.get(workspaceId);
       if (!workspace) {
-        return;
+        return false;
       }
       const force = options?.force ?? false;
       const isLoading = threadListLoadingByWorkspace[workspaceId] ?? false;
@@ -726,8 +799,11 @@ export function useWorkspaceThreadListHydration({
         fullyHydratedThreadListWorkspaceIdsRef.current.has(workspaceId);
       // Switch / daily / already-hydrated stay on Index first-paint.
       // Only force or an explicit full-catalog request fans out engines.
+      // Importer rematerialize is Index merge: not first-paint, not catalog.
       const kind: ThreadHydrationKind = force
         ? "full-catalog"
+        : options?.mergeExistingThreads
+          ? "first-paint"
         : options?.startupHydrationMode === "first-paint"
           ? "first-paint"
         : options?.startupHydrationMode === "full-catalog"
@@ -740,21 +816,21 @@ export function useWorkspaceThreadListHydration({
         !force &&
         shouldSkipWorkspaceDuringColdStart(workspaceId, activeWorkspaceId)
       ) {
-        return;
+        return false;
       }
       if (
         force &&
         isColdStartListGuardActive() &&
         workspaceId !== activeWorkspaceId
       ) {
-        return;
+        return false;
       }
       if (
         kind === "full-catalog" &&
         !force &&
         (isFullCatalogAutoRetryBlocked(workspaceId) || isStartupForceEntered())
       ) {
-        return;
+        return false;
       }
       if (force && kind === "full-catalog") {
         clearFullCatalogAutoRetryCooldown(workspaceId);
@@ -768,14 +844,16 @@ export function useWorkspaceThreadListHydration({
         fullyHydrated &&
         isFullCatalogFresh(workspaceId)
       ) {
-        return;
+        return false;
       }
       const hasHydratedThreadList =
-        options?.startupHydrationMode === "first-paint"
+        options?.mergeExistingThreads
           ? false
-          : kind === "first-paint"
-            ? uiHydrated
-            : fullyHydrated;
+          : options?.startupHydrationMode === "first-paint"
+            ? false
+            : kind === "first-paint"
+              ? uiHydrated
+              : fullyHydrated;
       const isHydratingThreadList =
         hydratingThreadListWorkspaceIdsRef.current.has(workspaceId);
       if (
@@ -784,9 +862,10 @@ export function useWorkspaceThreadListHydration({
           isLoading,
           isHydratingThreadList,
           hasHydratedThreadList,
-        })
+        }) &&
+        options?.startupHydrationMode !== "first-paint"
       ) {
-        return;
+        return false;
       }
       const phase: ThreadHydrationPhase = force
         ? "on-demand"
@@ -798,10 +877,15 @@ export function useWorkspaceThreadListHydration({
       void listThreadsForWorkspaceTracked(workspace, {
         preserveState: options?.preserveState,
         deletedThreadIds: options?.deletedThreadIds,
-        startupHydrationMode:
-          kind === "first-paint" ? "first-paint" : "full-catalog",
+        startupHydrationMode: options?.mergeExistingThreads
+          ? undefined
+          : kind === "first-paint"
+            ? "first-paint"
+            : "full-catalog",
         mergeExistingThreads: options?.mergeExistingThreads,
+        includeOpenCodeSessions: options?.mergeExistingThreads ? false : undefined,
       });
+      return true;
     },
     [
       activeWorkspaceId,
@@ -956,9 +1040,16 @@ export function useWorkspaceThreadListHydration({
         );
         return;
       }
-      autoHydratedActiveWorkspaceIdRef.current = targetId;
       pendingAutoFirstPaintCleanupRef.current = null;
-      ensureWorkspaceThreadListLoaded(targetId, { preserveState: true });
+      const alreadyHydrated =
+        hydratedThreadListWorkspaceIdsRef.current.has(targetId);
+      const started = ensureWorkspaceThreadListLoaded(targetId, {
+        preserveState: true,
+        startupHydrationMode: "first-paint",
+      });
+      if (started || alreadyHydrated) {
+        autoHydratedActiveWorkspaceIdRef.current = targetId;
+      }
     };
 
     const armQuietSchedule = () => {
@@ -1110,10 +1201,14 @@ export function useWorkspaceThreadListHydration({
         }
         const ids = event.payload?.workspaceIds ?? [];
         ids.forEach((workspaceId) => {
+          const alreadyHydrated =
+            hydratedThreadListWorkspaceIdsRef.current.has(workspaceId);
           ensureWorkspaceThreadListLoaded(workspaceId, {
             preserveState: true,
-            startupHydrationMode: "first-paint",
-            mergeExistingThreads: true,
+            mergeExistingThreads: alreadyHydrated,
+            ...(alreadyHydrated
+              ? {}
+              : { startupHydrationMode: "first-paint" as const }),
           });
         });
       },

@@ -87,6 +87,10 @@ import {
   scheduleRenameTurnFinalMetaThreadId,
 } from "../utils/turnFinalMetaStorage";
 import {
+  scheduleTombstoneLocalPendingDraftIndexRow,
+  writeRemappedClientSessionIndex,
+} from "../../../services/tauri/sessionIndex";
+import {
   dropLatestLocalReviewStart,
   ensureUniqueReviewId,
   findMatchingReview,
@@ -655,6 +659,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           const oldThreadId = pendingThread.id;
           const newThreadId = action.threadId;
           scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
+          scheduleTombstoneLocalPendingDraftIndexRow(oldThreadId);
+          writeRemappedClientSessionIndex({
+            workspaceId: action.workspaceId,
+            threadId: newThreadId,
+            engine: pendingEngine ?? pendingThread.engineSource,
+            providerProfileId:
+              action.providerProfileId ?? pendingThread.providerProfileId,
+            providerProfileName:
+              action.providerProfileName ?? pendingThread.providerProfileName,
+          });
 
           // Rename thread inline (similar to renameThreadId action)
           const updatedThread = attachReplacedThreadId(
@@ -2121,6 +2135,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "renameThreadId": {
       const { workspaceId, oldThreadId, newThreadId } = action;
       scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
+      scheduleTombstoneLocalPendingDraftIndexRow(oldThreadId);
+      const renamedThread = (state.threadsByWorkspace[workspaceId] ?? []).find(
+        (thread) => thread.id === oldThreadId,
+      );
+      writeRemappedClientSessionIndex({
+        workspaceId,
+        threadId: newThreadId,
+        engine: renamedThread?.engineSource,
+        providerProfileId: renamedThread?.providerProfileId,
+        providerProfileName: renamedThread?.providerProfileName,
+      });
       return renameThreadStateIdentity({
         state,
         workspaceId,
@@ -2801,25 +2826,56 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       locallyAcceptedCodexToPreserve.forEach((thread) => {
         preservedThreadIds.add(thread.id);
       });
-      const mergedVisibleThreads =
+      const continuityThreadsToPreserve = action.unionMembership
+        ? existingThreads.filter((thread) => {
+        const threadId = thread.id;
+        if (
+          !threadId ||
+          newThreadIds.has(threadId) ||
+          preservedThreadIds.has(threadId) ||
+          threadId === activeThreadId
+        ) {
+          return false;
+        }
+        if (
+          hidden[threadId] ||
+          isHiddenAutomaticThread(thread) ||
+          promotedPendingAliases.has(threadId)
+        ) {
+          return false;
+        }
+        if (threadId.includes("-pending-") && !isClaudeForkThreadId(threadId)) {
+          return false;
+        }
+        return true;
+      })
+        : [];
+      continuityThreadsToPreserve.forEach((thread) => {
+        preservedThreadIds.add(thread.id);
+      });
+      const hasPreservedRows =
         provisionalThreadsToPreserve.length > 0 ||
         finalizedCodexToPreserve.length > 0 ||
-        locallyAcceptedCodexToPreserve.length > 0
-          ? activeThreadId && visibleThreads[0]?.id === activeThreadId
-            ? [
+        locallyAcceptedCodexToPreserve.length > 0 ||
+        continuityThreadsToPreserve.length > 0;
+      const mergedVisibleThreads = hasPreservedRows
+        ? activeThreadId && visibleThreads[0]?.id === activeThreadId
+          ? [
               visibleThreads[0],
               ...finalizedCodexToPreserve,
               ...locallyAcceptedCodexToPreserve,
               ...provisionalThreadsToPreserve,
+              ...continuityThreadsToPreserve,
               ...visibleThreads.slice(1),
             ]
-            : [
+          : [
               ...finalizedCodexToPreserve,
               ...locallyAcceptedCodexToPreserve,
               ...provisionalThreadsToPreserve,
+              ...continuityThreadsToPreserve,
               ...visibleThreads,
             ]
-          : visibleThreads;
+        : visibleThreads;
       if (threadSummaryListEqual(existingThreads, mergedVisibleThreads)) {
         return state;
       }

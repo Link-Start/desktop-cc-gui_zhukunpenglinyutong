@@ -84,6 +84,7 @@ import {
   type WorkspaceGroupSection,
   type WorkspaceThreadRows,
 } from "./sidebarInternals";
+import { shouldHidePlaceholderNativeDraftFromSidebar } from "../../threads/hooks/sessionIndexThreadSummaries";
 import ChevronsDownUp from "lucide-react/dist/esm/icons/chevrons-down-up";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right";
 import Eye from "lucide-react/dist/esm/icons/eye";
@@ -592,7 +593,18 @@ function SidebarImpl({
   const getProjectedThreads = useCallback(
     (workspaceId: string) =>
       buildClaudeLiveSubagentRows(
-        threadsByWorkspace[workspaceId] ?? [],
+        (threadsByWorkspace[workspaceId] ?? []).filter(
+          (thread) =>
+            !shouldHidePlaceholderNativeDraftFromSidebar({
+              engine: thread.engineSource,
+              threadId: thread.id,
+              displayName: thread.name,
+              isActive:
+                workspaceId === activeWorkspaceId &&
+                thread.id === activeThreadId,
+              isChildSession: Boolean(thread.parentThreadId?.trim()),
+            }),
+        ),
         workspaceId,
         activeWorkspaceId,
         activeThreadId,
@@ -1945,6 +1957,8 @@ function SidebarImpl({
     // disconnected workspaces never hydrate so they spun forever.
     const hasCachedThreadList =
       threads.length > 0 || Boolean(nextCursor);
+    // Connected + no cache + not hydrated: show 加载中 while first-paint runs.
+    // Hydration must actually start without a click (see thread-list hydration).
     const showThreadLoadingState =
       !isThreadListHydrated &&
       worktrees.length === 0 &&

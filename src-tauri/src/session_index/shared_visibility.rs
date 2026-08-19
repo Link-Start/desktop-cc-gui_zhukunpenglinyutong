@@ -298,6 +298,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         }
     }
 
@@ -342,11 +344,8 @@ mod tests {
 
     #[test]
     fn missing_shared_workspace_is_available_with_empty_hide() {
-        let projection = load_shared_native_visibility_projection(
-            "ws-does-not-exist-for-visibility",
-            None,
-            &[],
-        );
+        let projection =
+            load_shared_native_visibility_projection("ws-does-not-exist-for-visibility", None, &[]);
         assert!(projection.available);
         assert_eq!(projection.freshness, "verified");
         assert!(projection.hidden_native_ids.is_empty());
@@ -363,7 +362,10 @@ mod tests {
         );
         assert!(!projection.available);
         assert_eq!(projection.freshness, "unavailable");
-        assert!(projection.hidden_native_ids.iter().any(|id| id == "native-v0"));
+        assert!(projection
+            .hidden_native_ids
+            .iter()
+            .any(|id| id == "native-v0"));
     }
 
     #[test]
@@ -377,8 +379,15 @@ mod tests {
         );
         assert!(!projection.available);
         assert_eq!(projection.freshness, "unavailable");
-        assert!(projection.reason.as_deref().unwrap_or("").contains("v2-readonly"));
-        assert!(projection.hidden_native_ids.iter().any(|id| id == "native-v0"));
+        assert!(projection
+            .reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("v2-readonly"));
+        assert!(projection
+            .hidden_native_ids
+            .iter()
+            .any(|id| id == "native-v0"));
     }
 
     #[test]
@@ -392,7 +401,10 @@ mod tests {
         );
         assert!(projection.available);
         assert_eq!(projection.freshness, "verified");
-        assert!(projection.hidden_native_ids.iter().any(|id| id == "native-v0"));
+        assert!(projection
+            .hidden_native_ids
+            .iter()
+            .any(|id| id == "native-v0"));
     }
 
     #[test]

@@ -602,7 +602,7 @@ const settings = {
     "displaySubtitle": "顯示",
     "displaySubDescription": "調整視窗算繪背景與效果的方式。",
     "sidebarProviderLabels": "在工作階段清單中顯示供應商標籤",
-    "sidebarProviderLabelsDesc": "在側邊欄與釘選的工作階段清單中顯示 Codex 供應商徽章。",
+    "sidebarProviderLabelsDesc": "在側邊欄與釘選的工作階段清單中顯示工作階段使用的供應商標籤。",
     "clientUiVisibility": {
       "title": "用戶端 UI 可見性",
       "description": "隱藏選用面板與圖示按鈕，但不停用底層功能。",
@@ -992,6 +992,7 @@ const settings = {
     "vendor": {
       "officialConfig": "官方配置",
       "thirdPartyConfig": "第三方配置",
+      "globalSettings": "全域設定",
       "engineSettings": "引擎設定",
       "providerChannels": "供應商渠道",
       "ccSwitchImport": {

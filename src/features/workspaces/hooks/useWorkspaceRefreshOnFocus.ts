@@ -16,6 +16,7 @@ type WorkspaceRefreshOptions = {
       recoverySource?: "focus-refresh";
       allowRuntimeReconnect?: boolean;
       startupHydrationMode?: "full-catalog" | "first-paint";
+      mergeExistingThreads?: boolean;
     },
   ) => Promise<unknown>;
 };
@@ -75,7 +76,8 @@ export function useWorkspaceRefreshOnFocus({
             preserveState: true,
             recoverySource: "focus-refresh",
             allowRuntimeReconnect: false,
-            startupHydrationMode: "first-paint",
+            mergeExistingThreads: true,
+            includeOpenCodeSessions: false,
           });
         }
         await Promise.allSettled(
@@ -84,7 +86,8 @@ export function useWorkspaceRefreshOnFocus({
               preserveState: true,
               recoverySource: "focus-refresh",
               allowRuntimeReconnect: false,
-              startupHydrationMode: "first-paint",
+              mergeExistingThreads: true,
+              includeOpenCodeSessions: false,
             }),
           ),
         );

@@ -625,8 +625,9 @@ describe("VendorSettingsPanel", () => {
     expect(
       screen.queryByText("settings.vendor.grokLocalProviderDescription"),
     ).toBeNull();
+    // [0] 是全局「供应商标签」卡的帮助；本地配置说明在 [1]。
     fireEvent.click(
-      screen.getAllByRole("button", { name: "What does this do?" })[0],
+      screen.getAllByRole("button", { name: "What does this do?" })[1],
     );
     expect(
       await screen.findByText("settings.vendor.grokLocalProviderDescription"),
@@ -695,8 +696,9 @@ describe("VendorSettingsPanel", () => {
     expect(
       screen.queryByText("settings.vendor.opencodeLocalProviderDescription"),
     ).toBeNull();
+    // [0] 是全局「供应商标签」卡的帮助；本地配置说明在 [1]。
     fireEvent.click(
-      screen.getAllByRole("button", { name: "What does this do?" })[0],
+      screen.getAllByRole("button", { name: "What does this do?" })[1],
     );
     expect(
       await screen.findByText(
@@ -937,8 +939,9 @@ describe("VendorSettingsPanel", () => {
     expect(
       screen.queryByText("settings.vendor.kimiLocalProviderDescription"),
     ).toBeNull();
+    // [0] 是全局「供应商标签」卡的帮助；本地配置说明在 [1]。
     fireEvent.click(
-      screen.getAllByRole("button", { name: "What does this do?" })[0],
+      screen.getAllByRole("button", { name: "What does this do?" })[1],
     );
     expect(
       await screen.findByText("settings.vendor.kimiLocalProviderDescription"),
@@ -977,10 +980,10 @@ describe("VendorSettingsPanel", () => {
       name: "What does this do?",
     });
     // CurrentCodexGlobalConfigCard is mocked and custom models intentionally
-    // uses an inline hint, leaving help for custom path, runtime, and labels.
+    // uses an inline hint, leaving help for global labels, custom path, runtime.
     expect(helpButtons).toHaveLength(3);
 
-    fireEvent.click(helpButtons[0]);
+    fireEvent.click(helpButtons[1]);
     expect(
       await screen.findByText("Configure the executable path for this CLI."),
     ).toBeTruthy();
@@ -989,8 +992,8 @@ describe("VendorSettingsPanel", () => {
     ).toBeTruthy();
 
     // Close the open popover before opening the next row help.
-    fireEvent.click(helpButtons[0]);
     fireEvent.click(helpButtons[1]);
+    fireEvent.click(helpButtons[2]);
     expect(
       await screen.findByText("Official default on this platform: enabled."),
     ).toBeTruthy();
@@ -1000,19 +1003,26 @@ describe("VendorSettingsPanel", () => {
       ),
     ).toBeTruthy();
 
-    fireEvent.click(helpButtons[1]);
     fireEvent.click(helpButtons[2]);
+    fireEvent.click(helpButtons[0]);
     expect(
       await screen.findByText(
-        "Display Codex provider badges in the sidebar and pinned session lists.",
+        "Show the provider each session uses in the sidebar and pinned session lists.",
       ),
     ).toBeTruthy();
   });
 
-  it("toggles sidebar provider labels from the Codex provider tab", async () => {
+  it("toggles sidebar provider labels from the global settings card", async () => {
     const { onUpdateAppSettings } = renderPanel();
 
-    await openCodexTab();
+    fireEvent.click(screen.getByRole("button", { name: "Claude Code CLI" }));
+
+    expect(
+      screen.getByRole("heading", { name: "Global settings" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "Claude Code CLI" }),
+    ).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("switch", {
@@ -1025,6 +1035,19 @@ describe("VendorSettingsPanel", () => {
         expect.objectContaining({ showSidebarProviderLabels: true }),
       );
     });
+  });
+
+  it("keeps engine detail visible next to the global settings card", async () => {
+    renderPanel();
+    await openCodexTab();
+
+    expect(
+      screen.getByRole("heading", { name: "Global settings" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Codex CLI" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Engine settings" }),
+    ).toBeTruthy();
   });
 
   it("restores official default without extra confirm dialog", async () => {

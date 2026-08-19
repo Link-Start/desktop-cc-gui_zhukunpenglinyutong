@@ -1018,6 +1018,7 @@ const settings = {
         "fromCcSwitchUpdate": "cc-switchからインポート/更新",
         "fromCcSwitchFile": "インポートするcc-switch.dbファイルを選択",
       },
+      "globalSettings": "グローバル設定",
       "engineSettings": "エンジン設定",
       "providerChannels": "プロバイダーチャネル",
       "allProviders": "すべてのプロバイダー",

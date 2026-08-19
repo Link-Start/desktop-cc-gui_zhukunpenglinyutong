@@ -230,3 +230,113 @@ fn deleting_session_metadata_removes_provider_bindings() {
         .codex_provider_binding_by_session_id
         .contains_key("claude:session-1"));
 }
+
+#[test]
+fn session_index_overlay_fills_provider_from_binding_ledger() {
+    let base = std::env::temp_dir().join(format!("index-overlay-binding-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&base).expect("create temp dir");
+    let storage_path = base.join("workspaces.json");
+    std::fs::write(&storage_path, "[]").expect("seed storage path");
+    let binding = EngineProviderBinding {
+        provider_profile_id: "provider-a".to_string(),
+        provider_profile_source: "managed".to_string(),
+        provider_profile_name: "Provider A".to_string(),
+        provider_availability: "available".to_string(),
+    };
+    assert!(record_engine_provider_binding_at_path(
+        &storage_path,
+        "ws-1",
+        "grok-session-1",
+        "grok",
+        &binding,
+    )
+    .expect("record binding"));
+
+    let mut rows = vec![crate::session_index::store::SessionIndexRow {
+        engine: "grok".to_string(),
+        session_id: "grok-session-1".to_string(),
+        title: "你好".to_string(),
+        native_title: None,
+        updated_at: 1,
+        created_at: None,
+        cwd: None,
+        workspace_path: None,
+        physical_path: None,
+        parent_session_id: None,
+        size_bytes: None,
+        provider_profile_id: None,
+        provider_profile_name: None,
+    }];
+    overlay_session_index_provider_bindings(&storage_path, "ws-1", &mut rows);
+
+    assert_eq!(rows[0].provider_profile_id.as_deref(), Some("provider-a"));
+    assert_eq!(rows[0].provider_profile_name.as_deref(), Some("Provider A"));
+    std::fs::remove_dir_all(base).ok();
+}
+
+#[test]
+fn session_index_overlay_codex_falls_back_to_provider_home_path() {
+    let base = std::env::temp_dir().join(format!("index-overlay-codex-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&base).expect("create temp dir");
+    let storage_path = base.join("workspaces.json");
+    std::fs::write(&storage_path, "[]").expect("seed storage path");
+
+    let mut rows = vec![crate::session_index::store::SessionIndexRow {
+        engine: "codex".to_string(),
+        session_id: "codex-session-1".to_string(),
+        title: "你好".to_string(),
+        native_title: None,
+        updated_at: 1,
+        created_at: None,
+        cwd: None,
+        workspace_path: None,
+        physical_path: Some(
+            "/Users/x/.ccgui/codex-provider-homes/profile-xyz/sessions/2026/08/19/rollout-1.jsonl"
+                .to_string(),
+        ),
+        parent_session_id: None,
+        size_bytes: None,
+        provider_profile_id: None,
+        provider_profile_name: None,
+    }];
+    // 账本完全缺失也要能从路径推断 id（name 依赖本机 config，不断言具体值）。
+    overlay_session_index_provider_bindings(&storage_path, "ws-1", &mut rows);
+
+    assert_eq!(
+        rows[0].provider_profile_id.as_deref(),
+        Some("profile-xyz")
+    );
+    assert!(rows[0].provider_profile_name.is_some());
+    std::fs::remove_dir_all(base).ok();
+}
+
+#[test]
+fn session_index_overlay_keeps_existing_provider_and_survives_missing_metadata() {
+    let base = std::env::temp_dir().join(format!("index-overlay-keep-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&base).expect("create temp dir");
+    let storage_path = base.join("workspaces.json");
+    // 连 workspaces.json 都不写：metadata 读取失败必须静默降级。
+    let mut rows = vec![crate::session_index::store::SessionIndexRow {
+        engine: "claude".to_string(),
+        session_id: "claude-session-1".to_string(),
+        title: "你好".to_string(),
+        native_title: None,
+        updated_at: 1,
+        created_at: None,
+        cwd: None,
+        workspace_path: None,
+        physical_path: None,
+        parent_session_id: None,
+        size_bytes: None,
+        provider_profile_id: Some("provider-keep".to_string()),
+        provider_profile_name: Some("Keep Me".to_string()),
+    }];
+    overlay_session_index_provider_bindings(&storage_path, "ws-1", &mut rows);
+
+    assert_eq!(
+        rows[0].provider_profile_id.as_deref(),
+        Some("provider-keep")
+    );
+    assert_eq!(rows[0].provider_profile_name.as_deref(), Some("Keep Me"));
+    std::fs::remove_dir_all(base).ok();
+}

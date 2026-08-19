@@ -9,6 +9,6 @@
 pub(crate) mod commands;
 mod empty_prune;
 pub(crate) mod importer;
-mod shared_visibility;
-mod store;
+pub(crate) mod shared_visibility;
+pub(crate) mod store;
 mod writers;

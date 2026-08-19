@@ -17,7 +17,8 @@ use std::time::Duration;
 use super::store::{list_for_workspace_path, now_ms, SessionIndexRow};
 use super::writers::{
     claude_value_has_media_part, extract_text_preview, is_claude_control_or_synthetic_user_text,
-    is_claude_user_or_human_entry, read_jsonl_line_capped, should_omit_codex_index_title, JsonlLine,
+    is_claude_user_or_human_entry, read_jsonl_line_capped, should_omit_codex_index_title,
+    JsonlLine,
 };
 use crate::claude_home::resolve_effective_claude_home;
 use crate::engine::claude_history::encode_project_path;
@@ -27,7 +28,9 @@ use crate::engine::grok_history::{
     candidate_encoded_cwd_names, first_user_prompt_from_line, resolve_grok_base_dir,
     session_dir_looks_valid,
 };
-use crate::engine::pi_history::{locate_pi_session_file, scan_pi_jsonl_user_prompt, PiUserPromptScan};
+use crate::engine::pi_history::{
+    locate_pi_session_file, scan_pi_jsonl_user_prompt, PiUserPromptScan,
+};
 use crate::state::AppState;
 use std::sync::Arc;
 
@@ -252,9 +255,10 @@ pub(crate) fn is_local_pending_draft_id(engine: &str, session_id: &str) -> bool 
     if engine.is_empty() || session_id.is_empty() {
         return false;
     }
-    let Some(rest) = session_id.strip_prefix(engine).and_then(|value| {
-        value.strip_prefix("-pending-")
-    }) else {
+    let Some(rest) = session_id
+        .strip_prefix(engine)
+        .and_then(|value| value.strip_prefix("-pending-"))
+    else {
         return false;
     };
     if rest.starts_with("shared-") || rest.starts_with("subagent:") {
@@ -769,14 +773,14 @@ async fn confirm_dsh_empty_targets(
             (session_id, peek)
         }
     });
-    let peeked = match tokio::time::timeout(DSH_PRUNE_BUDGET, futures_util::future::join_all(peeks)).await
-    {
-        Ok(items) => items,
-        Err(_) => {
-            log::info!("[session_index.empty_prune] dsh peek budget exceeded, skip remainder");
-            Vec::new()
-        }
-    };
+    let peeked =
+        match tokio::time::timeout(DSH_PRUNE_BUDGET, futures_util::future::join_all(peeks)).await {
+            Ok(items) => items,
+            Err(_) => {
+                log::info!("[session_index.empty_prune] dsh peek budget exceeded, skip remainder");
+                Vec::new()
+            }
+        };
     for (session_id, peek) in peeked {
         match peek {
             Ok(Ok(DshLatestUserPeek::Empty)) => targets.push(PruneTarget {
@@ -949,11 +953,9 @@ async fn delete_zero_byte_physical_path(target: &PruneTarget) -> Result<(), Stri
     };
     let path = PathBuf::from(physical);
     match tokio::fs::metadata(&path).await {
-        Ok(meta) if meta.is_file() && meta.len() == 0 => {
-            tokio::fs::remove_file(&path)
-                .await
-                .map_err(|error| error.to_string())
-        }
+        Ok(meta) if meta.is_file() && meta.len() == 0 => tokio::fs::remove_file(&path)
+            .await
+            .map_err(|error| error.to_string()),
         Ok(meta) => Err(format!(
             "refusing to delete non-empty physical path ({} bytes)",
             meta.len()
@@ -1015,6 +1017,8 @@ mod tests {
             physical_path: physical_path.map(str::to_string),
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         }
     }
 
@@ -1023,7 +1027,10 @@ mod tests {
         assert!(is_placeholder_session_title("grok session", "abc"));
         assert!(is_placeholder_session_title("Claude Session", "abc"));
         assert!(is_placeholder_session_title("Codex Session", "abc"));
-        assert!(is_placeholder_session_title("DeepSeek Harness Session", "abc"));
+        assert!(is_placeholder_session_title(
+            "DeepSeek Harness Session",
+            "abc"
+        ));
         assert!(is_placeholder_session_title(
             "73595715-aaaa-bbbb-cccc-ddddeeeeffff",
             "73595715-aaaa-bbbb-cccc-ddddeeeeffff"
@@ -1049,7 +1056,10 @@ mod tests {
         assert!(is_placeholder_session_title("Agent 3", "abc"));
         assert!(!is_placeholder_session_title("我的草稿", "abc"));
         assert!(!is_placeholder_session_title("分析左侧栏消失问题", "abc"));
-        assert!(!is_placeholder_session_title("PI session about rust", "abc"));
+        assert!(!is_placeholder_session_title(
+            "PI session about rust",
+            "abc"
+        ));
     }
 
     #[test]
@@ -1114,10 +1124,8 @@ mod tests {
 
     #[test]
     fn empty_claude_jsonl_is_collected_and_prompted_file_is_not() {
-        let dir = std::env::temp_dir().join(format!(
-            "ccgui-empty-prune-claude-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("ccgui-empty-prune-claude-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("mkdir");
         let empty_path = dir.join("empty.jsonl");
@@ -1305,10 +1313,8 @@ mod tests {
     #[test]
     fn grok_empty_chat_history_is_collected() {
         let _lock = GROK_HOME_TEST_LOCK.lock().expect("grok home lock");
-        let grok_home = std::env::temp_dir().join(format!(
-            "ccgui-empty-prune-grok-{}",
-            std::process::id()
-        ));
+        let grok_home =
+            std::env::temp_dir().join(format!("ccgui-empty-prune-grok-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&grok_home);
         let _restore = RestoreGrokHome(std::env::var("GROK_HOME").ok());
         std::env::set_var("GROK_HOME", &grok_home);
@@ -1321,8 +1327,11 @@ mod tests {
         let session_id = "ses-empty-grok";
         let session_dir = grok_home.join("sessions").join(encoded).join(session_id);
         std::fs::create_dir_all(&session_dir).expect("mkdir grok");
-        std::fs::write(session_dir.join("summary.json"), r#"{"num_chat_messages":0}"#)
-            .expect("summary");
+        std::fs::write(
+            session_dir.join("summary.json"),
+            r#"{"num_chat_messages":0}"#,
+        )
+        .expect("summary");
         std::fs::write(session_dir.join("chat_history.jsonl"), "").expect("chat");
 
         let connection = Connection::open_in_memory().expect("open");
@@ -1382,14 +1391,7 @@ mod tests {
         connection.execute_batch(DDL).expect("ddl");
         upsert_rows(
             &connection,
-            &[sample_row(
-                "grok",
-                session_id,
-                session_id,
-                Some(1),
-                1,
-                None,
-            )],
+            &[sample_row("grok", session_id, session_id, Some(1), 1, None)],
         )
         .expect("upsert");
         let targets = collect_confirmed_empty_targets(&connection, "/tmp/proj", 20 * 60 * 1000)
@@ -1543,7 +1545,8 @@ mod tests {
             )],
         )
         .expect("upsert");
-        let plan = collect_empty_prune_plan(&connection, "/tmp/proj", 20 * 60 * 1000).expect("plan");
+        let plan =
+            collect_empty_prune_plan(&connection, "/tmp/proj", 20 * 60 * 1000).expect("plan");
         assert!(plan.targets.is_empty(), "DSH must not be guessed from disk");
         assert_eq!(plan.dsh_session_ids, vec!["dsh-empty-1".to_string()]);
     }
@@ -1551,10 +1554,8 @@ mod tests {
     #[test]
     fn pi_empty_jsonl_is_collected_and_missing_file_is_not() {
         let _lock = PI_SESSION_DIR_TEST_LOCK.lock().expect("pi session lock");
-        let root = std::env::temp_dir().join(format!(
-            "ccgui-empty-prune-pi-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("ccgui-empty-prune-pi-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let _restore = RestorePiSessionDir(std::env::var("PI_CODING_AGENT_SESSION_DIR").ok());
         std::env::set_var("PI_CODING_AGENT_SESSION_DIR", &root);
@@ -1627,8 +1628,11 @@ mod tests {
             .join("not-the-encoded-cwd")
             .join(session_id);
         std::fs::create_dir_all(&session_dir).expect("mkdir grok");
-        std::fs::write(session_dir.join("summary.json"), r#"{"num_chat_messages":0}"#)
-            .expect("summary");
+        std::fs::write(
+            session_dir.join("summary.json"),
+            r#"{"num_chat_messages":0}"#,
+        )
+        .expect("summary");
         std::fs::write(session_dir.join("chat_history.jsonl"), "").expect("chat");
 
         let connection = Connection::open_in_memory().expect("open");
@@ -1851,17 +1855,20 @@ mod tests {
             "codex",
             "codex-pending-1786994371985-fv4mt5"
         ));
-        assert!(!is_local_pending_draft_id(
-            "grok",
-            "grok-pending-shared-1"
-        ));
+        assert!(!is_local_pending_draft_id("grok", "grok-pending-shared-1"));
         assert!(!is_local_pending_draft_id(
             "claude",
             "claude-pending-subagent:parent:toolu_1"
         ));
-        assert!(!is_local_pending_draft_id("grok", "14a64a80-c9ab-4ff1-a1de-196dca031750"));
+        assert!(!is_local_pending_draft_id(
+            "grok",
+            "14a64a80-c9ab-4ff1-a1de-196dca031750"
+        ));
         assert!(!is_local_pending_draft_id("dsh", "dsh-empty-1"));
-        assert!(!is_local_pending_draft_id("claude", "grok-pending-1787016153035-0bittx"));
+        assert!(!is_local_pending_draft_id(
+            "claude",
+            "grok-pending-1787016153035-0bittx"
+        ));
     }
 
     #[test]
@@ -1923,7 +1930,8 @@ mod tests {
         )
         .expect("upsert");
 
-        let plan = collect_empty_prune_plan(&connection, "/tmp/proj", 20 * 60 * 1000).expect("plan");
+        let plan =
+            collect_empty_prune_plan(&connection, "/tmp/proj", 20 * 60 * 1000).expect("plan");
         let mut ids: Vec<_> = plan
             .targets
             .iter()

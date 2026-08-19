@@ -235,10 +235,10 @@ fn claude_index_row_from_file(
         cwd: Some(workspace_key.clone()),
         workspace_path: Some(workspace_key),
         physical_path: Some(path.to_string_lossy().to_string()),
-        parent_session_id: super::shared_visibility::extract_claude_parent_session_id(
-            &session_id,
-        ),
+        parent_session_id: super::shared_visibility::extract_claude_parent_session_id(&session_id),
         size_bytes,
+        provider_profile_id: None,
+        provider_profile_name: None,
     })
 }
 
@@ -286,9 +286,11 @@ fn collect_codex_index_rows(
 ) -> (Vec<SessionIndexRow>, Vec<(String, String)>) {
     let mut rows = Vec::new();
     let mut omitted = Vec::new();
+    // provider id → 显示名 per-collect cache，避免每行重复读 config。
+    let mut provider_name_cache: HashMap<String, String> = HashMap::new();
     for summary in summaries {
         let session_id = summary.session_id.clone();
-        match codex_summary_to_index_row(summary, workspace_key) {
+        match codex_summary_to_index_row(summary, workspace_key, &mut provider_name_cache) {
             Some(row) => rows.push(row),
             None => omitted.push(("codex".to_string(), session_id)),
         }
@@ -299,6 +301,7 @@ fn collect_codex_index_rows(
 fn codex_summary_to_index_row(
     summary: crate::types::LocalUsageSessionSummary,
     workspace_key: &str,
+    provider_name_cache: &mut HashMap<String, String>,
 ) -> Option<SessionIndexRow> {
     let title = summary
         .native_title
@@ -308,6 +311,23 @@ fn codex_summary_to_index_row(
     if should_omit_codex_index_title(&title) {
         return None;
     }
+    // scan 已从 physical path 推断 managed provider id（provider-home 会话）；
+    // 这里解析显示名，让 first paint 就能画供应商标签。
+    let provider_profile_id = summary
+        .provider_profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let provider_profile_name = provider_profile_id.as_ref().map(|profile_id| {
+        provider_name_cache
+            .entry(profile_id.clone())
+            .or_insert_with(|| {
+                crate::codex::provider_profile::codex_provider_binding_for_profile_id(profile_id)
+                    .provider_profile_name
+            })
+            .clone()
+    });
     Some(SessionIndexRow {
         engine: "codex".into(),
         session_id: summary.session_id,
@@ -328,6 +348,8 @@ fn codex_summary_to_index_row(
         physical_path: summary.physical_path,
         parent_session_id: summary.parent_session_id,
         size_bytes: summary.file_size_bytes,
+        provider_profile_id,
+        provider_profile_name,
     })
 }
 
@@ -400,6 +422,8 @@ fn parse_kimi_index_line(line: &str, target: &str) -> Option<SessionIndexRow> {
         physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
         parent_session_id: None,
         size_bytes: None,
+        provider_profile_id: None,
+        provider_profile_name: None,
     })
 }
 
@@ -682,7 +706,10 @@ pub(crate) fn sync_claude_for_workspace(
     let project_dir = projects_dir.join(&encoded);
     let history_path = claude_home.join("history.jsonl");
 
-    let source_key = format!("claude:{}", normalize_path_key(&workspace_path.to_string_lossy()));
+    let source_key = format!(
+        "claude:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
     let fingerprint = format!(
         "{}|{}",
         mtime_fingerprint(&project_dir),
@@ -778,10 +805,7 @@ fn read_claude_history_titles(
         let Some(display) = display else {
             continue;
         };
-        let timestamp = value
-            .get("timestamp")
-            .and_then(Value::as_i64)
-            .unwrap_or(0);
+        let timestamp = value.get("timestamp").and_then(Value::as_i64).unwrap_or(0);
         let entry = titles
             .entry(session_id.to_string())
             .or_insert((timestamp, display.to_string()));
@@ -1023,7 +1047,10 @@ fn truncate_title(value: &str, max_chars: usize) -> String {
     if trimmed.chars().count() <= max_chars {
         return trimmed.to_string();
     }
-    let mut out = trimmed.chars().take(max_chars.saturating_sub(1)).collect::<String>();
+    let mut out = trimmed
+        .chars()
+        .take(max_chars.saturating_sub(1))
+        .collect::<String>();
     out.push('…');
     out
 }
@@ -1037,7 +1064,10 @@ pub(crate) fn sync_codex_for_workspace(
     force: bool,
 ) -> Result<WriterResult, String> {
     let limit = limit.clamp(1, 500);
-    let source_key = format!("codex:{}", normalize_path_key(&workspace_path.to_string_lossy()));
+    let source_key = format!(
+        "codex:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
     let fingerprint = sessions_roots
         .iter()
         .map(|root| mtime_fingerprint(root))
@@ -1115,7 +1145,10 @@ pub(crate) fn sync_kimi_for_workspace(
         })
         .unwrap_or(home);
     let index_path = home.join("session_index.jsonl");
-    let source_key = format!("kimi:{}", normalize_path_key(&workspace_path.to_string_lossy()));
+    let source_key = format!(
+        "kimi:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
     let fingerprint = mtime_fingerprint(&index_path);
     if !force
         && source_should_skip_as_fresh(
@@ -1209,6 +1242,8 @@ pub(crate) fn sync_kimi_for_workspace(
             physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         });
     }
     let upserted = upsert_rows(connection, &rows)?;
@@ -1284,11 +1319,8 @@ pub(crate) fn source_should_skip_as_fresh(
     let Some(disk_newest) = disk_newest_mtime.filter(|value| *value > 0) else {
         return Ok(true);
     };
-    let ledger_max = max_updated_at_for_engine(
-        connection,
-        engine,
-        &workspace_path.to_string_lossy(),
-    )?;
+    let ledger_max =
+        max_updated_at_for_engine(connection, engine, &workspace_path.to_string_lossy())?;
     match ledger_max {
         Some(max) if disk_newest <= max => Ok(true),
         _ => Ok(false),
@@ -1390,7 +1422,12 @@ pub(crate) fn engine_source_is_fresh(
         engine.trim().to_ascii_lowercase(),
         normalize_path_key(&workspace_path.to_string_lossy())
     );
-    source_is_fresh(connection, &source_key, fingerprint, SOURCE_FRESH_MAX_AGE_MS)
+    source_is_fresh(
+        connection,
+        &source_key,
+        fingerprint,
+        SOURCE_FRESH_MAX_AGE_MS,
+    )
 }
 
 pub(crate) fn engine_source_should_skip(
@@ -1524,6 +1561,8 @@ pub(crate) fn rows_from_gemini_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: session.file_size_bytes,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1557,6 +1596,8 @@ pub(crate) fn rows_from_pi_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: session.file_size_bytes,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1590,6 +1631,8 @@ pub(crate) fn rows_from_dsh_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: None,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1623,6 +1666,8 @@ pub(crate) fn rows_from_grok_summaries(
                 physical_path: None,
                 parent_session_id: session.parent_session_id.clone(),
                 size_bytes: session.file_size_bytes,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1662,6 +1707,8 @@ pub(crate) fn rows_from_opencode_entries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: None,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1690,8 +1737,8 @@ pub(crate) fn invalidate_workspace_sources(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::store::mark_source_synced;
+    use super::*;
 
     #[test]
     fn claude_index_row_writes_file_birthtime_as_created_at() {
@@ -1710,8 +1757,8 @@ mod tests {
 "#,
         )
         .expect("write");
-        let row = claude_index_row_from_file(&path, Path::new("/tmp/ws"), &HashMap::new())
-            .expect("row");
+        let row =
+            claude_index_row_from_file(&path, Path::new("/tmp/ws"), &HashMap::new()).expect("row");
         let _ = std::fs::remove_dir_all(&dir);
         assert!(row.created_at.unwrap_or(0) > 0);
         assert!(row.updated_at > 0);
@@ -1751,9 +1798,7 @@ mod tests {
                 created_at: 1_786_896_696_172,
                 message_count: 0,
                 engine: Some("dsh".into()),
-                canonical_session_id: Some(
-                    "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into(),
-                ),
+                canonical_session_id: Some("session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into()),
             }],
         );
         assert_eq!(rows.len(), 1);
@@ -1844,15 +1889,11 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         };
         upsert_rows(&connection, &[existing]).expect("seed");
-        mark_source_synced(
-            &connection,
-            "grok:c:/users/me/proj",
-            "fp-ok",
-            1,
-        )
-        .expect("mark");
+        mark_source_synced(&connection, "grok:c:/users/me/proj", "fp-ok", 1).expect("mark");
         assert!(engine_source_is_fresh(&connection, "grok", workspace, "fp-ok").expect("fresh"));
 
         let result = commit_engine_rows(
@@ -1870,12 +1911,9 @@ mod tests {
             !engine_source_is_fresh(&connection, "grok", workspace, "fp-ok")
                 .expect("must not stay fresh")
         );
-        let listed = super::super::store::list_for_workspace_path(
-            &connection,
-            r"C:\Users\me\proj",
-            10,
-        )
-        .expect("list");
+        let listed =
+            super::super::store::list_for_workspace_path(&connection, r"C:\Users\me\proj", 10)
+                .expect("list");
         assert!(
             listed.iter().any(|row| row.session_id == "grok-keep"),
             "timeout empty commit must not wipe indexed grok rows: {listed:?}"
@@ -1901,15 +1939,11 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         };
         upsert_rows(&connection, &[existing]).expect("seed");
-        mark_source_synced(
-            &connection,
-            "grok:/tmp/ccgui-fresh-child",
-            "fp-root",
-            1,
-        )
-        .expect("mark");
+        mark_source_synced(&connection, "grok:/tmp/ccgui-fresh-child", "fp-root", 1).expect("mark");
         assert!(engine_source_is_fresh(&connection, "grok", workspace, "fp-root").expect("fp"));
         assert!(
             !source_should_skip_as_fresh(

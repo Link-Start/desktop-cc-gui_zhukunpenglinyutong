@@ -22,8 +22,8 @@ use super::writers::{
 };
 use crate::engine::gemini_history::list_gemini_sessions;
 use crate::engine::grok_history::list_grok_sessions;
-use crate::engine::pi_history::list_pi_sessions;
 use crate::engine::opencode_session_list_core;
+use crate::engine::pi_history::list_pi_sessions;
 use crate::local_usage::resolve_sessions_roots;
 use crate::state::AppState;
 
@@ -117,11 +117,7 @@ async fn sync_disk_engines(
     .map_err(|error| error.to_string())?
 }
 
-async fn sync_gemini_engine(
-    workspace_path: PathBuf,
-    limit: usize,
-    force: bool,
-) -> WriterResult {
+async fn sync_gemini_engine(workspace_path: PathBuf, limit: usize, force: bool) -> WriterResult {
     let fingerprint = gemini_home_fingerprint();
     let skip = !force
         && tokio::task::spawn_blocking({
@@ -152,7 +148,10 @@ async fn sync_gemini_engine(
 
     let (rows, partial) = match list_result {
         Ok(Ok(sessions)) => (rows_from_gemini_summaries(&workspace_path, &sessions), None),
-        Ok(Err(error)) => (Vec::new(), Some(format!("gemini-sync-error:{}", truncate_error(&error)))),
+        Ok(Err(error)) => (
+            Vec::new(),
+            Some(format!("gemini-sync-error:{}", truncate_error(&error))),
+        ),
         Err(_) => (Vec::new(), Some("gemini-sync-timeout".into())),
     };
 
@@ -209,7 +208,10 @@ async fn sync_grok_engine(workspace_path: PathBuf, limit: usize, force: bool) ->
 
     let (rows, partial) = match list_result {
         Ok(Ok(sessions)) => (rows_from_grok_summaries(&workspace_path, &sessions), None),
-        Ok(Err(error)) => (Vec::new(), Some(format!("grok-sync-error:{}", truncate_error(&error)))),
+        Ok(Err(error)) => (
+            Vec::new(),
+            Some(format!("grok-sync-error:{}", truncate_error(&error))),
+        ),
         Err(_) => (Vec::new(), Some("grok-sync-timeout".into())),
     };
 
@@ -419,10 +421,7 @@ async fn sync_opencode_engine(
     let (rows, partial) = match list_result {
         Ok(Ok(mut entries)) => {
             entries.truncate(limit);
-            (
-                rows_from_opencode_entries(&workspace_path, &entries),
-                None,
-            )
+            (rows_from_opencode_entries(&workspace_path, &entries), None)
         }
         Ok(Err(error)) => {
             // Missing CLI / disabled engine is soft-empty, not hard failure.
@@ -479,13 +478,8 @@ pub(crate) async fn sync_session_index_core(
     };
 
     // Disk-bound engines first (blocking pool), then bounded async engine lists.
-    let mut aggregated = sync_disk_engines(
-        workspace_path.clone(),
-        sessions_roots,
-        limit,
-        force,
-    )
-    .await?;
+    let mut aggregated =
+        sync_disk_engines(workspace_path.clone(), sessions_roots, limit, force).await?;
 
     // Gemini / Grok / PI / DSH each have their own 3s timeout. Join them so a
     // slow Gemini probe cannot serialize PI/DSH off the first-paint window.
@@ -627,8 +621,10 @@ fn merge_backfill(
         }
         Err(error) => {
             if into.partial_source.is_none() {
-                into.partial_source =
-                    Some(format!("{engine}-backfill-error:{}", truncate_error(&error)));
+                into.partial_source = Some(format!(
+                    "{engine}-backfill-error:{}",
+                    truncate_error(&error)
+                ));
             }
             if !into.engines.iter().any(|existing| existing == engine) {
                 into.engines.push(engine.to_string());
@@ -678,11 +674,7 @@ pub(crate) async fn backfill_session_index_core(
             merge_backfill(
                 &mut result,
                 "kimi",
-                backfill_kimi_for_workspace(
-                    &connection,
-                    &workspace_path,
-                    KIMI_BACKFILL_BATCH_SIZE,
-                ),
+                backfill_kimi_for_workspace(&connection, &workspace_path, KIMI_BACKFILL_BATCH_SIZE),
             );
             Ok::<WriterResult, String>(result)
         }
@@ -880,6 +872,15 @@ pub async fn list_session_index_for_workspace(
     })
     .await
     .map_err(|error| error.to_string())??;
+
+    // provider 标签 overlay：老行 / 缺列行按绑定账本补齐（codex 另走
+    // physical_path provider-home 兜底），重载后 first paint 即可画标签。
+    let mut data = data;
+    crate::session_management::overlay_session_index_provider_bindings(
+        &state.storage_path,
+        &workspace_id,
+        &mut data,
+    );
 
     if engines.is_empty() {
         let mut seen = std::collections::HashSet::new();

@@ -751,7 +751,7 @@ const settings = {
       "Adjust how the window renders backgrounds and effects.",
     sidebarProviderLabels: "Show provider labels in session lists",
     sidebarProviderLabelsDesc:
-      "Display Codex provider badges in the sidebar and pinned session lists.",
+      "Show the provider each session uses in the sidebar and pinned session lists.",
     clientUiVisibility: {
       title: "Client UI visibility",
       description:
@@ -1294,6 +1294,7 @@ const settings = {
     vendor: {
       officialConfig: "Official Config",
       thirdPartyConfig: "Third-party Config",
+      globalSettings: "Global settings",
       engineSettings: "Engine settings",
       providerChannels: "Provider channels",
       ccSwitchImport: {

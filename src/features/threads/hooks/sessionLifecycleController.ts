@@ -6,9 +6,10 @@ import { previewThreadName } from "../../../utils/threadItems";
 import {
   CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
   CODEX_DISK_PROVIDER_PROFILE_ID,
-  CODEX_DISK_PROVIDER_PROFILE_NAME,
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
   GROK_LOCAL_PROVIDER_PROFILE_ID,
   KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
   OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
   PI_LOCAL_PROVIDER_PROFILE_ID,
   type EngineProviderProfileOption,
@@ -171,6 +172,66 @@ export function extractProviderBindingFromStartedThread(
   };
 }
 
+const LOCAL_PROVIDER_PROFILE_IDS = new Set([
+  CLAUDE_LOCAL_PROVIDER_PROFILE_ID,
+  CODEX_DISK_PROVIDER_PROFILE_ID,
+  KIMI_LOCAL_PROVIDER_PROFILE_ID,
+  GROK_LOCAL_PROVIDER_PROFILE_ID,
+  OPENCODE_LOCAL_PROVIDER_PROFILE_ID,
+  PI_LOCAL_PROVIDER_PROFILE_ID,
+  DSH_LOCAL_PROVIDER_PROFILE_ID,
+]);
+
+export function isManagedEngineProviderProfileId(
+  providerProfileId: string | null | undefined,
+): providerProfileId is string {
+  const normalized = providerProfileId?.trim() ?? "";
+  return normalized.length > 0 && !LOCAL_PROVIDER_PROFILE_IDS.has(normalized);
+}
+
+export function localProviderBindingForEngine(
+  engine: string | null | undefined,
+): ProviderProfileSelection {
+  const localId =
+    engine === "claude"
+      ? CLAUDE_LOCAL_PROVIDER_PROFILE_ID
+      : engine === "codex"
+        ? CODEX_DISK_PROVIDER_PROFILE_ID
+        : engine === "kimi" || engine === "grok"
+          ? KIMI_LOCAL_PROVIDER_PROFILE_ID
+          : engine === "opencode"
+            ? OPENCODE_LOCAL_PROVIDER_PROFILE_ID
+            : engine === "pi"
+              ? PI_LOCAL_PROVIDER_PROFILE_ID
+              : engine === "dsh"
+                ? DSH_LOCAL_PROVIDER_PROFILE_ID
+                : null;
+  if (!localId) {
+    return {};
+  }
+  return {
+    providerProfileId: localId,
+    providerProfileName: LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+    providerProfileSource: "disk",
+    providerAvailability: "available",
+  };
+}
+
+export function resolveSendProviderProfileId(input: {
+  threadProviderProfileId?: string | null;
+  composerProviderProfileId?: string | null;
+}): string | null {
+  const threadId = input.threadProviderProfileId?.trim() || null;
+  if (isManagedEngineProviderProfileId(threadId)) {
+    return threadId;
+  }
+  if (threadId) {
+    return null;
+  }
+  const composerId = input.composerProviderProfileId?.trim() || null;
+  return isManagedEngineProviderProfileId(composerId) ? composerId : null;
+}
+
 export function providerBindingFromSelectedProfile(
   providerProfile?: EngineProviderProfileOption | null,
   fallbackProviderProfileId?: string | null,
@@ -178,33 +239,30 @@ export function providerBindingFromSelectedProfile(
   const selectedProfileId = normalizeResponseString(providerProfile?.id);
   const providerProfileId =
     selectedProfileId ?? normalizeResponseString(fallbackProviderProfileId);
-  // Local/disk sentinels: no managed L2 override (follow global/disk config).
-  // Grok shares Kimi's local id string; keep GROK_LOCAL explicit for readers.
-  if (
-    providerProfileId === CLAUDE_LOCAL_PROVIDER_PROFILE_ID ||
-    providerProfileId === KIMI_LOCAL_PROVIDER_PROFILE_ID ||
-    providerProfileId === GROK_LOCAL_PROVIDER_PROFILE_ID ||
-    providerProfileId === OPENCODE_LOCAL_PROVIDER_PROFILE_ID ||
-    providerProfileId === PI_LOCAL_PROVIDER_PROFILE_ID
-  ) {
+  if (!providerProfileId) {
     return {};
   }
-  const isDiskProvider = providerProfileId === CODEX_DISK_PROVIDER_PROFILE_ID;
+  if (LOCAL_PROVIDER_PROFILE_IDS.has(providerProfileId)) {
+    return {
+      providerProfileId,
+      providerProfileName:
+        normalizeResponseString(providerProfile?.name) ??
+        LOCAL_PROVIDER_PROFILE_DISPLAY_NAME,
+      providerProfileSource: "disk",
+      providerAvailability: "available",
+    };
+  }
   const providerProfileSource = selectedProfileId
     ? normalizeResponseString(providerProfile?.source)
-    : isDiskProvider
-      ? "disk"
     : null;
   const providerProfileName = selectedProfileId
     ? normalizeResponseString(providerProfile?.name)
-    : isDiskProvider
-      ? CODEX_DISK_PROVIDER_PROFILE_NAME
     : null;
   return {
-    ...(providerProfileId ? { providerProfileId } : {}),
+    providerProfileId,
     ...(providerProfileSource ? { providerProfileSource } : {}),
     ...(providerProfileName ? { providerProfileName } : {}),
-    ...(selectedProfileId || isDiskProvider ? { providerAvailability: "available" } : {}),
+    ...(selectedProfileId ? { providerAvailability: "available" } : {}),
   };
 }
 

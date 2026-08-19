@@ -1018,6 +1018,7 @@ const settings = {
         "fromCcSwitchUpdate": "Importer/mettre à jour depuis cc-switch",
         "fromCcSwitchFile": "Sélectionner un fichier cc-switch.db à importer",
       },
+      "globalSettings": "Paramètres globaux",
       "engineSettings": "Paramètres du moteur",
       "providerChannels": "Canaux fournisseurs",
       "allProviders": "Tous les fournisseurs",

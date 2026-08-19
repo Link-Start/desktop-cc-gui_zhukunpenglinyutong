@@ -1017,7 +1017,11 @@ describe("useWorkspaceThreadListHydration", () => {
             // Raw off-orchestrator call: a hanging promise is safe to leak.
             return new Promise<void>(() => {});
           }
-          return Promise.resolve(undefined);
+          return Promise.resolve({
+            applied: true,
+            visibleCount: 1,
+            authoritativeEmpty: false,
+          });
         },
       );
       return { softRefreshCalls, listThreadsForWorkspace };
@@ -1204,6 +1208,7 @@ describe("useWorkspaceThreadListHydration", () => {
             preserveState?: boolean;
             mergeExistingThreads?: boolean;
             includeEngineDiskLists?: boolean;
+            includeOpenCodeSessions?: boolean;
             startupHydrationMode?: "full-catalog" | "first-paint";
           },
         ) => undefined,
@@ -1235,16 +1240,18 @@ describe("useWorkspaceThreadListHydration", () => {
         );
       });
       const importedCall = listThreadsForWorkspace.mock.calls.find(
-        (call) => call[1]?.mergeExistingThreads === true,
+        (call) =>
+          call[1]?.startupHydrationMode === "first-paint" ||
+          call[1]?.mergeExistingThreads === true,
       );
       expect(importedCall?.[0]).toMatchObject({ id: "ws-1" });
       expect(importedCall?.[1]).toEqual(
         expect.objectContaining({
-          startupHydrationMode: "first-paint",
-          mergeExistingThreads: true,
           preserveState: true,
+          startupHydrationMode: "first-paint",
         }),
       );
+      expect(importedCall?.[1]?.mergeExistingThreads).not.toBe(true);
       expect(importedCall?.[1]?.includeEngineDiskLists).not.toBe(true);
     });
 
@@ -1282,7 +1289,11 @@ describe("useWorkspaceThreadListHydration", () => {
       await act(async () => {
         imported.emit({ workspaceIds: ["ws-1"], upserted: 0 });
       });
-      expect(listThreadsForWorkspace.mock.calls.length).toBe(callsBeforeImport);
+      expect(
+        listThreadsForWorkspace.mock.calls
+          .slice(callsBeforeImport)
+          .some((call) => call[1]?.mergeExistingThreads === true),
+      ).toBe(false);
     });
   });
 });

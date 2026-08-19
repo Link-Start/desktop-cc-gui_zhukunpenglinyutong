@@ -78,6 +78,7 @@ import {
   consumeExplicitComposerEngineSwitch,
   shouldSpawnNativeThreadForEngineMismatch,
 } from "../../composer/hooks/explicitComposerEngineSwitch";
+import { resolveSendProviderProfileId } from "./sessionLifecycleController";
 import { getComposerEnginePrefForEngine } from "../../composer/hooks/composerEnginePrefsStore";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
@@ -2159,8 +2160,10 @@ export function useThreadMessaging({
           onDebug,
           errorMessage,
           refreshErrorMessage,
-          providerProfileId:
-            getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
+          providerProfileId: resolveSendProviderProfileId({
+            threadProviderProfileId:
+              getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
+          }),
         });
         const isSameMissingThreadRebind =
           reboundThreadId === threadId &&
@@ -2667,8 +2670,10 @@ export function useThreadMessaging({
             }
 
             const sendRequestedAt = Date.now();
-            const providerProfileId =
-              getThreadProviderProfileId?.(workspace.id, threadId) ?? null;
+            const providerProfileId = resolveSendProviderProfileId({
+              threadProviderProfileId:
+                getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
+            });
             response = await engineSendMessageService(workspace.id, {
               text: finalText,
               engine: resolvedEngine,
@@ -3409,9 +3414,17 @@ export function useThreadMessaging({
       // Detect engine switch from the selected engine to thread ownership.
       const currentEngine = normalizeEngineSelection(activeEngine);
       const resolvedComposerSelection = resolveComposerSelection?.() ?? null;
+      const threadProviderProfileId = activeThreadId
+        ? getThreadProviderProfileId?.(activeWorkspace.id, activeThreadId) ??
+          null
+        : null;
       const codexFirstSendProviderProfileId =
         currentEngine === "codex"
-          ? resolvedComposerSelection?.providerProfileId?.trim() || null
+          ? resolveSendProviderProfileId({
+              threadProviderProfileId,
+              composerProviderProfileId:
+                resolvedComposerSelection?.providerProfileId,
+            })
           : null;
       const codexFirstSendOptions = codexFirstSendProviderProfileId
         ? { providerProfileId: codexFirstSendProviderProfileId }

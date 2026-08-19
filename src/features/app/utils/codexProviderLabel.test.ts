@@ -78,14 +78,72 @@ describe("resolveCodexProviderLabel", () => {
     ).toBe("local");
   });
 
-  it("keeps Kimi local/default labels hidden", () => {
+  it.each(["kimi", "grok", "opencode", "pi", "dsh"] as const)(
+    "labels %s local config as local",
+    (engineSource) => {
+      expect(
+        resolveEngineProviderLabel({
+          ...codexThread,
+          engineSource,
+          providerProfileId:
+            engineSource === "opencode"
+              ? "__local_opencode_json__"
+              : engineSource === "pi"
+                ? "__local_pi__"
+                : engineSource === "dsh"
+                  ? "__dsh_host_catalog__"
+                  : "__local_config_toml__",
+          providerProfileName: "Local config",
+        }),
+      ).toBe("local");
+    },
+  );
+
+  it("falls back to local for PI / DSH / Grok rows with no binding", () => {
     expect(
       resolveEngineProviderLabel({
         ...codexThread,
-        engineSource: "kimi",
-        providerProfileId: "__local_config_toml__",
-        providerProfileName: "Local config",
+        engineSource: "pi",
       }),
-    ).toBeNull();
+    ).toBe("local");
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "dsh",
+      }),
+    ).toBe("local");
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "grok",
+      }),
+    ).toBe("local");
+  });
+
+  it("renders managed provider labels for PI / DSH / Gemini", () => {
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "pi",
+        providerProfileId: "pi-provider-a",
+        providerProfileName: "PI A",
+      }),
+    ).toBe("PI A");
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "dsh",
+        providerProfileId: "dsh-provider-a",
+        providerProfileName: "DSH A",
+      }),
+    ).toBe("DSH A");
+    expect(
+      resolveEngineProviderLabel({
+        ...codexThread,
+        engineSource: "gemini",
+        providerProfileId: "gemini-provider-a",
+        providerProfileName: "Gemini A",
+      }),
+    ).toBe("Gemini A");
   });
 });

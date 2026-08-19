@@ -1140,7 +1140,7 @@ describe("useThreadActions.helpers", () => {
     ]);
   });
 
-  it("mergeCodexCatalogSessionSummaries drops empty Claude/Codex Session pups but keeps pending and nicknames", () => {
+  it("mergeCodexCatalogSessionSummaries drops empty Claude/Codex Session pups and pending drafts, keeps nicknames", () => {
     const merged = mergeCodexCatalogSessionSummaries(
       [
         {
@@ -1187,14 +1187,10 @@ describe("useThreadActions.helpers", () => {
       {},
       () => undefined,
     );
-    expect(merged.map((row) => row.id).sort()).toEqual([
-      "codex-pending-1786994371985-fv4mt5",
-      "nick-1",
-      "user-1",
-    ]);
+    expect(merged.map((row) => row.id).sort()).toEqual(["nick-1", "user-1"]);
   });
 
-  it("mergeCodexCatalogSessionSummaries drops empty DSH Session pups but keeps pending and real titles", () => {
+  it("mergeCodexCatalogSessionSummaries drops empty DSH Session pups and pending drafts, keeps real titles", () => {
     const merged = mergeCodexCatalogSessionSummaries(
       [
         {
@@ -1234,10 +1230,7 @@ describe("useThreadActions.helpers", () => {
       {},
       () => undefined,
     );
-    expect(merged.map((row) => row.id).sort()).toEqual([
-      "dsh:dsh-pending-1787016153035-0bittx",
-      "dsh:real-1",
-    ]);
+    expect(merged.map((row) => row.id).sort()).toEqual(["dsh:real-1"]);
   });
 
   it("mergeCodexCatalogSessionSummaries drops collab MOSSX worker before Agent N rename", () => {

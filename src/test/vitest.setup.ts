@@ -724,7 +724,7 @@ const mockTranslate = (key: string, params?: Record<string, unknown>) => {
         "settings.displaySubDescription": "Adjust how the window renders backgrounds and effects.",
         "settings.sidebarProviderLabels": "Show provider labels in session lists",
         "settings.sidebarProviderLabelsDesc":
-          "Display Codex provider badges in the sidebar and pinned session lists.",
+          "Show the provider each session uses in the sidebar and pinned session lists.",
         "settings.clientUiVisibility.title": "Client UI visibility",
         "settings.clientUiVisibility.description": "Hide optional panels and icon buttons without disabling the underlying features.",
         "settings.clientUiVisibility.reset": "Restore default visibility",

@@ -16,6 +16,7 @@ import {
   listDshSessions as listDshSessionsService,
   getOpenCodeSessionList as getOpenCodeSessionListService,
   listSessionIndexForWorkspace as listSessionIndexForWorkspaceService,
+  rememberSessionIndexWorkspacePath,
 } from "../../../services/tauri";
 import {
   buildNativeIndexEarlyPaintSummaries,
@@ -386,6 +387,7 @@ export function useThreadActions({
     ) => {
       // Store workspace path for Claude session loading
       workspacePathsByIdRef.current[workspace.id] = workspace.path;
+      rememberSessionIndexWorkspacePath(workspace.id, workspace.path);
       const requestSeq =
         (threadListRequestSeqRef.current[workspace.id] ?? 0) + 1;
       threadListRequestSeqRef.current[workspace.id] = requestSeq;
@@ -441,6 +443,8 @@ export function useThreadActions({
       const recoverySource = options?.recoverySource ?? "thread-list-live";
       const allowRuntimeReconnect = options?.allowRuntimeReconnect ?? true;
       let appliedThreadListUpdate = false;
+      let visibleThreadCount = 0;
+      let authoritativeEmpty = false;
       const workspacePath = normalizeComparableWorkspacePath(workspace.path);
       deletedThreadIds.forEach((threadId) => {
         loadedThreadsRef.current[threadId] = false;
@@ -571,6 +575,7 @@ export function useThreadActions({
         );
         if (
           isFirstPaintHydration &&
+          !options?.mergeExistingThreads &&
           sessionIndexPage &&
           Array.isArray(sessionIndexPage.data) &&
           sessionIndexPage.data.length > 0
@@ -597,6 +602,7 @@ export function useThreadActions({
               type: "setThreads",
               workspaceId: workspace.id,
               threads: earlyIndexSummaries,
+              unionMembership: true,
             });
             earlyIndexPaintApplied = true;
             appliedThreadListUpdate = true;
@@ -1139,6 +1145,8 @@ export function useThreadActions({
                 autoSession: prev.autoSession ?? summary.autoSession,
                 providerProfileId:
                   prev.providerProfileId ?? summary.providerProfileId,
+                providerProfileName:
+                  prev.providerProfileName ?? summary.providerProfileName,
                 parentThreadId: prev.parentThreadId ?? summary.parentThreadId,
               });
             }
@@ -1963,6 +1971,9 @@ export function useThreadActions({
             type: "setThreads",
             workspaceId: workspace.id,
             threads: visibleSummaries,
+            unionMembership:
+              Boolean(options?.mergeExistingThreads) ||
+              sessionIndexPage?.hasMore === true,
           });
           dispatch({
             type: "setThreadListCursor",
@@ -1986,6 +1997,8 @@ export function useThreadActions({
           });
         }
         appliedThreadListUpdate = true;
+        visibleThreadCount = visibleSummaries.length;
+        authoritativeEmpty = hasAuthoritativeEmptyCatalog;
         if (hasHealthyThreadSummaries(visibleSummaries)) {
           latestThreadsByWorkspaceRef.current = {
             ...latestThreadsByWorkspaceRef.current,
@@ -2096,6 +2109,7 @@ export function useThreadActions({
                 type: "setThreads",
                 workspaceId: workspace.id,
                 threads: visibleNextSummaries,
+                unionMembership: true,
               });
               latestThreadsByWorkspaceRef.current = {
                 ...latestThreadsByWorkspaceRef.current,
@@ -2225,6 +2239,7 @@ export function useThreadActions({
                 type: "setThreads",
                 workspaceId: workspace.id,
                 threads: visibleNextSummaries,
+                unionMembership: true,
               });
               latestThreadsByWorkspaceRef.current = {
                 ...latestThreadsByWorkspaceRef.current,
@@ -2338,6 +2353,7 @@ export function useThreadActions({
                 type: "setThreads",
                 workspaceId: workspace.id,
                 threads: visibleNextSummaries,
+                unionMembership: true,
               });
               latestThreadsByWorkspaceRef.current = {
                 ...latestThreadsByWorkspaceRef.current,
@@ -2422,6 +2438,7 @@ export function useThreadActions({
                 type: "setThreads",
                 workspaceId: workspace.id,
                 threads: visibleNextSummaries,
+                unionMembership: true,
               });
               latestThreadsByWorkspaceRef.current = {
                 ...latestThreadsByWorkspaceRef.current,
@@ -2488,6 +2505,7 @@ export function useThreadActions({
               type: "setThreads",
               workspaceId: workspace.id,
               threads: visibleNextSummaries,
+              unionMembership: true,
             });
             latestThreadsByWorkspaceRef.current = {
               ...latestThreadsByWorkspaceRef.current,
@@ -2514,6 +2532,7 @@ export function useThreadActions({
             type: "setThreads",
             workspaceId: workspace.id,
             threads: degradedThreads,
+            unionMembership: true,
           });
           appliedThreadListUpdate = true;
           const diagnostic = buildPartialHistoryDiagnostic(
@@ -2562,7 +2581,7 @@ export function useThreadActions({
         // leave the spinner stuck).
         const ownsRequest =
           threadListRequestSeqRef.current[workspace.id] === requestSeq;
-        if (!preserveState && ownsRequest) {
+        if (ownsRequest) {
           dispatch({
             type: "setThreadListLoading",
             workspaceId: workspace.id,
@@ -2570,7 +2589,11 @@ export function useThreadActions({
           });
         }
       }
-      return { applied: appliedThreadListUpdate };
+      return {
+        applied: appliedThreadListUpdate,
+        visibleCount: visibleThreadCount,
+        authoritativeEmpty,
+      };
     },
     [
       beginAutomaticRuntimeRecovery,

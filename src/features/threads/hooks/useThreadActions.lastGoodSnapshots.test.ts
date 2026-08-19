@@ -39,6 +39,24 @@ describe("last-good engine snapshots", () => {
 });
 
 describe("unionIndexWithNewerLastGood", () => {
+  it("keeps extra last-good rows when Index only returns a short page", () => {
+    const index = Array.from({ length: 12 }, (_, index) =>
+      summary(`claude:${index}`, "claude", 100 - index),
+    );
+    const lastGood = [
+      ...index,
+      ...Array.from({ length: 8 }, (_, extra) =>
+        summary(`claude:extra-${extra}`, "claude", 40 - extra),
+      ),
+    ];
+
+    const visible = unionIndexWithNewerLastGood(index, lastGood);
+
+    expect(visible).toHaveLength(20);
+    expect(visible.some((entry) => entry.id === "claude:extra-0")).toBe(true);
+    expect(visible.some((entry) => entry.id === "claude:0")).toBe(true);
+  });
+
   it("keeps Index A,B and last-good C", () => {
     const index = [
       summary("claude:a", "claude", 10),

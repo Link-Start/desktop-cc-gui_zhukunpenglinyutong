@@ -8,6 +8,7 @@ import {
 } from "../utils/codexBackgroundHelpers";
 import { isMossxProgramControlTitle } from "../../../utils/contextProtocol";
 import { shouldExcludeOrdinaryNativeRow } from "./sharedNativeVisibility";
+import { isWeakSessionDisplayTitle } from "../utils/sessionDisplayProjection";
 import {
   compareThreadSummariesByCreatedAtDesc,
   pickStableCreatedAt,
@@ -39,20 +40,23 @@ export function shouldHidePlaceholderNativeDraftFromSidebar(params: {
   threadId: string;
   displayName: string;
   hasCustomName?: boolean;
+  isActive?: boolean;
+  isChildSession?: boolean;
 }): boolean {
+  if (params.hasCustomName || params.isActive || params.isChildSession) {
+    return false;
+  }
   const engine = String(params.engine ?? "")
     .trim()
     .toLowerCase();
-  if (!PLACEHOLDER_DRAFT_ENGINES.has(engine)) {
-    return false;
+  const pendingEngine = engine || inferEngineFromPendingThreadId(params.threadId);
+  if (isLocalPendingDraftThreadId(pendingEngine, params.threadId)) {
+    return true;
   }
-  if (params.hasCustomName) {
-    return false;
+  if (PLACEHOLDER_DRAFT_ENGINES.has(engine) && isEmptyNativeIndexFallbackTitle(params.displayName)) {
+    return true;
   }
-  if (isLocalPendingDraftThreadId(engine, params.threadId)) {
-    return false;
-  }
-  return isEmptyNativeIndexFallbackTitle(params.displayName);
+  return isWeakSessionDisplayTitle(params.displayName);
 }
 
 export function isEmptyClaudeIndexFallbackTitle(
@@ -224,6 +228,12 @@ export function sessionIndexRowsToThreadSummaries(
       engineSource: engine,
       threadKind: "native",
       ...(parentThreadId ? { parentThreadId } : {}),
+      ...(row.providerProfileId
+        ? { providerProfileId: String(row.providerProfileId) }
+        : {}),
+      ...(row.providerProfileName
+        ? { providerProfileName: String(row.providerProfileName) }
+        : {}),
     });
   }
   return out;
@@ -264,6 +274,8 @@ export function mergeSessionIndexRowsIntoSummaries(
             autoSession: prev.autoSession ?? summary.autoSession,
             providerProfileId:
               prev.providerProfileId ?? summary.providerProfileId,
+            providerProfileName:
+              prev.providerProfileName ?? summary.providerProfileName,
             parentThreadId: prev.parentThreadId ?? summary.parentThreadId,
             createdAt: pickStableCreatedAt(
               prev.createdAt,
@@ -290,9 +302,6 @@ export function stripEmptyClaudeIndexFallbackSummaries(
       return true;
     }
     const engine = summary.engineSource;
-    if (isLocalPendingDraftThreadId(engine, summary.id)) {
-      return true;
-    }
     const hidePlaceholder = shouldHidePlaceholderNativeDraftFromSidebar({
       engine,
       threadId: summary.id,
@@ -345,6 +354,19 @@ function summaryEngineKey(summary: ThreadSummary): string {
  */
 const LOCAL_PENDING_DRAFT_PATTERN =
   /^([a-z][a-z0-9]*)-pending-(\d{10,16})-([a-z0-9]{4,12})$/i;
+
+function inferEngineFromPendingThreadId(threadId: string): string {
+  const raw = threadId.trim();
+  const bare = raw.includes(":")
+    ? raw.slice(raw.indexOf(":") + 1).trim()
+    : raw;
+  const match = LOCAL_PENDING_DRAFT_PATTERN.exec(bare);
+  return match?.[1]?.toLowerCase() ?? "";
+}
+
+export function isLocalPendingDraftSessionId(sessionId: string): boolean {
+  return LOCAL_PENDING_DRAFT_PATTERN.test(sessionId.trim());
+}
 
 export function isLocalPendingDraftThreadId(
   engine: string | null | undefined,

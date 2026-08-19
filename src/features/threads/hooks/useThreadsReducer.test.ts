@@ -139,6 +139,44 @@ describe("threadReducer", () => {
     expect(enriched.threadParentById["child-thread"]).toBe("parent-thread");
   });
 
+  it("does not evaporate extra in-memory sessions when setThreads receives a short Index page", () => {
+    let seeded = initialState;
+    for (let index = 0; index < 20; index += 1) {
+      seeded = threadReducer(seeded, {
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId: `claude:keep-${index}`,
+        engine: "claude",
+        name: `Keep ${index}`,
+      });
+    }
+
+    expect(seeded.threadsByWorkspace["ws-1"]).toHaveLength(20);
+
+    const incoming = (seeded.threadsByWorkspace["ws-1"] ?? [])
+      .slice(0, 12)
+      .map((thread) => ({
+        ...thread,
+        updatedAt: thread.updatedAt + 1,
+      }));
+    const refreshed = threadReducer(seeded, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: incoming,
+      unionMembership: true,
+    });
+    const ids = (refreshed.threadsByWorkspace["ws-1"] ?? []).map(
+      (thread) => thread.id,
+    );
+
+    expect(ids).toHaveLength(20);
+    expect(ids).toEqual(
+      expect.arrayContaining(
+        Array.from({ length: 20 }, (_, index) => `claude:keep-${index}`),
+      ),
+    );
+  });
+
   it("keeps the live parent while accepting a stronger refreshed name", () => {
     const live = threadReducer(initialState, {
       type: "ensureThread",

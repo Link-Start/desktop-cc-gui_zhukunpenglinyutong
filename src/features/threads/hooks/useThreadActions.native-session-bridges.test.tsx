@@ -789,4 +789,48 @@ describe("useThreadActions native session bridges", () => {
     expect(listDshSessions).not.toHaveBeenCalled();
     expect(listPiSessions).not.toHaveBeenCalled();
   });
+
+  it("skips Index early-paint when rematerialize merges into the current list", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as never);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [
+        {
+          engine: "claude",
+          sessionId: "session-real-1",
+          title: "帮我看一下这段代码",
+          updatedAt: 1_730_000_000_000,
+        },
+      ],
+      source: "session-index",
+      synced: true,
+      engines: ["claude"],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
+    const onDebug = vi.fn();
+    const { result } = renderActions({ onDebug });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+        startupHydrationMode: "first-paint",
+        mergeExistingThreads: true,
+      });
+    });
+
+    expect(onDebug).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/list session-index early-paint",
+      }),
+    );
+  });
 });

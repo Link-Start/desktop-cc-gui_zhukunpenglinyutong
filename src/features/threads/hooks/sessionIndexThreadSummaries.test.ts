@@ -4,6 +4,7 @@ import {
   mergeSummariesForMissingEngines,
   sessionIndexRowToThreadId,
   sessionIndexRowsToThreadSummaries,
+  shouldHidePlaceholderNativeDraftFromSidebar,
   stripEmptyClaudeIndexFallbackSummaries,
 } from "./sessionIndexThreadSummaries";
 import type { ThreadSummary } from "../../../types";
@@ -66,6 +67,71 @@ describe("sessionIndexThreadSummaries", () => {
     expect(rows[0]?.engineSource).toBe("claude");
     expect(rows[0]?.name).toContain("First");
     expect(rows[0]?.createdAt).toBe(100);
+  });
+
+  it("carries provider label fields from index rows", () => {
+    const rows = sessionIndexRowsToThreadSummaries(
+      [
+        {
+          engine: "codex",
+          sessionId: "uuid-9",
+          title: "你好",
+          updatedAt: 100,
+          providerProfileId: "profile-xmapi",
+          providerProfileName: "xmapi.cc",
+        },
+        {
+          engine: "grok",
+          sessionId: "g1",
+          title: "在吗",
+          updatedAt: 90,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(rows).toHaveLength(2);
+    const codex = rows.find((row) => row.id === "uuid-9");
+    expect(codex?.providerProfileId).toBe("profile-xmapi");
+    expect(codex?.providerProfileName).toBe("xmapi.cc");
+    const grok = rows.find((row) => row.id === "grok:g1");
+    expect(grok?.providerProfileId).toBeUndefined();
+  });
+
+  it("keeps live provider fields when merging older index rows", () => {
+    const live: ThreadSummary[] = [
+      {
+        id: "uuid-9",
+        name: "你好",
+        updatedAt: 200,
+        engineSource: "codex",
+        threadKind: "native",
+        providerProfileId: "profile-xmapi",
+        providerProfileName: "xmapi.cc",
+      },
+    ];
+    const merged = mergeSessionIndexRowsIntoSummaries(
+      live,
+      [
+        {
+          engine: "codex",
+          sessionId: "uuid-9",
+          title: "你好",
+          updatedAt: 100,
+        },
+      ],
+      {
+        workspaceId: "ws",
+        mappedTitles: {},
+        getCustomName: () => "",
+      },
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.providerProfileId).toBe("profile-xmapi");
+    expect(merged[0]?.providerProfileName).toBe("xmapi.cc");
   });
 
   it("maps explicit createdAt and does not let a later updatedAt replace it", () => {
@@ -196,13 +262,10 @@ describe("sessionIndexThreadSummaries", () => {
         getCustomName: () => "",
       },
     );
-    expect(rows.map((row) => row.id)).toEqual([
-      "claude:claude-pending-1787016153035-0bittx",
-      "claude:user-1",
-    ]);
+    expect(rows.map((row) => row.id)).toEqual(["claude:user-1"]);
   });
 
-  it("drops empty Codex Session fallbacks, helpers and MOSSX but keeps pending drafts", () => {
+  it("drops empty Codex Session fallbacks, helpers, MOSSX and pending drafts", () => {
     const rows = sessionIndexRowsToThreadSummaries(
       [
         {
@@ -248,14 +311,10 @@ describe("sessionIndexThreadSummaries", () => {
         getCustomName: () => "",
       },
     );
-    expect(rows.map((row) => row.id)).toEqual([
-      "codex-pending-1786994371985-fv4mt5",
-      "user-1",
-      "nick-1",
-    ]);
+    expect(rows.map((row) => row.id)).toEqual(["user-1", "nick-1"]);
   });
 
-  it("last-good strip drops empty Claude Session and MOSSX but keeps pending drafts", () => {
+  it("last-good strip drops empty Claude Session, MOSSX and pending drafts", () => {
     const kept = stripEmptyClaudeIndexFallbackSummaries([
       {
         id: "claude:empty-uuid",
@@ -282,13 +341,10 @@ describe("sessionIndexThreadSummaries", () => {
         engineSource: "claude",
       },
     ] as ThreadSummary[]);
-    expect(kept.map((row) => row.id)).toEqual([
-      "claude:claude-pending-1787016153035-0bittx",
-      "claude:user-1",
-    ]);
+    expect(kept.map((row) => row.id)).toEqual(["claude:user-1"]);
   });
 
-  it("drops empty DSH / Grok / Gemini placeholder drafts but keeps pending and real titles", () => {
+  it("drops empty DSH / Grok / Gemini placeholder drafts and pending, keeps custom and real titles", () => {
     const rows = sessionIndexRowsToThreadSummaries(
       [
         {
@@ -342,13 +398,12 @@ describe("sessionIndexThreadSummaries", () => {
       },
     );
     expect(rows.map((row) => row.id)).toEqual([
-      "dsh:dsh-pending-1787016153035-0bittx",
       "dsh:named-dsh",
       "dsh:real-dsh",
     ]);
   });
 
-  it("last-good strip drops empty Codex Session and helpers but keeps pending drafts", () => {
+  it("last-good strip drops empty Codex Session, helpers and pending drafts", () => {
     const kept = stripEmptyClaudeIndexFallbackSummaries([
       {
         id: "empty-uuid",
@@ -375,13 +430,10 @@ describe("sessionIndexThreadSummaries", () => {
         engineSource: "codex",
       },
     ] as ThreadSummary[]);
-    expect(kept.map((row) => row.id)).toEqual([
-      "codex-pending-1786994371985-fv4mt5",
-      "user-1",
-    ]);
+    expect(kept.map((row) => row.id)).toEqual(["user-1"]);
   });
 
-  it("last-good strip drops empty DSH / Grok placeholders but keeps pending drafts", () => {
+  it("last-good strip drops empty DSH / Grok placeholders and pending drafts", () => {
     const kept = stripEmptyClaudeIndexFallbackSummaries([
       {
         id: "dsh:empty-dsh",
@@ -408,10 +460,65 @@ describe("sessionIndexThreadSummaries", () => {
         engineSource: "dsh",
       },
     ] as ThreadSummary[]);
-    expect(kept.map((row) => row.id)).toEqual([
-      "dsh:dsh-pending-1787016153035-0bittx",
-      "dsh:real-dsh",
-    ]);
+    expect(kept.map((row) => row.id)).toEqual(["dsh:real-dsh"]);
+  });
+
+  it("hides local pending drafts unless the user gave a custom name", () => {
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "claude",
+        threadId: "claude:claude-pending-1787016153035-0bittx",
+        displayName: "Claude Session",
+      }),
+    ).toBe(true);
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "dsh",
+        threadId: "dsh:dsh-pending-1787016153035-0bittx",
+        displayName: "dsh session",
+      }),
+    ).toBe(true);
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "codex",
+        threadId: "codex-pending-1786994371985-fv4mt5",
+        displayName: "我的草稿",
+        hasCustomName: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "claude",
+        threadId: "claude:user-1",
+        displayName: "分析左侧栏消失问题",
+      }),
+    ).toBe(false);
+  });
+
+  it("hides leftover Agent N placeholders but keeps the active conversation", () => {
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "codex",
+        threadId: "real-codex-id",
+        displayName: "Agent 5",
+      }),
+    ).toBe(true);
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "claude",
+        threadId: "claude:real",
+        displayName: "Claude Session",
+        isActive: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: "grok",
+        threadId: "grok:child",
+        displayName: "grok session",
+        isChildSession: true,
+      }),
+    ).toBe(false);
   });
 
   it("never hides a shared canonical row via the owner predicate", () => {

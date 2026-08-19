@@ -61,6 +61,8 @@ import {
   extractHookSafeFallbackMetadata,
   extractProviderBindingFromStartedThread,
   extractThreadId,
+  isManagedEngineProviderProfileId,
+  localProviderBindingForEngine,
   providerBindingFromSelectedProfile,
   pushHookSafeFallbackNotice,
   resolveClaudeForkThreadName,
@@ -321,16 +323,24 @@ export function useThreadActionsSessionRuntime({
         oldThreadId: pendingThreadId,
         newThreadId: realThreadId,
       });
+      const remappedBinding = extractProviderBindingFromStartedThread(
+        response,
+        providerBindingFromSelectedProfile(undefined, null),
+      );
       dispatch({
         type: "ensureThread",
         workspaceId,
         threadId: realThreadId,
         engine: "codex",
         ...(entry.folderId ? { folderId: entry.folderId } : {}),
-        ...extractProviderBindingFromStartedThread(
-          response,
-          providerBindingFromSelectedProfile(undefined, null),
-        ),
+        ...remappedBinding,
+      });
+      writeClientCreatedSessionIndex({
+        engine: "codex",
+        sessionId: realThreadId,
+        workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+        providerProfileId: remappedBinding.providerProfileId,
+        providerProfileName: remappedBinding.providerProfileName,
       });
       // The real thread now owns a sidebar entry, so a late `thread/started`
       // for it is a harmless no-op ensureThread. Stop suppressing it.
@@ -377,16 +387,26 @@ export function useThreadActionsSessionRuntime({
       }
       const folderId = options?.folderId?.trim() || null;
       const autoSession = options?.autoSession ?? null;
-      const selectedProviderBinding = providerBindingFromSelectedProfile(
-        options?.providerProfile,
-        options?.providerProfileId,
-      );
+      const selectedProviderBinding = {
+        ...localProviderBindingForEngine(engine),
+        ...providerBindingFromSelectedProfile(
+          options?.providerProfile,
+          options?.providerProfileId,
+        ),
+      };
       const providerProfileId =
         selectedProviderBinding.providerProfileId?.trim() || null;
+      const managedProviderProfileId = isManagedEngineProviderProfileId(
+        providerProfileId,
+      )
+        ? providerProfileId
+        : null;
       const autoSessionPayload = autoSession ? { autoSession } : {};
-      const providerProfilePayload = providerProfileId ? { providerProfileId } : {};
+      const providerProfilePayload = managedProviderProfileId
+        ? { providerProfileId: managedProviderProfileId }
+        : {};
       const startThreadOptions =
-        autoSession || providerProfileId
+        autoSession || managedProviderProfileId
           ? { ...autoSessionPayload, ...providerProfilePayload }
           : undefined;
       const startThreadWithOptionalMetadata = () =>
@@ -440,6 +460,8 @@ export function useThreadActionsSessionRuntime({
           engine,
           sessionId: threadId,
           workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+          providerProfileId: selectedProviderBinding.providerProfileId,
+          providerProfileName: selectedProviderBinding.providerProfileName,
         });
         if (shouldActivate) {
           dispatch({ type: "setActiveThreadId", workspaceId, threadId });
@@ -479,6 +501,8 @@ export function useThreadActionsSessionRuntime({
           engine: "codex",
           sessionId: threadId,
           workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+          providerProfileId: selectedProviderBinding.providerProfileId,
+          providerProfileName: selectedProviderBinding.providerProfileName,
         });
         // Mirrors createSessionLifecycleThreadStarter so the pending thread
         // survives background thread-list refreshes like a real codex thread.
@@ -522,6 +546,8 @@ export function useThreadActionsSessionRuntime({
               engine: "codex",
               sessionId: startedId,
               workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+              providerProfileId: selectedProviderBinding.providerProfileId,
+              providerProfileName: selectedProviderBinding.providerProfileName,
             });
           }
           return startedId;
@@ -543,6 +569,8 @@ export function useThreadActionsSessionRuntime({
                   engine: "codex",
                   sessionId: retryStartedId,
                   workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+                  providerProfileId: selectedProviderBinding.providerProfileId,
+                  providerProfileName: selectedProviderBinding.providerProfileName,
                 });
               }
               return retryStartedId;
@@ -713,6 +741,8 @@ export function useThreadActionsSessionRuntime({
           engine: forkedEngine,
           sessionId: forkedThreadId,
           workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+          providerProfileId: selectedProviderBinding.providerProfileId,
+          providerProfileName: selectedProviderBinding.providerProfileName,
         });
         if (shouldActivate) {
           dispatch({
@@ -949,6 +979,8 @@ export function useThreadActionsSessionRuntime({
             engine: "claude",
             sessionId: forkedThreadId,
             workspacePath: workspacePath,
+            providerProfileId: inheritedProviderBinding.providerProfileId,
+            providerProfileName: inheritedProviderBinding.providerProfileName,
           });
           const forkThreadName = resolveClaudeForkThreadName({
             workspaceId,
@@ -1244,6 +1276,8 @@ export function useThreadActionsSessionRuntime({
             engine: "codex",
             sessionId: forkedThreadId,
             workspacePath: workspacePathsByIdRef.current[workspaceId] ?? "",
+            providerProfileId: selectedProviderBinding.providerProfileId,
+            providerProfileName: selectedProviderBinding.providerProfileName,
           });
           if (shouldActivate) {
             dispatch({

@@ -123,6 +123,12 @@
 - 硬红线：① 禁止用固定 timeout 当冷启动修复；② 禁止用第一次 pointerdown/keydown 启动 deferred stores / i18n / updater / Markdown compile / ComposerImpl；③ 禁止假设 StartupGateOverlay 默认在挡用户；④ 禁止 Light 层泄漏可点 ModelSelect / atomic catalog。
 - 分析与入口表见 `docs/analysis/windows-cold-start-click-freeze-release-notes-and-composer-2026-08-14.md`。只修用户点到的那一个按钮不算修完。
 
+### Session Switch Catalog Fetch Gate（2026-08-19 切会话拉 catalog 卡死沉淀）
+
+- 改切会话 / `setActiveThreadId` / `commitThreadSelection` / `useProviderModelCatalogSync` / composer `providerProfileId` / `refreshEngineModels` 前，必读 `dev-guidelines/guides/session-switch-catalog-fetch-pitfall.md`。
+- 硬红线：① 点击路径禁止 `get_engine_models` / `refreshEngineModels` / `vendor_switch_*`；② `forceRefresh: false` 仍会 IPC，不算便宜；③ 本地 sentinel 禁止当 composer 新 catalog 作用域；④ 绑回独立配置禁止 switch L1。
+- 标签补齐会让「空 id 时的 early-return」失效；热路径加预热前必须按「每条会话都有该字段」重演点击。
+
 ### WebView Animation Compat Gate（2026-08-19 流体背景 Win 兼容沉淀）
 
 - 改 WebGL / canvas 全屏动效、workspace wallpaper、`backdrop-filter` 盖动态层、或 `prefers-reduced-motion` 停 RAF 前，必读 `dev-guidelines/guides/webview-animation-compat-pitfall.md`。

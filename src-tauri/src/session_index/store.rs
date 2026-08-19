@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS session_index (
   physical_path TEXT,
   parent_session_id TEXT,
   size_bytes INTEGER,
+  provider_profile_id TEXT,
+  provider_profile_name TEXT,
   source_fingerprint TEXT,
   indexed_at INTEGER NOT NULL,
   tombstoned_at INTEGER,
@@ -69,6 +71,10 @@ pub struct SessionIndexRow {
     pub parent_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_profile_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_profile_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +127,14 @@ pub(crate) fn open_connection() -> Result<Connection, String> {
         .map_err(|error| error.to_string())?;
     let _ = connection.execute(
         "ALTER TABLE session_index ADD COLUMN tombstoned_at INTEGER",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE session_index ADD COLUMN provider_profile_id TEXT",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE session_index ADD COLUMN provider_profile_name TEXT",
         [],
     );
     let _ = connection.execute_batch(
@@ -201,7 +215,10 @@ pub(crate) fn paths_equivalent(left: &str, right: &str) -> bool {
     false
 }
 
-pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> Result<usize, String> {
+pub(crate) fn upsert_rows(
+    connection: &Connection,
+    rows: &[SessionIndexRow],
+) -> Result<usize, String> {
     if rows.is_empty() {
         return Ok(0);
     }
@@ -215,8 +232,9 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                 "INSERT INTO session_index (
                     engine, session_id, title, native_title, updated_at, created_at,
                     cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name,
                     source_fingerprint, indexed_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
                  ON CONFLICT(engine, session_id) DO UPDATE SET
                     title = excluded.title,
                     native_title = excluded.native_title,
@@ -227,6 +245,8 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                     physical_path = COALESCE(excluded.physical_path, session_index.physical_path),
                     parent_session_id = COALESCE(excluded.parent_session_id, session_index.parent_session_id),
                     size_bytes = COALESCE(excluded.size_bytes, session_index.size_bytes),
+                    provider_profile_id = COALESCE(excluded.provider_profile_id, session_index.provider_profile_id),
+                    provider_profile_name = COALESCE(excluded.provider_profile_name, session_index.provider_profile_name),
                     source_fingerprint = excluded.source_fingerprint,
                     indexed_at = excluded.indexed_at
                  WHERE session_index.tombstoned_at IS NULL",
@@ -281,6 +301,14 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                         .map(str::trim)
                         .filter(|value| !value.is_empty()),
                     row.size_bytes.map(|value| value as i64),
+                    row.provider_profile_id
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty()),
+                    row.provider_profile_name
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty()),
                     row.physical_path
                         .as_deref()
                         .map(str::trim)
@@ -411,7 +439,8 @@ fn list_slice_for_workspace_engine(
     let mut statement = connection
         .prepare(
             "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                    cwd, workspace_path, physical_path, parent_session_id, size_bytes
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name
              FROM session_index
              WHERE (workspace_path = ?1 OR cwd = ?1)
                AND engine = ?2
@@ -462,7 +491,8 @@ fn merge_equivalent_workspace_rows(
     let mut fallback = connection
         .prepare(
             "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                    cwd, workspace_path, physical_path, parent_session_id, size_bytes
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name
              FROM session_index
              WHERE tombstoned_at IS NULL
              ORDER BY updated_at DESC, session_id ASC
@@ -474,8 +504,7 @@ fn merge_equivalent_workspace_rows(
         .map_err(|error| error.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
-    let mut per_engine: std::collections::HashMap<String, usize> =
-        std::collections::HashMap::new();
+    let mut per_engine: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for row in rows.iter() {
         *per_engine.entry(row.engine.clone()).or_insert(0) += 1;
     }
@@ -551,7 +580,8 @@ pub(crate) fn list_for_workspace_path_before(
     let mut statement = connection
         .prepare(
             "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                    cwd, workspace_path, physical_path, parent_session_id, size_bytes
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name
              FROM session_index
              WHERE (workspace_path = ?1 OR cwd = ?1)
                AND tombstoned_at IS NULL
@@ -582,14 +612,7 @@ pub(crate) fn list_for_workspace_path_before(
         .iter()
         .map(|row| (row.engine.clone(), row.session_id.clone()))
         .collect();
-    merge_equivalent_workspace_rows(
-        connection,
-        &key,
-        limit,
-        &mut existing,
-        &mut rows,
-        before,
-    )?;
+    merge_equivalent_workspace_rows(connection, &key, limit, &mut existing, &mut rows, before)?;
     rows.sort_by(|left, right| {
         right
             .updated_at
@@ -612,9 +635,7 @@ pub(crate) fn count_for_workspace_path(
         return Ok(0);
     }
     let mut statement = connection
-        .prepare(
-            "SELECT cwd, workspace_path FROM session_index WHERE tombstoned_at IS NULL",
-        )
+        .prepare("SELECT cwd, workspace_path FROM session_index WHERE tombstoned_at IS NULL")
         .map_err(|error| error.to_string())?;
     let mapped = statement
         .query_map([], |row| {
@@ -843,9 +864,15 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionIndexRow> {
         workspace_path: row.get(7)?,
         physical_path: row.get(8)?,
         parent_session_id: row.get(9)?,
-        size_bytes: row
-            .get::<_, Option<i64>>(10)?
-            .and_then(|value| if value >= 0 { Some(value as u64) } else { None }),
+        size_bytes: row.get::<_, Option<i64>>(10)?.and_then(|value| {
+            if value >= 0 {
+                Some(value as u64)
+            } else {
+                None
+            }
+        }),
+        provider_profile_id: row.get(11)?,
+        provider_profile_name: row.get(12)?,
     })
 }
 
@@ -866,10 +893,44 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         }
     }
 
     #[test]
+    fn provider_columns_roundtrip_and_survive_reupsert_without_provider() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        let row = SessionIndexRow {
+            engine: "codex".into(),
+            session_id: "sp1".into(),
+            title: "Hello".into(),
+            native_title: None,
+            updated_at: 200,
+            created_at: Some(100),
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: Some("profile-a".into()),
+            provider_profile_name: Some("Provider A".into()),
+        };
+        upsert_rows(&connection, &[row]).expect("upsert with provider");
+
+        // 不知道 provider 的 writer 重 upsert（COALESCE）不得清掉已有值。
+        let mut stripped = index_row("codex", "sp1", 300);
+        stripped.title = "Hello v2".into();
+        upsert_rows(&connection, &[stripped]).expect("re-upsert without provider");
+
+        let rows = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "Hello v2");
+        assert_eq!(rows[0].provider_profile_id.as_deref(), Some("profile-a"));
+        assert_eq!(rows[0].provider_profile_name.as_deref(), Some("Provider A"));
+    }
+
     fn upsert_and_list_by_workspace() {
         let connection = Connection::open_in_memory().expect("open");
         connection.execute_batch(DDL).expect("ddl");
@@ -887,6 +948,8 @@ mod tests {
                 physical_path: Some("/tmp/s1.jsonl".into()),
                 parent_session_id: None,
                 size_bytes: Some(12),
+                provider_profile_id: None,
+                provider_profile_name: None,
             }],
         )
         .expect("upsert");
@@ -894,8 +957,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].session_id, "s1");
         assert_eq!(
-            max_updated_at_for_engine(&connection, "claude", "/Users/me/proj/")
-                .expect("max"),
+            max_updated_at_for_engine(&connection, "claude", "/Users/me/proj/").expect("max"),
             Some(200)
         );
         assert_eq!(
@@ -934,9 +996,11 @@ mod tests {
             },
         )
         .expect("save complete");
-        assert!(load_backfill_state(&connection, "codex:/tmp/proj")
-            .expect("reload")
-            .complete);
+        assert!(
+            load_backfill_state(&connection, "codex:/tmp/proj")
+                .expect("reload")
+                .complete
+        );
     }
 
     #[test]
@@ -955,6 +1019,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         };
         upsert_rows(&connection, &[first]).expect("insert");
         let refresh = SessionIndexRow {
@@ -969,6 +1035,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         };
         upsert_rows(&connection, &[refresh]).expect("refresh");
         let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
@@ -993,6 +1061,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         };
         upsert_rows(&connection, &[first]).expect("insert");
         let refresh = SessionIndexRow {
@@ -1007,6 +1077,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         };
         upsert_rows(&connection, &[refresh]).expect("refresh");
         let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
@@ -1033,14 +1105,20 @@ mod tests {
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: Some(32),
+                provider_profile_id: None,
+                provider_profile_name: None,
             }],
         )
         .expect("upsert");
 
-        let updated = tombstone_session_ids(&connection, &["pi:ses_pi_1".into()]).expect("tombstone");
+        let updated =
+            tombstone_session_ids(&connection, &["pi:ses_pi_1".into()]).expect("tombstone");
         assert_eq!(updated, 1);
         let listed = list_for_workspace_path(&connection, "/tmp/codex", 10).expect("list");
-        assert!(listed.is_empty(), "tombstoned PI rows must leave the sidebar page");
+        assert!(
+            listed.is_empty(),
+            "tombstoned PI rows must leave the sidebar page"
+        );
     }
 
     #[test]
@@ -1048,7 +1126,8 @@ mod tests {
         let connection = Connection::open_in_memory().expect("open");
         connection.execute_batch(DDL).expect("ddl");
         // 行尚不存在（会话只经磁盘列表进过侧栏）：tombstone 也要留下持久标记
-        let updated = tombstone_session_ids(&connection, &["pi:ses_ghost".into()]).expect("tombstone");
+        let updated =
+            tombstone_session_ids(&connection, &["pi:ses_ghost".into()]).expect("tombstone");
         assert_eq!(updated, 0);
         // 重启后 rescan 重新 upsert 同一个 (engine, session_id)
         upsert_rows(&connection, &[index_row("pi", "ses_ghost", 300)]).expect("upsert");
@@ -1079,7 +1158,11 @@ mod tests {
         connection.execute_batch(DDL).expect("ddl");
         let mut rows = Vec::new();
         for index in 0..8 {
-            rows.push(index_row("claude", &format!("claude-{index}"), 1000 + index));
+            rows.push(index_row(
+                "claude",
+                &format!("claude-{index}"),
+                1000 + index,
+            ));
         }
         rows.push(index_row("pi", "pi-old", 1));
         upsert_rows(&connection, &rows).expect("upsert");
@@ -1097,9 +1180,7 @@ mod tests {
         connection.execute_batch(DDL).expect("ddl");
         upsert_rows(&connection, &[index_row("claude", "claude-1", 100)]).expect("upsert");
         mark_source_synced(&connection, "pi:/tmp/proj", "fp-a", 1).expect("mark");
-        assert!(
-            !workspace_index_sources_invalidated(&connection, "/tmp/proj").expect("fresh")
-        );
+        assert!(!workspace_index_sources_invalidated(&connection, "/tmp/proj").expect("fresh"));
         connection
             .execute(
                 "UPDATE session_index_sources SET last_sync_ms = 0 WHERE source_key = ?1",
@@ -1114,14 +1195,8 @@ mod tests {
 
     #[test]
     fn normalize_path_key_folds_windows_drive_and_extended_prefix() {
-        assert_eq!(
-            normalize_path_key(r"C:\Users\me\proj"),
-            "c:/users/me/proj"
-        );
-        assert_eq!(
-            normalize_path_key(r"c:\Users\me\proj\"),
-            "c:/users/me/proj"
-        );
+        assert_eq!(normalize_path_key(r"C:\Users\me\proj"), "c:/users/me/proj");
+        assert_eq!(normalize_path_key(r"c:\Users\me\proj\"), "c:/users/me/proj");
         assert_eq!(
             normalize_path_key(r"\\?\C:\Users\me\proj"),
             "c:/users/me/proj"
@@ -1160,6 +1235,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         }
     }
 
@@ -1183,7 +1260,10 @@ mod tests {
         assert!(engines.contains(&"grok"), "{engines:?}");
         assert!(engines.contains(&"pi"), "{engines:?}");
         assert!(engines.contains(&"dsh"), "{engines:?}");
-        assert_eq!(count_for_workspace_path(&connection, r"C:\Users\me\proj").expect("count"), 4);
+        assert_eq!(
+            count_for_workspace_path(&connection, r"C:\Users\me\proj").expect("count"),
+            4
+        );
     }
 
     #[test]

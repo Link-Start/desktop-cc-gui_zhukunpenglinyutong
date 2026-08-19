@@ -89,7 +89,8 @@ describe("useWorkspaceRefreshOnFocus", () => {
         preserveState: true,
         recoverySource: "focus-refresh",
         allowRuntimeReconnect: false,
-        startupHydrationMode: "first-paint",
+        mergeExistingThreads: true,
+        includeOpenCodeSessions: false,
       },
     );
     expect(listThreadsForWorkspace).toHaveBeenNthCalledWith(
@@ -99,7 +100,8 @@ describe("useWorkspaceRefreshOnFocus", () => {
         preserveState: true,
         recoverySource: "focus-refresh",
         allowRuntimeReconnect: false,
-        startupHydrationMode: "first-paint",
+        mergeExistingThreads: true,
+        includeOpenCodeSessions: false,
       },
     );
   });

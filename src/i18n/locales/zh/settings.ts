@@ -721,7 +721,7 @@ const settings = {
     displaySubDescription: "调整窗口渲染背景和效果的方式。",
     sidebarProviderLabels: "在会话列表显示供应商标签",
     sidebarProviderLabelsDesc:
-      "在侧栏和置顶会话列表中显示 Codex provider badge。",
+      "在侧栏和置顶会话列表中显示会话使用的供应商标签。",
     clientUiVisibility: {
       title: "界面显示",
       description: "隐藏可选面板和 icon 按钮，但不关闭底层功能。",
@@ -1217,6 +1217,7 @@ const settings = {
     vendor: {
       officialConfig: "官方配置",
       thirdPartyConfig: "第三方配置",
+      globalSettings: "全局设置",
       engineSettings: "引擎设置",
       providerChannels: "供应商渠道",
       ccSwitchImport: {

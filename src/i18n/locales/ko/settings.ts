@@ -1018,6 +1018,7 @@ const settings = {
         "fromCcSwitchUpdate": "cc-switch에서 가져오기/업데이트",
         "fromCcSwitchFile": "가져올 cc-switch.db 파일 선택",
       },
+      "globalSettings": "전역 설정",
       "engineSettings": "엔진 설정",
       "providerChannels": "공급자 채널",
       "allProviders": "모든 공급자",
