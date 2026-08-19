@@ -76,6 +76,65 @@ describe("mergeThreadItemsPreservingOptimisticUsers leftover order", () => {
     expect(users[users.length - 1]?.id).toBe("optimistic-user-keep");
   });
 
+  it("drops a tail optimistic copy when the same visible question already sits earlier", () => {
+    const question =
+      "比如说 我有好几个进程崩溃了，为什么从好几个进程里面定位到peechclient.hmi这个进程";
+    const wrapped = [
+      "<browser_context_v2>",
+      "url: https://example.com/tombstone",
+      "</browser_context_v2>",
+      "",
+      question,
+    ].join("\n");
+    const local: ConversationItem[] = [
+      userMessage("hist-1", "上一问"),
+      assistantMessage("a-1", "上一答"),
+      userMessage("optimistic-user-late", question),
+    ];
+    const incoming: ConversationItem[] = [
+      userMessage("hist-1", "上一问"),
+      assistantMessage("a-1", "上一答"),
+      userMessage("hist-q", wrapped),
+      assistantMessage("a-q", "tombstone 分析"),
+    ];
+
+    const merged = mergeThreadItemsPreservingOptimisticUsers(local, incoming, {
+      isProcessing: true,
+    });
+    const users = merged.filter(
+      (item): item is UserMessage =>
+        item.kind === "message" && item.role === "user",
+    );
+
+    expect(users.map((item) => item.id)).toEqual(["hist-1", "hist-q"]);
+    expect(merged.some((item) => item.id === "optimistic-user-late")).toBe(
+      false,
+    );
+    expect(merged.map((item) => item.id)).toEqual([
+      "hist-1",
+      "a-1",
+      "hist-q",
+      "a-q",
+    ]);
+  });
+
+  it("keeps two genuine adjacent user bubbles when only the later one is optimistic", () => {
+    const local: ConversationItem[] = [
+      userMessage("hist-keep", "已有提问"),
+      userMessage("optimistic-user-keep", "下一问"),
+    ];
+    const incoming: ConversationItem[] = [userMessage("hist-keep", "已有提问")];
+
+    const merged = mergeThreadItemsPreservingOptimisticUsers(local, incoming, {
+      isProcessing: true,
+    });
+
+    expect(merged.map((item) => item.id)).toEqual([
+      "hist-keep",
+      "optimistic-user-keep",
+    ]);
+  });
+
   it("does not splice a foreign unmatched explore window above a new optimistic user", () => {
     const local: ConversationItem[] = [
       userMessage("optimistic-user-only", "在吗"),

@@ -304,12 +304,13 @@ export function resolveActiveMessageAnchor(
   if (!container) {
     return null;
   }
+  const containerRect = container.getBoundingClientRect();
   const viewportAnchorY =
-    container.scrollTop + Math.min(96, container.clientHeight * 0.32);
+    containerRect.top + Math.min(96, container.clientHeight * 0.32);
   let bestId: string | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const [messageId, node] of messageNodeById) {
-    const distance = Math.abs(node.offsetTop - viewportAnchorY);
+    const distance = Math.abs(node.getBoundingClientRect().top - viewportAnchorY);
     if (distance < bestDistance) {
       bestDistance = distance;
       bestId = messageId;

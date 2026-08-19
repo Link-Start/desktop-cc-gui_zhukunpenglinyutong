@@ -1,6 +1,7 @@
 import type { ConversationItem } from "../../../types";
 import {
   buildComparableUserMessageKey,
+  buildMessagePresentationMetadata,
   isEquivalentUserObservation,
   normalizeComparableUserText,
   normalizeUserImages,
@@ -52,6 +53,31 @@ function isTextEquivalentUserTurn(
   );
 }
 
+function resolveVisibleUserIntentText(item: UserMessageItem): string {
+  const metadata =
+    item.presentationMetadata ?? buildMessagePresentationMetadata(item);
+  const sticky = metadata.stickyCandidateText.trim().replace(/\s+/g, " ");
+  if (sticky.length > 0) {
+    return sticky;
+  }
+  return normalizeComparableUserText(item.text);
+}
+
+function isSameVisibleUserIntent(
+  left: UserMessageItem,
+  right: UserMessageItem,
+): boolean {
+  if (
+    isEquivalentUserObservation(left, right) ||
+    isTextEquivalentUserTurn(left, right)
+  ) {
+    return true;
+  }
+  const leftVisible = resolveVisibleUserIntentText(left);
+  const rightVisible = resolveVisibleUserIntentText(right);
+  return leftVisible.length > 0 && leftVisible === rightVisible;
+}
+
 function findMatchingRealUserMessage(
   list: ConversationItem[],
   candidate: UserMessageItem,
@@ -64,11 +90,40 @@ function findMatchingRealUserMessage(
       return false;
     }
     // 全文+图等价，或同 turn 文案等价（Shared 投影曾丢图时仍要收敛双气泡）
-    return (
-      isEquivalentUserObservation(item, candidate) ||
-      isTextEquivalentUserTurn(item, candidate)
-    );
+    return isSameVisibleUserIntent(item, candidate);
   });
+}
+
+/**
+ * 尾巴上的 optimistic 若前面已有同一句可见提问，丢掉尾巴。
+ * 只删 optimistic-user-*，不动两条真实 user。
+ */
+export function dropRedundantTailOptimisticUsers(
+  items: readonly ConversationItem[],
+): ConversationItem[] {
+  const dropIds = new Set<string>();
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (!item || !isOptimisticUserMessage(item)) {
+      continue;
+    }
+    const hasEarlierVisibleMatch = items.slice(0, index).some((candidate) => {
+      if (
+        !isUserMessageItem(candidate) ||
+        isOptimisticUserMessage(candidate)
+      ) {
+        return false;
+      }
+      return isSameVisibleUserIntent(candidate, item);
+    });
+    if (hasEarlierVisibleMatch) {
+      dropIds.add(item.id);
+    }
+  }
+  if (dropIds.size === 0) {
+    return items as ConversationItem[];
+  }
+  return items.filter((item) => !dropIds.has(item.id));
 }
 
 function enrichRealUserImagesFromOptimistic(
@@ -320,5 +375,5 @@ export function mergeThreadItemsPreservingOptimisticUsers(
     }
   }
 
-  return mergedItems;
+  return dropRedundantTailOptimisticUsers(mergedItems);
 }

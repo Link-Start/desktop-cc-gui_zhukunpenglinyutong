@@ -123,6 +123,17 @@ describe("Messages live behavior", () => {
       configurable: true,
       value: offsetTop,
     });
+    Object.defineProperty(message, "getBoundingClientRect", {
+      configurable: true,
+      value: () => {
+        const scroller = (message as HTMLElement).closest(
+          ".messages.scrollable",
+        ) as HTMLElement | null;
+        const scrollerTop = scroller?.getBoundingClientRect().top ?? 0;
+        const scrollTop = scroller?.scrollTop ?? 0;
+        return { top: scrollerTop + offsetTop - scrollTop };
+      },
+    });
   };
 
   const getActiveAnchorDashIndex = (container: HTMLElement) =>
