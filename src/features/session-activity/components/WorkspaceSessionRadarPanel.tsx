@@ -10,6 +10,8 @@ import { useTranslation } from "react-i18next";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import type { SessionRadarEntry } from "../hooks/useSessionRadarFeed";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
+import { loadSessionActivityStyles } from "../../../styles/featureStyleLoaders";
+import { useFeatureStylesReady } from "../../../styles/useFeatureStylesReady";
 import { formatRelativeTimeShort } from "../../../utils/time";
 import { EngineIcon } from "../../engine/components/EngineIcon";
 import { deleteSessionRadarHistoryEntries } from "../utils/sessionRadarHistoryManagement";
@@ -147,6 +149,9 @@ export function WorkspaceSessionRadarPanel({
   recentCompletedSessions,
   onSelectThread,
 }: WorkspaceSessionRadarPanelProps) {
+  // activity 面板已被 kill-switch 关掉，雷达是 session-activity.css 的唯一生产入口。
+  // 不在这里拉 loader，右栏会整片退化为无卡片/无间距的裸文本。
+  const stylesReady = useFeatureStylesReady(loadSessionActivityStyles);
   const { t } = useTranslation();
   const [previewExpandedById, setPreviewExpandedById] = useState<Record<string, boolean>>({});
   const [deletingEntryIds, setDeletingEntryIds] = useState<Record<string, boolean>>({});
@@ -673,6 +678,10 @@ export function WorkspaceSessionRadarPanel({
       </section>
     );
   };
+
+  if (!stylesReady) {
+    return null;
+  }
 
   return (
     <div className="session-activity-panel">

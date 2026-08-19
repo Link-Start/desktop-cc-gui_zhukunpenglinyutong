@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { writeClientStoreValue, getClientStoreSync } from "../../../services/clientStorage";
@@ -37,6 +39,21 @@ const DAY_EIGHT = new Date(2026, 4, 26, 10, 0, 0).getTime();
 const DAY_NINE = new Date(2026, 4, 27, 10, 0, 0).getTime();
 
 describe("WorkspaceSessionRadarPanel", () => {
+  it("loads session-activity styles because the activity panel kill-switch no longer does", () => {
+    // session-activity.css 随 P1-1 改成 feature loader；activity 面板被关掉后
+    // 雷达是唯一挂载面。test mode 下 hook 不真调 loader，用源码契约锁住接线。
+    const panelSource = readFileSync(
+      path.join(
+        process.cwd(),
+        "src/features/session-activity/components/WorkspaceSessionRadarPanel.tsx",
+      ),
+      "utf8",
+    );
+    expect(panelSource).toContain("loadSessionActivityStyles");
+    expect(panelSource).toContain("useFeatureStylesReady");
+    expect(panelSource).toContain("if (!stylesReady)");
+  });
+
   it("renders radar entries and toggles preview by click", () => {
     const onSelectThread = vi.fn();
 
