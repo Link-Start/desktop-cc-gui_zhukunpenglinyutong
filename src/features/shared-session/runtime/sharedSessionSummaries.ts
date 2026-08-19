@@ -255,9 +255,12 @@ export function remapThreadParentsToSharedOwners(
 /**
  * 侧栏隐藏用：从当前 list 中 Shared 会话收集「藏崽」父 id 键
  * （shared: 自身 + nativeThreadIds 的 raw/engine: 变体）。
+ * extraHideIds：protocol hide / 已验证 hide set 的文件 UUID。
+ * owner 被 Index 标题闸丢掉后，子代理 parent 仍要能命中。
  */
 export function buildSharedSidebarHiddenParentKeys(
   threads: readonly ThreadSummary[],
+  extraHideIds?: Iterable<string>,
 ): Set<string> {
   const keys = new Set<string>();
   for (const thread of threads) {
@@ -271,6 +274,13 @@ export function buildSharedSidebarHiddenParentKeys(
       keys.add(sharedId);
     }
     expandHiddenSharedBindingIds(thread.nativeThreadIds ?? []).forEach((id) => {
+      if (id) {
+        keys.add(id);
+      }
+    });
+  }
+  if (extraHideIds) {
+    expandHiddenSharedBindingIds(extraHideIds).forEach((id) => {
       if (id) {
         keys.add(id);
       }

@@ -1,13 +1,21 @@
 // @vitest-environment jsdom
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { ThreadSummary } from "../../../types";
+import {
+  rememberVerifiedSharedHide,
+  resetSharedNativeVisibilityMemory,
+} from "../../threads/hooks/sharedNativeVisibility";
 import { useThreadRows } from "./useThreadRows";
 
 const getPinTimestamp = () => null;
 
 describe("useThreadRows", () => {
+  afterEach(() => {
+    resetSharedNativeVisibilityMemory();
+  });
+
   it("renders Codex subagent sessions under one parent root", () => {
     const parent: ThreadSummary = {
       id: "parent-session",
@@ -183,5 +191,87 @@ describe("useThreadRows", () => {
     ]);
     expect(visibleIds).not.toContain(windowsLivePup.id);
     expect(visibleIds).not.toContain("child-singer");
+  });
+
+  it("does not promote Claude subagent when protocol owner is missing from the list", () => {
+    const fileUuid = "1807f883-011c-46bd-94d5-ff483ffb1a4a";
+    rememberVerifiedSharedHide(
+      "ws-protocol",
+      new Set([fileUuid, `claude:${fileUuid}`]),
+    );
+    const shared: ThreadSummary = {
+      id: "shared:267c001d-932a-4a05-bfa9-a238937f7707",
+      name: "Shared",
+      updatedAt: 300,
+      engineSource: "claude",
+      threadKind: "shared",
+      nativeThreadIds: ["claude:c65677af-c64e-4fce-9e34-76f1cd1a7c7f"],
+    };
+    const pup: ThreadSummary = {
+      id: `claude:subagent:${fileUuid}:agent-a0f4436c38b58a97e`,
+      name: "调研 Zen 代理",
+      parentThreadId: `claude:${fileUuid}`,
+      updatedAt: 400,
+      engineSource: "claude",
+    };
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [shared, pup],
+      true,
+      "ws-protocol",
+      getPinTimestamp,
+    );
+    const visibleIds = rows.unpinnedRows.map((row) => row.thread.id);
+    expect(visibleIds).toEqual(["shared:267c001d-932a-4a05-bfa9-a238937f7707"]);
+    expect(visibleIds).not.toContain(pup.id);
+  });
+
+  it("keeps local Socrates and Singer under their TUI/Desktop parents", () => {
+    const desktopParent: ThreadSummary = {
+      id: "01a00d6c-205e-7492-b344-dccefed9909d",
+      name: "Desktop parent",
+      updatedAt: 100,
+      engineSource: "codex",
+    };
+    const socrates: ThreadSummary = {
+      id: "01a00d8f-7e8d-7481-bb59-9d3f79e4b51b",
+      name: "Socrates",
+      parentThreadId: "01a00d6c-205e-7492-b344-dccefed9909d",
+      updatedAt: 200,
+      engineSource: "codex",
+    };
+    const tuiParent: ThreadSummary = {
+      id: "019fc7da-75f2-73a3-8793-9a8705e33a18",
+      name: "TUI parent",
+      updatedAt: 90,
+      engineSource: "codex",
+    };
+    const singer: ThreadSummary = {
+      id: "019fc810-0a87-7542-8cf3-5a70454f2fa4",
+      name: "Singer",
+      parentThreadId: "019fc7da-75f2-73a3-8793-9a8705e33a18",
+      updatedAt: 180,
+      engineSource: "codex",
+    };
+    rememberVerifiedSharedHide(
+      "ws-native-codex",
+      new Set(["1807f883-011c-46bd-94d5-ff483ffb1a4a", "claude:hidden-owner"]),
+    );
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [desktopParent, socrates, tuiParent, singer],
+      true,
+      "ws-native-codex",
+      getPinTimestamp,
+    );
+    const visible = rows.unpinnedRows.map((row) => [row.thread.id, row.depth]);
+    expect(visible).toEqual(
+      expect.arrayContaining([
+        ["01a00d6c-205e-7492-b344-dccefed9909d", 0],
+        ["01a00d8f-7e8d-7481-bb59-9d3f79e4b51b", 1],
+        ["019fc7da-75f2-73a3-8793-9a8705e33a18", 0],
+        ["019fc810-0a87-7542-8cf3-5a70454f2fa4", 1],
+      ]),
+    );
   });
 });

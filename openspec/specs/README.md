@@ -477,6 +477,7 @@
 - [shared-session-merge-guard](./shared-session-merge-guard/spec.md)
 - [shared-session-target-optimistic](./shared-session-target-optimistic/spec.md)
 - [shared-session-thread](./shared-session-thread/spec.md)
+- [shared-spawn-sidebar-ownership](./shared-spawn-sidebar-ownership/spec.md)
 - [shared-state-lock-governance](./shared-state-lock-governance/spec.md)
 - [shell-first-lazy-runtime-isolation](./shell-first-lazy-runtime-isolation/spec.md)
 - [shell-orchestration-hardening](./shell-orchestration-hardening/spec.md)

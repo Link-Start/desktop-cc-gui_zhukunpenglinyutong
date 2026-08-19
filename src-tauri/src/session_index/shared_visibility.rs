@@ -343,6 +343,23 @@ mod tests {
     }
 
     #[test]
+    fn protocol_hidden_ids_keep_claude_file_uuid_when_title_is_mossx() {
+        let rows = vec![
+            sample_row(
+                "1807f883-011c-46bd-94d5-ff483ffb1a4a",
+                "MOSSX_CONTEXT_PACKAGE:sha256:dead…",
+                None,
+            ),
+            sample_row("visible-native", "继续", None),
+        ];
+        let hidden = protocol_hidden_ids_from_index_rows(&rows);
+        assert!(hidden
+            .iter()
+            .any(|id| id == "1807f883-011c-46bd-94d5-ff483ffb1a4a"));
+        assert!(!hidden.iter().any(|id| id == "visible-native"));
+    }
+
+    #[test]
     fn missing_shared_workspace_is_available_with_empty_hide() {
         let projection =
             load_shared_native_visibility_projection("ws-does-not-exist-for-visibility", None, &[]);

@@ -134,6 +134,20 @@ fn is_mossx_program_control_text(text: &str) -> bool {
     trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("MOSSX_")
 }
 
+/// Shared 协议包（完整 token）。截断占位 `MOSSX_CONTE` 不算，避免 empty-prune 把续跑 jsonl 当空会话删盘。
+pub(crate) fn is_mossx_shared_protocol_owner_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    const TOKENS: &[&str] = &[
+        "MOSSX_CONTEXT_PACKAGE",
+        "MOSSX_SHARED_CONTEXT",
+        "MOSSX_NATIVE_CONTEXT",
+        "MOSSX_CONTEXT_ACCEPTED",
+    ];
+    TOKENS
+        .iter()
+        .any(|token| trimmed.len() >= token.len() && trimmed[..token.len()].eq_ignore_ascii_case(token))
+}
+
 fn is_generic_claude_session_title(title: &str) -> bool {
     title.trim().eq_ignore_ascii_case("claude session")
 }
@@ -193,6 +207,11 @@ fn should_omit_claude_index_row(session_id: &str, title: &str, path: &Path) -> b
     if is_claude_agent_session_id(session_id) {
         return true;
     }
+    // Shared 协议 owner 必须留在 Index，供 protocol hide 收录文件 UUID。
+    // 侧栏投影再用 MOSSX_ 标题闸藏行；禁止用 history.jsonl「继续」顶替后 omit 失败。
+    if is_mossx_program_control_text(title) {
+        return false;
+    }
     if is_claude_control_plane_title(title) {
         return true;
     }
@@ -200,6 +219,32 @@ fn should_omit_claude_index_row(session_id: &str, title: &str, path: &Path) -> b
         return peek_claude_transcript_kind(path) == ClaudeTranscriptPeek::Empty;
     }
     false
+}
+
+fn peek_claude_first_user_raw(path: &Path) -> Option<String> {
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    for _ in 0..80 {
+        let line = match read_jsonl_line_capped(&mut reader, 256 * 1024) {
+            Ok(Some(JsonlLine::Text(line))) => line,
+            Ok(Some(JsonlLine::SkippedHuge)) => continue,
+            Ok(None) => break,
+            Err(_) => break,
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if !is_claude_user_or_human_entry(&value) {
+            continue;
+        }
+        if let Some(text) = extract_text_preview(&value) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn claude_index_row_from_file(
@@ -212,14 +257,21 @@ fn claude_index_row_from_file(
         return None;
     }
     let updated_at = file_mtime_ms(path);
-    let title_from_history = titles
-        .get(&session_id)
-        .cloned()
-        .filter(|title| !is_claude_control_plane_title(title));
-    let title = title_from_history
-        .clone()
-        .or_else(|| peek_claude_first_user_preview(path))
-        .unwrap_or_else(|| "Claude Session".to_string());
+    let protocol_raw = peek_claude_first_user_raw(path)
+        .filter(|text| is_mossx_program_control_text(text));
+    let (title, title_from_history) = if let Some(raw) = protocol_raw {
+        (truncate_title(&raw, 80), None)
+    } else {
+        let title_from_history = titles
+            .get(&session_id)
+            .cloned()
+            .filter(|title| !is_claude_control_plane_title(title));
+        let title = title_from_history
+            .clone()
+            .or_else(|| peek_claude_first_user_preview(path))
+            .unwrap_or_else(|| "Claude Session".to_string());
+        (title, title_from_history)
+    };
     if should_omit_claude_index_row(&session_id, &title, path) {
         return None;
     }
@@ -1994,6 +2046,14 @@ mod tests {
             "MOSSX_CONTEXT_PACKAGE:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
         ));
         assert!(is_claude_control_or_synthetic_user_text("MOSSX_CONTE"));
+        assert!(super::is_mossx_shared_protocol_owner_text(
+            "MOSSX_CONTEXT_PACKAGE:sha256:dead"
+        ));
+        assert!(super::is_mossx_shared_protocol_owner_text(
+            "MOSSX_SHARED_CONTEXT_V1\nsession:x"
+        ));
+        assert!(!super::is_mossx_shared_protocol_owner_text("MOSSX_CONTE"));
+        assert!(!super::is_mossx_shared_protocol_owner_text("继续"));
     }
 
     #[test]
@@ -2033,10 +2093,46 @@ mod tests {
         let ws = Path::new("/tmp/ws");
         let titles = HashMap::new();
         assert!(claude_index_row_from_file(&empty, ws, &titles).is_none());
-        assert!(claude_index_row_from_file(&control, ws, &titles).is_none());
+        let control_row = claude_index_row_from_file(&control, ws, &titles).expect("keep mossx owner for protocol hide");
+        assert!(control_row.title.starts_with("MOSSX_CONTEXT_PACKAGE"));
+        assert!(control_row.native_title.is_none());
         assert!(claude_index_row_from_file(&agent, ws, &titles).is_none());
         let imported = claude_index_row_from_file(&real, ws, &titles).expect("real row");
         assert_eq!(imported.title, "分析左侧栏消失问题");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn claude_index_keeps_mossx_title_when_history_says_continue() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-mossx-continue-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("1807f883-011c-46bd-94d5-ff483ffb1a4a.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"MOSSX_CONTEXT_PACKAGE:sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef:sha256:cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe\nMOSSX_SHARED_CONTEXT_V1\nsession:267c001d-932a-4a05-bfa9-a238937f7707\nbinding:claude:c65677af-c64e-4fce-9e34-76f1cd1a7c7f\n\nCurrent user request:\n继续"}]}}
+"#,
+        )
+        .expect("write");
+        let mut titles = HashMap::new();
+        titles.insert(
+            "1807f883-011c-46bd-94d5-ff483ffb1a4a".into(),
+            "继续".into(),
+        );
+        let row = claude_index_row_from_file(&path, Path::new("/tmp/ws"), &titles)
+            .expect("protocol owner stays in index");
+        assert!(
+            row.title.starts_with("MOSSX_CONTEXT_PACKAGE"),
+            "history 继续 must not replace protocol title: {}",
+            row.title
+        );
+        assert_ne!(row.title, "继续");
+        assert!(row.native_title.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

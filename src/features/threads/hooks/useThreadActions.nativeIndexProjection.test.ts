@@ -116,6 +116,40 @@ describe("native Session Index projection", () => {
     ]);
   });
 
+  it("first-paint drops protocol-owned Claude rows even if history title is 继续", () => {
+    const fileUuid = "1807f883-011c-46bd-94d5-ff483ffb1a4a";
+    const painted = buildNativeIndexEarlyPaintSummaries({
+      rows: [
+        {
+          engine: "claude",
+          sessionId: fileUuid,
+          title: "MOSSX_CONTEXT_PACKAGE:sha256:dead…",
+          updatedAt: 50,
+        },
+        {
+          engine: "claude",
+          sessionId: "user-keep",
+          title: "修订 readme",
+          updatedAt: 40,
+        },
+      ],
+      workspaceId: "ws-1",
+      getCustomName: () => undefined,
+      hideSet: new Set([fileUuid, `claude:${fileUuid}`]),
+      currentThreads: undefined,
+      lastGood: [
+        {
+          id: `claude:${fileUuid}`,
+          name: "继续",
+          createdAt: 50,
+          updatedAt: 50,
+          engineSource: "claude",
+        } as ThreadSummary,
+      ],
+    });
+    expect(painted.map((row) => row.id)).toEqual(["claude:user-keep"]);
+  });
+
   it("first-paint does not resurrect empty DSH Session last-good rows", () => {
     const painted = buildNativeIndexEarlyPaintSummaries({
       rows: [

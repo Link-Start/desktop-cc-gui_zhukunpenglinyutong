@@ -10,6 +10,10 @@
 
 ## 2026-08
 
+### 2026-08-19
+
+- [`2026-08-19-hide-shared-spawned-sidebar-sessions`](2026-08-19-hide-shared-spawned-sidebar-sessions/proposal.md) — verified implementation，已同步 `shared-spawn-sidebar-ownership`、`shared-session-thread`、`subagent-session-tree-navigation`；Shared 协议续跑 native 与其子代理不进侧栏；empty-prune 不删协议 owner；Native Codex TUI/Desktop 树保留
+
 ### 2026-08-18
 
 - [`2026-08-18-fix-dsh-followup-ccgui-provider-leak`](2026-08-18-fix-dsh-followup-ccgui-provider-leak/proposal.md) — verified implementation，已同步 `dsh-followup-model-ledger`；DSH 续聊不得把 mossx reserved provider `ccgui` 送给 `session.selectModel`；thread ownership skip 外国 ledger；`dsh-pending-*` 才回退 dsh pref

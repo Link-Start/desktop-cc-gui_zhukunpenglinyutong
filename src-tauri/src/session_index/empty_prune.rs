@@ -17,8 +17,8 @@ use std::time::Duration;
 use super::store::{list_for_workspace_path, now_ms, SessionIndexRow};
 use super::writers::{
     claude_value_has_media_part, extract_text_preview, is_claude_control_or_synthetic_user_text,
-    is_claude_user_or_human_entry, read_jsonl_line_capped, should_omit_codex_index_title,
-    JsonlLine,
+    is_claude_user_or_human_entry, is_mossx_shared_protocol_owner_text, read_jsonl_line_capped,
+    should_omit_codex_index_title, JsonlLine,
 };
 use crate::claude_home::resolve_effective_claude_home;
 use crate::engine::claude_history::encode_project_path;
@@ -192,6 +192,10 @@ pub(crate) fn collect_empty_prune_plan(
         if !is_placeholder_session_title(&row.title, &row.session_id) {
             continue;
         }
+        // Index 为 protocol hide 保留 MOSSX_CONTEXT_PACKAGE 标题；这不是空草稿。
+        if is_mossx_shared_protocol_owner_text(&row.title) {
+            continue;
+        }
         let anchor = stale_age_anchor(row.created_at, row.updated_at);
         if !is_stale_empty_age(anchor, now) {
             continue;
@@ -358,7 +362,13 @@ fn claude_entry_user_prompt_verdict(value: &Value) -> UserPromptScan {
         return UserPromptScan::ScannedEmpty;
     };
     let trimmed = text.trim();
-    if trimmed.is_empty() || is_claude_control_or_synthetic_user_text(trimmed) {
+    if trimmed.is_empty() {
+        return UserPromptScan::ScannedEmpty;
+    }
+    if is_mossx_shared_protocol_owner_text(trimmed) {
+        return UserPromptScan::HasUser;
+    }
+    if is_claude_control_or_synthetic_user_text(trimmed) {
         return UserPromptScan::ScannedEmpty;
     }
     UserPromptScan::HasUser
@@ -1235,6 +1245,45 @@ mod tests {
             .expect("collect");
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].session_id, "warmup-1");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn shared_protocol_owner_is_not_pruned_as_empty() {
+        let dir = std::env::temp_dir().join(format!(
+            "ccgui-empty-prune-claude-protocol-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("1807f883-011c-46bd-94d5-ff483ffb1a4a.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"MOSSX_CONTEXT_PACKAGE:sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef:sha256:cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe\nMOSSX_SHARED_CONTEXT_V1\nsession:267c001d-932a-4a05-bfa9-a238937f7707\n\nCurrent user request:\n继续"}]}}
+"#,
+        )
+        .expect("write");
+
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        upsert_rows(
+            &connection,
+            &[sample_row(
+                "claude",
+                "1807f883-011c-46bd-94d5-ff483ffb1a4a",
+                "MOSSX_CONTEXT_PACKAGE:sha256:dead…",
+                Some(1),
+                1,
+                Some(&path.to_string_lossy()),
+            )],
+        )
+        .expect("upsert");
+        let targets = collect_confirmed_empty_targets(&connection, "/tmp/proj", 20 * 60 * 1000)
+            .expect("collect");
+        assert!(
+            targets.is_empty(),
+            "Shared protocol owner must not be GC'd: {targets:?}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

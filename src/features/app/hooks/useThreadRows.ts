@@ -6,6 +6,7 @@ import {
   buildSharedSidebarHiddenParentKeys,
   isSharedSidebarHiddenPup,
 } from "../../shared-session/runtime/sharedSessionSummaries";
+import { lastVerifiedSharedHide } from "../../threads/hooks/sharedNativeVisibility";
 import { compareThreadSummariesByCreatedAtDesc } from "../../threads/utils/threadSummarySort";
 
 type ThreadRow = {
@@ -36,7 +37,10 @@ export function useThreadRows(threadParentById: Record<string, string>) {
       visibleThreadRootCount = DEFAULT_VISIBLE_THREAD_ROOT_COUNT,
     ): ThreadRowResult => {
       const threadIds = new Set(threads.map((thread) => thread.id));
-      const sharedHiddenParentKeys = buildSharedSidebarHiddenParentKeys(threads);
+      const sharedHiddenParentKeys = buildSharedSidebarHiddenParentKeys(
+        threads,
+        lastVerifiedSharedHide(workspaceId),
+      );
       const childrenByParent = new Map<string, ThreadSummary[]>();
       const roots: ThreadSummary[] = [];
 

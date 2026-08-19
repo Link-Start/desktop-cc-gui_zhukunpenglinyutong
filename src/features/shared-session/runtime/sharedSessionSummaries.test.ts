@@ -407,4 +407,65 @@ describe("sharedSessionSummaries", () => {
       ),
     ).toBe(false);
   });
+
+  it("hides Claude subagent when parent is protocol file uuid extra hide", () => {
+    const fileUuid = "1807f883-011c-46bd-94d5-ff483ffb1a4a";
+    const keys = buildSharedSidebarHiddenParentKeys(
+      [
+        {
+          id: "shared:267c001d-932a-4a05-bfa9-a238937f7707",
+          name: "Shared",
+          updatedAt: 1,
+          engineSource: "claude",
+          threadKind: "shared",
+          nativeThreadIds: ["claude:c65677af-c64e-4fce-9e34-76f1cd1a7c7f"],
+        },
+      ],
+      [fileUuid, `claude:${fileUuid}`],
+    );
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: `claude:subagent:${fileUuid}:agent-a0f4436c38b58a97e` },
+        `claude:${fileUuid}`,
+        keys,
+      ),
+    ).toBe(true);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: `claude:subagent:${fileUuid}:agent-a0f4436c38b58a97e` },
+        fileUuid,
+        keys,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps local Codex TUI/Desktop pups visible", () => {
+    const keys = buildSharedSidebarHiddenParentKeys(
+      [
+        {
+          id: "shared:other",
+          name: "Shared",
+          updatedAt: 1,
+          engineSource: "codex",
+          threadKind: "shared",
+          nativeThreadIds: ["codex:hidden-owner"],
+        },
+      ],
+      ["1807f883-011c-46bd-94d5-ff483ffb1a4a"],
+    );
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "01a00d8f-7e8d-7481-bb59-9d3f79e4b51b" },
+        "01a00d6c-205e-7492-b344-dccefed9909d",
+        keys,
+      ),
+    ).toBe(false);
+    expect(
+      isSharedSidebarHiddenPup(
+        { id: "019fc810-0a87-7542-8cf3-5a70454f2fa4" },
+        "019fc7da-75f2-73a3-8793-9a8705e33a18",
+        keys,
+      ),
+    ).toBe(false);
+  });
 });
