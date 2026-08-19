@@ -70,8 +70,9 @@ import {
 } from "../../../utils/interactiveMainThread";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
 import {
-  displayDshAgentPreset,
+  isBlankDshComposerThread,
   normalizeDshAgentPreset,
+  resolveDshComposerAgentPreset,
   type DshAgentPresetId,
 } from "./ChatInputBox/selectors/dshAgentPresets";
 import {
@@ -878,25 +879,28 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : nativeSessionTarget;
-  const isDshConversationThread =
-    typeof activeThreadId === "string" &&
-    (activeThreadId.startsWith("dsh:") ||
-      activeThreadId.startsWith("dsh-pending-"));
+  const isDshComposerEngine =
+    (selectedAtomicTarget?.engine ?? selectedEngine) === "dsh";
   const hasDshUserMessages = items.some(
     (item) => item.kind === "message" && item.role === "user",
   );
-  const dshAgentPresetLocked =
-    (selectedAtomicTarget?.engine ?? selectedEngine) === "dsh" &&
-    isDshConversationThread &&
-    hasDshUserMessages;
   const [draftDshAgentPreset, setDraftDshAgentPreset] =
     useState<DshAgentPresetId>(() =>
       normalizeDshAgentPreset(
         getComposerEnginePrefForEngine("dsh").dshAgentPreset,
       ),
     );
+  const resolvedDshComposerPreset = resolveDshComposerAgentPreset({
+    threadId: activeThreadId,
+    sessionHeader: sessionDshAgentPreset,
+    draftOrPref: draftDshAgentPreset,
+    hasUserMessages: hasDshUserMessages,
+  });
+  const dshAgentPresetLocked =
+    isDshComposerEngine && resolvedDshComposerPreset.locked;
+  const resolvedDshAgentPreset = resolvedDshComposerPreset.value;
   useEffect(() => {
-    if (dshAgentPresetLocked) {
+    if (!isBlankDshComposerThread(activeThreadId)) {
       return;
     }
     setDraftDshAgentPreset(
@@ -904,13 +908,7 @@ function ComposerImpl({
         getComposerEnginePrefForEngine("dsh").dshAgentPreset,
       ),
     );
-  }, [activeThreadId, dshAgentPresetLocked, selectedEngine]);
-  const resolvedDshAgentPreset = dshAgentPresetLocked
-    ? displayDshAgentPreset(
-        sessionDshAgentPreset ??
-          getComposerEnginePrefForEngine("dsh").dshAgentPreset,
-      )
-    : draftDshAgentPreset;
+  }, [activeThreadId, selectedEngine]);
   const handleDshAgentPresetSelect = useCallback(
     (preset: string) => {
       if (dshAgentPresetLocked) {

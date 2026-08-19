@@ -83,6 +83,7 @@ export type ThreadAction =
       threadId: string;
       engine?: "codex" | "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
       name?: string | null;
+      dshAgentPreset?: string | null;
       parentThreadId?: string | null;
       folderId?: string | null;
       autoSession?: AutoSessionMetadata | null;
@@ -168,6 +169,12 @@ export type ThreadAction =
       workspaceId: string;
       threadId: string;
       engine: "codex" | "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
+    }
+  | {
+      type: "setThreadDshAgentPreset";
+      workspaceId: string;
+      threadId: string;
+      dshAgentPreset: string | null;
     }
   | {
       type: "setThreadTimestamp";

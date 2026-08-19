@@ -409,6 +409,38 @@ describe("threadReducer", () => {
     expect(repeated).toBe(withProvider);
   });
 
+  it("writes and keeps a DSH agent preset on the thread summary", () => {
+    const created = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "dsh-pending-1",
+      engine: "dsh",
+      dshAgentPreset: "code",
+    });
+    expect(created.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe("code");
+
+    const renamed = threadReducer(created, {
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: "dsh-pending-1",
+      newThreadId: "dsh:sess-code",
+    });
+    expect(renamed.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "dsh:sess-code",
+      dshAgentPreset: "code",
+    });
+
+    const patched = threadReducer(renamed, {
+      type: "setThreadDshAgentPreset",
+      workspaceId: "ws-1",
+      threadId: "dsh:sess-code",
+      dshAgentPreset: "minimal",
+    });
+    expect(patched.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe(
+      "minimal",
+    );
+  });
+
   it("does not churn state for repeated thread list status values", () => {
     const loading = threadReducer(initialState, {
       type: "setThreadListLoading",

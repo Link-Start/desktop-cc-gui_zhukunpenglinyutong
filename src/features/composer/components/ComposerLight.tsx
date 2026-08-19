@@ -17,7 +17,7 @@ import {
 import { useComposerDraft } from "../hooks/composerDraftStore";
 import { getComposerEnginePrefForEngine } from "../hooks/composerEnginePrefsStore";
 import { buildComposerSendReadiness } from "../utils/composerSendReadiness";
-import { normalizeDshAgentPreset } from "./ChatInputBox/selectors/dshAgentPresets";
+import { resolveDshComposerAgentPreset } from "./ChatInputBox/selectors/dshAgentPresets";
 import type { ComposerProps } from "./Composer";
 
 type Props = ComposerProps;
@@ -67,6 +67,8 @@ export function ComposerLight({
   onTextareaHeightChange,
   steerEnabled = false,
   onSelectEngine: _onSelectEngine,
+  dshAgentPreset: sessionDshAgentPreset = null,
+  items = [],
 }: Props) {
   const { t } = useTranslation();
   const draftText = useComposerDraft(activeThreadId);
@@ -94,9 +96,15 @@ export function ComposerLight({
       const dshSendOptions =
         selectedEngine === "dsh"
           ? {
-              dshAgentPreset: normalizeDshAgentPreset(
-                getComposerEnginePrefForEngine("dsh").dshAgentPreset,
-              ),
+              dshAgentPreset: resolveDshComposerAgentPreset({
+                threadId: activeThreadId,
+                sessionHeader: sessionDshAgentPreset,
+                draftOrPref:
+                  getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+                hasUserMessages: items.some(
+                  (item) => item.kind === "message" && item.role === "user",
+                ),
+              }).value,
             }
           : undefined;
       if (isProcessing && !steerEnabled) {
@@ -106,11 +114,14 @@ export function ComposerLight({
       void onSend(content, images, dshSendOptions);
     },
     [
+      activeThreadId,
       attachedImages,
       isProcessing,
+      items,
       onQueue,
       onSend,
       selectedEngine,
+      sessionDshAgentPreset,
       text,
       steerEnabled,
     ],

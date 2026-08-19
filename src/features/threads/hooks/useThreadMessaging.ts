@@ -80,6 +80,7 @@ import {
 } from "../../composer/hooks/explicitComposerEngineSwitch";
 import { resolveSendProviderProfileId } from "./sessionLifecycleController";
 import { getComposerEnginePrefForEngine } from "../../composer/hooks/composerEnginePrefsStore";
+import { resolveDshComposerAgentPreset } from "../../composer/components/ChatInputBox/selectors/dshAgentPresets";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -413,6 +414,10 @@ type UseThreadMessagingOptions = {
     workspaceId: string,
     threadId: string,
   ) => string | null | undefined;
+  getThreadDshAgentPreset?: (
+    workspaceId: string,
+    threadId: string,
+  ) => string | null | undefined;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
@@ -502,6 +507,7 @@ export function useThreadMessaging({
   getThreadEngine,
   getThreadKind,
   getThreadProviderProfileId,
+  getThreadDshAgentPreset,
   markProcessing,
   markReviewing,
   setActiveTurnId,
@@ -1077,11 +1083,28 @@ export function useThreadMessaging({
               supportedStoredSharedTarget?.engine ?? activeEngine,
             )
           : resolvedThreadEngine;
+      const resolvedDshAgentPreset =
+        resolvedEngine === "dsh"
+          ? resolveDshComposerAgentPreset({
+              threadId,
+              sessionHeader:
+                getThreadDshAgentPreset?.(workspace.id, threadId) ?? null,
+              draftOrPref:
+                options?.dshAgentPreset?.trim() ||
+                getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+              hasUserMessages: (itemsByThread[threadId] ?? []).some(
+                (item) => item.kind === "message" && item.role === "user",
+              ),
+            }).value
+          : null;
       dispatch({
         type: "ensureThread",
         workspaceId: workspace.id,
         threadId,
         engine: resolvedEngine,
+        ...(resolvedDshAgentPreset
+          ? { dshAgentPreset: resolvedDshAgentPreset }
+          : {}),
       });
       dispatch({
         type: "setThreadEngine",
@@ -1089,6 +1112,14 @@ export function useThreadMessaging({
         threadId,
         engine: resolvedEngine,
       });
+      if (resolvedEngine === "dsh" && resolvedDshAgentPreset) {
+        dispatch({
+          type: "setThreadDshAgentPreset",
+          workspaceId: workspace.id,
+          threadId,
+          dshAgentPreset: resolvedDshAgentPreset,
+        });
+      }
       // 首页首发 / 纯图：在任何 await 之前立刻上屏用户气泡，否则 pending→session
       // rebind 期间幕布会长时间保持 emptyThread（「今天想构建什么」），用户以为没发出去。
       // 气泡用可见原文 + 附图；injection 只影响 model text，不改用户气泡正文。
@@ -1733,12 +1764,6 @@ export function useThreadMessaging({
         accessModeForSend,
         resolvedEngine,
       );
-      const resolvedDshAgentPreset =
-        resolvedEngine === "dsh"
-          ? options?.dshAgentPreset?.trim() ||
-            getComposerEnginePrefForEngine("dsh").dshAgentPreset ||
-            null
-          : null;
       const resolvedOpenCodeAgent =
         resolvedEngine === "opencode"
           ? (resolveOpenCodeAgent?.(threadId) ?? null)

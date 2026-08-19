@@ -556,6 +556,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (
           (!action.engine || existing.engineSource) &&
           action.name === undefined &&
+          action.dshAgentPreset === undefined &&
           action.parentThreadId === undefined &&
           action.folderId === undefined &&
           action.autoSession === undefined &&
@@ -568,12 +569,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           return state;
         }
         const ensuredName = normalizeEnsureThreadMetadataValue(action.name);
+        const ensuredDshAgentPreset = normalizeEnsureThreadMetadataValue(
+          action.dshAgentPreset,
+        );
         const ensuredParentThreadId = parentThreadIdFromEnsureThreadAction(action);
         const providerBindingPatch = providerBindingFromEnsureThreadAction(action);
         const updated = {
           ...existing,
           engineSource: existing.engineSource ?? action.engine,
           name: ensuredName ?? existing.name,
+          dshAgentPreset: ensuredDshAgentPreset ?? existing.dshAgentPreset,
           parentThreadId:
             ensuredParentThreadId && ensuredParentThreadId !== existing.id
               ? ensuredParentThreadId
@@ -585,6 +590,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (
           updated.engineSource === existing.engineSource &&
           updated.name === existing.name &&
+          (updated.dshAgentPreset ?? null) === (existing.dshAgentPreset ?? null) &&
           (updated.parentThreadId ?? null) === (existing.parentThreadId ?? null) &&
           updated.folderId === existing.folderId &&
           updated.autoSession === existing.autoSession &&
@@ -677,6 +683,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               id: newThreadId,
               name:
                 normalizeEnsureThreadMetadataValue(action.name) ?? pendingThread.name,
+              dshAgentPreset:
+                normalizeEnsureThreadMetadataValue(action.dshAgentPreset) ??
+                pendingThread.dshAgentPreset,
               parentThreadId:
                 parentThreadIdFromEnsureThreadAction(action) ?? pendingThread.parentThreadId,
               ...providerBindingFromEnsureThreadAction(action),
@@ -787,6 +796,13 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         createdAt,
         updatedAt: createdAt,
         engineSource: action.engine,
+        ...(normalizeEnsureThreadMetadataValue(action.dshAgentPreset)
+          ? {
+              dshAgentPreset: normalizeEnsureThreadMetadataValue(
+                action.dshAgentPreset,
+              ),
+            }
+          : {}),
         folderId: action.folderId ?? null,
         autoSession: action.autoSession ?? null,
         ...(parentThreadId ? { parentThreadId } : {}),
@@ -1344,6 +1360,32 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             }
           : thread,
       );
+      return {
+        ...state,
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: next,
+        },
+      };
+    }
+    case "setThreadDshAgentPreset": {
+      const list = state.threadsByWorkspace[action.workspaceId] ?? [];
+      const preset = action.dshAgentPreset?.trim() || null;
+      let changed = false;
+      const next = list.map((thread) => {
+        if (thread.id !== action.threadId) {
+          return thread;
+        }
+        const current = thread.dshAgentPreset?.trim() || null;
+        if (current === preset) {
+          return thread;
+        }
+        changed = true;
+        return { ...thread, dshAgentPreset: preset };
+      });
+      if (!changed) {
+        return state;
+      }
       return {
         ...state,
         threadsByWorkspace: {

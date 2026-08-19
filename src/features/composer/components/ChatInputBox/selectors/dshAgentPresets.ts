@@ -88,3 +88,50 @@ export function displayDshAgentPreset(
   const trimmed = value?.trim() ?? "";
   return trimmed.length > 0 ? trimmed : DEFAULT_DSH_AGENT_PRESET;
 }
+
+export function isExistingDshSessionThread(
+  threadId: string | null | undefined,
+): boolean {
+  return typeof threadId === "string" && threadId.startsWith("dsh:");
+}
+
+export function isBlankDshComposerThread(
+  threadId: string | null | undefined,
+): boolean {
+  return (
+    !threadId ||
+    (typeof threadId === "string" && threadId.startsWith("dsh-pending-"))
+  );
+}
+
+/**
+ * Existing `dsh:` sessions are isolated by their list/header preset.
+ * Global composer prefs only seed a blank home / pending draft.
+ */
+export function resolveDshComposerAgentPreset(input: {
+  threadId?: string | null;
+  sessionHeader?: string | null;
+  draftOrPref?: string | null;
+  hasUserMessages?: boolean;
+}): { value: string; locked: boolean } {
+  if (isExistingDshSessionThread(input.threadId)) {
+    return {
+      value: displayDshAgentPreset(input.sessionHeader),
+      locked: true,
+    };
+  }
+  if (
+    typeof input.threadId === "string" &&
+    input.threadId.startsWith("dsh-pending-") &&
+    input.hasUserMessages
+  ) {
+    return {
+      value: displayDshAgentPreset(input.sessionHeader ?? input.draftOrPref),
+      locked: true,
+    };
+  }
+  return {
+    value: normalizeDshAgentPreset(input.draftOrPref),
+    locked: false,
+  };
+}

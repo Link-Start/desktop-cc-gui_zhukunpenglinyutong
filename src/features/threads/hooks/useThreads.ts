@@ -771,6 +771,15 @@ export function useThreads({
     [],
   );
 
+  const getThreadDshAgentPreset = useCallback(
+    (workspaceId: string, threadId: string): string | null => {
+      const threads = threadsByWorkspaceRef.current[workspaceId] ?? [];
+      const thread = threads.find((t) => t.id === threadId);
+      return thread?.dshAgentPreset?.trim() || null;
+    },
+    [],
+  );
+
   const resolvePendingThreadForSession = useCallback(
     (
       workspaceId: string,
@@ -2094,6 +2103,7 @@ export function useThreads({
     getThreadEngine,
     getThreadKind,
     getThreadProviderProfileId,
+    getThreadDshAgentPreset,
     markProcessing: markProcessingWithImmediateOwner,
     markReviewing,
     setActiveTurnId: setActiveTurnIdWithCompletionEmail,

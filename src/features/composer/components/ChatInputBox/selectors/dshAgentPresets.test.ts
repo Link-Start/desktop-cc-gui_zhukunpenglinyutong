@@ -4,6 +4,7 @@ import {
   displayDshAgentPreset,
   isDshAgentPresetId,
   normalizeDshAgentPreset,
+  resolveDshComposerAgentPreset,
 } from "./dshAgentPresets";
 
 describe("dshAgentPresets", () => {
@@ -19,5 +20,31 @@ describe("dshAgentPresets", () => {
     expect(displayDshAgentPreset(null)).toBe(DEFAULT_DSH_AGENT_PRESET);
     expect(isDshAgentPresetId("code")).toBe(true);
     expect(isDshAgentPresetId("custom-lab")).toBe(false);
+  });
+
+  it("keeps existing DSH sessions on their header, not the last blank pref", () => {
+    expect(
+      resolveDshComposerAgentPreset({
+        threadId: "dsh:sess-a",
+        sessionHeader: "code",
+        draftOrPref: "minimal",
+        hasUserMessages: false,
+      }),
+    ).toEqual({ value: "code", locked: true });
+    expect(
+      resolveDshComposerAgentPreset({
+        threadId: "dsh:sess-b",
+        sessionHeader: null,
+        draftOrPref: "minimal",
+        hasUserMessages: false,
+      }),
+    ).toEqual({ value: DEFAULT_DSH_AGENT_PRESET, locked: true });
+    expect(
+      resolveDshComposerAgentPreset({
+        threadId: "dsh-pending-1",
+        sessionHeader: null,
+        draftOrPref: "minimal",
+      }),
+    ).toEqual({ value: "minimal", locked: false });
   });
 });
