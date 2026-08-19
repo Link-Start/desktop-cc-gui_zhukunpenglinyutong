@@ -287,6 +287,35 @@ describe("useThreadUserInput", () => {
     );
   });
 
+  it("treats a late DSH not-pending receipt as already settled", async () => {
+    const dispatch = vi.fn();
+    vi.mocked(respondToUserInputRequest).mockRejectedValue(
+      new Error("dsh respond rejected: not-pending"),
+    );
+
+    const { result } = renderHook(() => useThreadUserInput({ dispatch }));
+
+    await act(async () => {
+      await result.current.handleUserInputSubmit(
+        request,
+        { answers: { age: { answers: ["18-25岁 (Recommended)"] } } },
+        { staleSettlementHint: "timeout" },
+      );
+    });
+
+    expect(isUserInputRequestSettled(requestUserInputIdentityKey(request))).toBe(
+      true,
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "removeUserInputRequest",
+        requestId: "req-1",
+        workspaceId: "ws-1",
+        request,
+      }),
+    );
+  });
+
   it("does not tombstone non-stale submit failures so retry remains possible", async () => {
     const dispatch = vi.fn();
     vi.mocked(respondToUserInputRequest).mockRejectedValue(

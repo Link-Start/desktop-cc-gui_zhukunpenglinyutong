@@ -122,6 +122,7 @@ describe("useAppSettings", () => {
       mode: "none",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(result.current.settings.userMsgColor).toBe("");
@@ -697,6 +698,74 @@ describe("useAppSettings", () => {
     expect(result.current.settings.theme).toBe("dark");
     // Backend may echo a legacy scale; normalize always re-locks to 100%.
     expect(result.current.settings.uiScale).toBe(UI_SCALE_DEFAULT);
+  });
+
+  it("keeps fluid motion when the backend echo includes it", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    const { result } = renderHook(() => useAppSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const next: AppSettings = {
+      ...result.current.settings,
+      workspaceWallpaper: {
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        fluidMotion: "tornado",
+        veilOpacity: 20,
+      },
+    };
+    updateAppSettingsMock.mockResolvedValue(next);
+
+    await act(async () => {
+      await result.current.saveSettings(next);
+    });
+
+    expect(result.current.settings.workspaceWallpaper).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "ash",
+      fluidMotion: "tornado",
+      veilOpacity: 20,
+    });
+  });
+
+  it("falls back to drift when the backend echo drops fluidMotion", async () => {
+    getAppSettingsMock.mockResolvedValue({} as AppSettings);
+    const { result } = renderHook(() => useAppSettings());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const next: AppSettings = {
+      ...result.current.settings,
+      workspaceWallpaper: {
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        fluidMotion: "tornado",
+        veilOpacity: 20,
+      },
+    };
+    updateAppSettingsMock.mockResolvedValue({
+      ...next,
+      workspaceWallpaper: {
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        veilOpacity: 20,
+      },
+    });
+
+    await act(async () => {
+      await result.current.saveSettings(next);
+    });
+
+    expect(result.current.settings.workspaceWallpaper).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "ash",
+      fluidMotion: "drift",
+      veilOpacity: 20,
+    });
   });
 
   it("sanitizes preset slots before persisting settings", async () => {

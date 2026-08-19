@@ -139,6 +139,44 @@ describe("threadReducer", () => {
     expect(enriched.threadParentById["child-thread"]).toBe("parent-thread");
   });
 
+  it("does not evaporate extra in-memory sessions when setThreads receives a short Index page", () => {
+    let seeded = initialState;
+    for (let index = 0; index < 20; index += 1) {
+      seeded = threadReducer(seeded, {
+        type: "ensureThread",
+        workspaceId: "ws-1",
+        threadId: `claude:keep-${index}`,
+        engine: "claude",
+        name: `Keep ${index}`,
+      });
+    }
+
+    expect(seeded.threadsByWorkspace["ws-1"]).toHaveLength(20);
+
+    const incoming = (seeded.threadsByWorkspace["ws-1"] ?? [])
+      .slice(0, 12)
+      .map((thread) => ({
+        ...thread,
+        updatedAt: thread.updatedAt + 1,
+      }));
+    const refreshed = threadReducer(seeded, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: incoming,
+      unionMembership: true,
+    });
+    const ids = (refreshed.threadsByWorkspace["ws-1"] ?? []).map(
+      (thread) => thread.id,
+    );
+
+    expect(ids).toHaveLength(20);
+    expect(ids).toEqual(
+      expect.arrayContaining(
+        Array.from({ length: 20 }, (_, index) => `claude:keep-${index}`),
+      ),
+    );
+  });
+
   it("keeps the live parent while accepting a stronger refreshed name", () => {
     const live = threadReducer(initialState, {
       type: "ensureThread",
@@ -167,6 +205,35 @@ describe("threadReducer", () => {
       name: "Named child",
       parentThreadId: "parent-thread",
     });
+  });
+
+  it("stamps createdAt on ensureThread and keeps it when setThreads only refreshes updatedAt", () => {
+    const created = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      engine: "codex",
+    });
+    const createdAt = created.threadsByWorkspace["ws-1"]?.[0]?.createdAt;
+    expect(createdAt).toBeGreaterThan(0);
+
+    const refreshed = threadReducer(created, {
+      type: "setThreads",
+      workspaceId: "ws-1",
+      threads: [
+        {
+          id: "thread-1",
+          name: "Codex Session",
+          updatedAt: (createdAt ?? 0) + 10_000,
+          engineSource: "codex",
+        },
+      ],
+    });
+
+    expect(refreshed.threadsByWorkspace["ws-1"]?.[0]?.createdAt).toBe(createdAt);
+    expect(refreshed.threadsByWorkspace["ws-1"]?.[0]?.updatedAt).toBe(
+      (createdAt ?? 0) + 10_000,
+    );
   });
 
   it("drops commit-message helper titles from setThreads even without autoSession", () => {
@@ -340,6 +407,48 @@ describe("threadReducer", () => {
     });
 
     expect(repeated).toBe(withProvider);
+  });
+
+  it("writes and keeps a DSH agent preset on the thread summary", () => {
+    const created = threadReducer(initialState, {
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "dsh-pending-1",
+      engine: "dsh",
+      dshAgentPreset: "code",
+    });
+    expect(created.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe("code");
+
+    const renamed = threadReducer(created, {
+      type: "renameThreadId",
+      workspaceId: "ws-1",
+      oldThreadId: "dsh-pending-1",
+      newThreadId: "dsh:sess-code",
+    });
+    expect(renamed.threadsByWorkspace["ws-1"]?.[0]).toMatchObject({
+      id: "dsh:sess-code",
+      dshAgentPreset: "code",
+    });
+
+    const patched = threadReducer(renamed, {
+      type: "setThreadDshAgentPreset",
+      workspaceId: "ws-1",
+      threadId: "dsh:sess-code",
+      dshAgentPreset: "minimal",
+    });
+    expect(patched.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe(
+      "minimal",
+    );
+
+    const ignoredEmpty = threadReducer(patched, {
+      type: "setThreadDshAgentPreset",
+      workspaceId: "ws-1",
+      threadId: "dsh:sess-code",
+      dshAgentPreset: null,
+    });
+    expect(ignoredEmpty.threadsByWorkspace["ws-1"]?.[0]?.dshAgentPreset).toBe(
+      "minimal",
+    );
   });
 
   it("does not churn state for repeated thread list status values", () => {

@@ -294,6 +294,7 @@ export async function engineSendMessage(
     customSpecRoot?: string | null;
     autoSession?: AutoSessionMetadata | null;
     skillInvocations?: SkillInvocation[] | null;
+    dshAgentPreset?: string | null;
   },
 ): Promise<Record<string, unknown>> {
   if (params.engine) {
@@ -326,6 +327,7 @@ export async function engineSendMessage(
       customSpecRoot: params.customSpecRoot ?? null,
       autoSession: params.autoSession ?? null,
       skillInvocations: params.skillInvocations ?? null,
+      dshAgentPreset: params.dshAgentPreset ?? null,
     });
   } catch (error) {
     if (isUnknownMethodError(error, "engine_send_message")) {
@@ -363,6 +365,7 @@ export async function engineSendMessageSync(
     variant?: string | null;
     customSpecRoot?: string | null;
     autoSession?: AutoSessionMetadata | null;
+    dshAgentPreset?: string | null;
   },
 ): Promise<{ engine: EngineType; text: string }> {
   if (params.engine) {
@@ -388,6 +391,7 @@ export async function engineSendMessageSync(
       variant: params.variant ?? null,
       customSpecRoot: params.customSpecRoot ?? null,
       autoSession: params.autoSession ?? null,
+      dshAgentPreset: params.dshAgentPreset ?? null,
     });
   } catch (error) {
     if (isUnknownMethodError(error, "engine_send_message_sync")) {

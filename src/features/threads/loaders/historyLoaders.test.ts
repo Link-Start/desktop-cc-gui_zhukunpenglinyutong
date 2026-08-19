@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../../services/events", () => ({
+  subscribeDshHistoryLoadProgress: vi.fn(() => () => {}),
+}));
 import { buildWorkspaceSessionActivity } from "../../session-activity/adapters/buildWorkspaceSessionActivity";
 import { createCodexHistoryLoader } from "./codexHistoryLoader";
 import { parseCodexSessionHistory } from "./codexSessionHistory";
@@ -732,6 +736,8 @@ describe("history loaders", () => {
     const snapshot = await loader.load("kimi:session-1");
     expect(snapshot.engine).toBe("kimi");
     expect(snapshot.threadId).toBe("kimi:session-1");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toHaveLength(3);
     expect(snapshot.items[0]).toEqual(
       expect.objectContaining({
@@ -768,42 +774,48 @@ describe("history loaders", () => {
   });
 
   it("loads dsh history into normalized snapshot", async () => {
+    const loadDshSession = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "dsh-user-1",
+          kind: "message",
+          role: "user",
+          text: "hello",
+        },
+        {
+          id: "dsh-assistant-1",
+          kind: "message",
+          role: "assistant",
+          text: "hi",
+        },
+        {
+          id: "dsh-tool-1",
+          kind: "tool",
+          title: "Grep",
+          toolInput: { pattern: "foo" },
+        },
+        {
+          id: "dsh-tool-1",
+          kind: "tool",
+          title: "Grep",
+          toolOutput: "3 matches",
+        },
+      ],
+    });
     const loader = createDshHistoryLoader({
       workspaceId: "ws-dsh",
       workspacePath: "/tmp/workspace",
-      loadDshSession: vi.fn().mockResolvedValue({
-        messages: [
-          {
-            id: "dsh-user-1",
-            kind: "message",
-            role: "user",
-            text: "hello",
-          },
-          {
-            id: "dsh-assistant-1",
-            kind: "message",
-            role: "assistant",
-            text: "hi",
-          },
-          {
-            id: "dsh-tool-1",
-            kind: "tool",
-            title: "Grep",
-            toolInput: { pattern: "foo" },
-          },
-          {
-            id: "dsh-tool-1",
-            kind: "tool",
-            title: "Grep",
-            toolOutput: "3 matches",
-          },
-        ],
-      }),
+      loadDshSession,
     });
 
     const snapshot = await loader.load("dsh:session-1");
+    expect(loadDshSession).toHaveBeenCalledWith("/tmp/workspace", "session-1", {
+      limit: 200,
+    });
     expect(snapshot.engine).toBe("dsh");
     expect(snapshot.threadId).toBe("dsh:session-1");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toHaveLength(3);
     expect(snapshot.items[0]).toEqual(
       expect.objectContaining({
@@ -824,6 +836,34 @@ describe("history loaders", () => {
         output: "3 matches",
       }),
     );
+  });
+
+  it("writes DSH hasMore and nextCursor from the tail payload", async () => {
+    const loadDshSession = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          id: "dsh-user-1",
+          kind: "message",
+          role: "user",
+          text: "hello",
+        },
+      ],
+      hasMore: true,
+      nextCursor: "161682",
+    });
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession,
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(loadDshSession).toHaveBeenCalledWith("/tmp/workspace", "session-1", {
+      limit: 200,
+    });
+    expect(snapshot.meta.historyHasMore).toBe(true);
+    expect(snapshot.meta.historyNextCursor).toBe("161682");
+    expect(snapshot.items).toHaveLength(1);
   });
 
   it("hydrates dsh token usage and sessionStats from history", async () => {
@@ -869,6 +909,112 @@ describe("history loaders", () => {
     });
   });
 
+  it("hydrates dsh todos and occupancy from history projections", async () => {
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession: vi.fn().mockResolvedValue({
+        messages: [],
+        todos: [{ content: "step", status: "completed" }],
+        usage: {
+          contextUsedTokens: 209000,
+          modelContextWindow: 262000,
+          contextUsedPercent: 80,
+          contextCategoryUsages: [
+            { name: "system", tokens: 1500 },
+            { name: "tools", tokens: 6400 },
+            { name: "messages", tokens: 196000 },
+          ],
+        },
+      }),
+    });
+
+    const snapshot = await loader.load("dsh:session-1");
+    expect(snapshot.tokenUsage).toMatchObject({
+      dshTodos: [{ content: "step", status: "completed" }],
+      contextUsedTokens: 209000,
+      modelContextWindow: 262000,
+      contextUsageSource: "dsh-context-pressure",
+      contextUsageFreshness: "restored",
+      contextCategoryUsages: [
+        { name: "system", tokens: 1500 },
+        { name: "tools", tokens: 6400 },
+        { name: "messages", tokens: 196000 },
+      ],
+    });
+  });
+
+  it("reports DSH page progress before loadDshSession resolves", async () => {
+    const { subscribeDshHistoryLoadProgress } = await import(
+      "../../../services/events"
+    );
+    type DshPageEvent = {
+      sessionId: string;
+      pageIndex: number;
+      maxPages: number;
+      pageEventCount: number;
+      totalEventCount: number;
+      hasMore: boolean;
+    };
+    const progressCapture: {
+      deliverPage: ((event: DshPageEvent) => void) | null;
+    } = { deliverPage: null };
+    vi.mocked(subscribeDshHistoryLoadProgress).mockImplementation((onEvent) => {
+      progressCapture.deliverPage = onEvent;
+      return () => {
+        progressCapture.deliverPage = null;
+      };
+    });
+
+    const reports: string[] = [];
+    const loadCapture: {
+      resolve: ((value: { messages: unknown[] }) => void) | null;
+    } = { resolve: null };
+    const loadDshSession = vi.fn(
+      () =>
+        new Promise<{ messages: unknown[] }>((resolve) => {
+          loadCapture.resolve = (value) => {
+            resolve(value);
+          };
+        }),
+    );
+    const loader = createDshHistoryLoader({
+      workspaceId: "ws-dsh",
+      workspacePath: "/tmp/workspace",
+      loadDshSession,
+      onProgress: (progress) => {
+        reports.push(
+          `${progress.detailKey}:${String(progress.detailParams?.page ?? "")}`,
+        );
+      },
+    });
+
+    const pending = loader.load("dsh:session-1");
+    await vi.waitFor(() => {
+      expect(loadDshSession).toHaveBeenCalledWith(
+        "/tmp/workspace",
+        "session-1",
+        { limit: 200 },
+      );
+    });
+    expect(progressCapture.deliverPage).toBeTypeOf("function");
+    progressCapture.deliverPage?.({
+      sessionId: "session-1",
+      pageIndex: 1,
+      maxPages: 1,
+      pageEventCount: 180,
+      totalEventCount: 180,
+      hasMore: true,
+    });
+    expect(reports.some((entry) => entry.startsWith("restoringHistorySessionPage:1"))).toBe(
+      true,
+    );
+
+    loadCapture.resolve?.({ messages: [] });
+    await pending;
+    vi.mocked(subscribeDshHistoryLoadProgress).mockImplementation(() => () => {});
+  });
+
   it("returns an empty dsh snapshot when workspace path is missing", async () => {
     const loader = createDshHistoryLoader({
       workspaceId: "ws-dsh",
@@ -912,6 +1058,8 @@ describe("history loaders", () => {
     );
     expect(snapshot.engine).toBe("pi");
     expect(snapshot.threadId).toBe("pi:019ffb7b-dedc-7b36-8d2f-f85f35501036");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toEqual([
       expect.objectContaining({
         kind: "message",
@@ -982,6 +1130,8 @@ describe("history loaders", () => {
     const snapshot = await loader.load("grok:session-1");
     expect(snapshot.engine).toBe("grok");
     expect(snapshot.threadId).toBe("grok:session-1");
+    expect(snapshot.meta.historyHasMore).toBe(false);
+    expect(snapshot.meta.historyNextCursor).toBeNull();
     expect(snapshot.items).toHaveLength(3);
     expect(snapshot.items[0]).toEqual(
       expect.objectContaining({

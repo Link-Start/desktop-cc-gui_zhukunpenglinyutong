@@ -27,7 +27,10 @@ import {
   listWorkspaceSessions,
   unarchiveWorkspaceSessions,
 } from "../../../services/tauri";
-import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  resetClientStorageForTests,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import { pushErrorToast } from "../../../services/toasts";
 import {
   DEFAULT_CODE_FONT_FAMILY,
@@ -57,20 +60,6 @@ vi.mock("../../../i18n", () => ({
 vi.mock("../../../services/toasts", () => ({
   pushErrorToast: vi.fn(),
 }));
-
-const platformMocks = vi.hoisted(() => ({
-  isWindowsPlatform: vi.fn(() => false),
-}));
-
-vi.mock("../../../utils/platform", async () => {
-  const actual = await vi.importActual<typeof import("../../../utils/platform")>(
-    "../../../utils/platform",
-  );
-  return {
-    ...actual,
-    isWindowsPlatform: platformMocks.isWindowsPlatform,
-  };
-});
 
 vi.mock("@/features/computer-use/components/ComputerUseStatusCard", () => ({
   ComputerUseStatusCard: () => <div data-testid="computer-use-status-card" />,
@@ -188,8 +177,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  platformMocks.isWindowsPlatform.mockReset();
-  platformMocks.isWindowsPlatform.mockReturnValue(false);
   delete (window as any).queryLocalFonts;
 });
 
@@ -290,6 +277,7 @@ const baseSettings: AppSettings = {
     mode: "none",
     customImagePath: null,
     fluidPreset: "mist",
+    fluidMotion: "drift",
     veilOpacity: 12,
   },
   userMsgColor: "",
@@ -1515,6 +1503,42 @@ describe("SettingsView Display", () => {
     );
   });
 
+  it("lets appearance settings hide and show top session tabs", async () => {
+    resetClientStorageForTests();
+    renderDisplaySection();
+
+    const toggle = screen.getByRole("switch", { name: "Top session tabs" });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(writeClientStoreValue).toHaveBeenCalledWith(
+        "app",
+        "clientUiVisibility",
+        expect.objectContaining({
+          panels: expect.objectContaining({ topSessionTabs: false }),
+        }),
+        { immediate: true },
+      );
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(toggle);
+
+    await waitFor(() => {
+      expect(writeClientStoreValue).toHaveBeenCalledWith(
+        "app",
+        "clientUiVisibility",
+        expect.objectContaining({
+          panels: expect.objectContaining({ topSessionTabs: true }),
+        }),
+        { immediate: true },
+      );
+    });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+  });
+
   it("updates user message color using reference-compatible format", async () => {
     const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
     const appRoot = document.createElement("div");
@@ -1583,6 +1607,7 @@ describe("SettingsView Display", () => {
           mode: "none",
           customImagePath: null,
           fluidPreset: "mist",
+          fluidMotion: "drift",
           veilOpacity: 12,
         },
       }),
@@ -1623,6 +1648,9 @@ describe("SettingsView Display", () => {
     });
     await flushSettingsViewEffects();
 
+    expect(screen.getByRole("radio", { name: "Ash" })).toBeTruthy();
+    expect(screen.getByRole("radiogroup", { name: "Fluid motion" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Chase" })).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Orchid" }));
 
     expect(onUpdateAppSettings).toHaveBeenCalledWith(
@@ -1631,10 +1659,58 @@ describe("SettingsView Display", () => {
           mode: "fluid",
           customImagePath: null,
           fluidPreset: "orchid",
+          fluidMotion: "drift",
           veilOpacity: 12,
         },
       }),
     );
+  });
+
+  it("updates the fluid wallpaper motion without changing the palette", async () => {
+    const onUpdateAppSettings = vi.fn().mockResolvedValue(undefined);
+    renderDisplaySection({
+      onUpdateAppSettings,
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "ash",
+          fluidMotion: "drift",
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    fireEvent.click(screen.getByRole("radio", { name: "Tornado" }));
+
+    expect(onUpdateAppSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceWallpaper: {
+          mode: "fluid",
+          customImagePath: null,
+          fluidPreset: "ash",
+          fluidMotion: "tornado",
+          veilOpacity: 12,
+        },
+      }),
+    );
+  });
+
+  it("hides fluid motion chips when wallpaper is not fluid", async () => {
+    renderDisplaySection({
+      appSettings: {
+        workspaceWallpaper: {
+          mode: "none",
+          customImagePath: null,
+          fluidPreset: "mist",
+          fluidMotion: "taiji",
+        },
+      },
+    });
+    await flushSettingsViewEffects();
+
+    expect(screen.queryByRole("radio", { name: "Tai Chi" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Fluid motion" })).toBeNull();
   });
 
   it("updates the wallpaper veil opacity from appearance settings", async () => {
@@ -1668,20 +1744,20 @@ describe("SettingsView Display", () => {
           mode: "fluid",
           customImagePath: null,
           fluidPreset: "mist",
+          fluidMotion: "drift",
           veilOpacity: 18,
         },
       }),
     );
   });
 
-  it("hides the workspace wallpaper controls on Windows", async () => {
-    platformMocks.isWindowsPlatform.mockReturnValue(true);
+  it("shows the workspace wallpaper controls including fluid", async () => {
     renderDisplaySection();
     await flushSettingsViewEffects();
 
-    expect(screen.queryByTestId("settings-workspace-wallpaper")).toBeNull();
-    expect(screen.queryByText("Page background")).toBeNull();
-    expect(screen.queryByRole("radio", { name: "Fluid" })).toBeNull();
+    expect(screen.getByTestId("settings-workspace-wallpaper")).not.toBeNull();
+    expect(screen.getByText("Page background")).not.toBeNull();
+    expect(screen.getByRole("radio", { name: "Fluid" })).not.toBeNull();
   });
 
   it("hides remaining limits and message anchors while showing window transparency controls", async () => {

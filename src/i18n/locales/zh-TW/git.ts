@@ -307,6 +307,8 @@ const git = {
     "historyPushDialogPushTags": "推送標籤",
     "historyPushDialogRunHooks": "執行 Git hook",
     "historyPushDialogForceWithLease": "以 lease 強制推送",
+    "historyPushDialogRecentLabel": "推送歷史",
+    "historyPushDialogRecentGerrit": "Gerrit",
     "historyCreatePr": "PR",
     "historyCreatePrDialogTitle": "建立 Pull Request",
     "historyCreatePrDialogSubtitle": "確認參數後，執行預先檢查、推送、建立 PR 及選用的核准留言。",

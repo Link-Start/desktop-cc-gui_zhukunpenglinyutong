@@ -425,13 +425,17 @@ export const ContextBar: React.FC<ContextBarProps> = memo(({
           )}
 
           {shouldShowLegacyTokenIndicator
-            && (percentage !== null || (currentProvider === 'claude' && claudeContextUsage)) && (
+            && (percentage !== null || ((currentProvider === 'claude' || currentProvider === 'dsh') && claudeContextUsage)) && (
             <div className="context-token-indicator">
               <TokenIndicator
                 percentage={percentage}
                 usedTokens={usedTokens}
                 maxTokens={maxTokens}
-                claudeContextUsage={currentProvider === 'claude' ? claudeContextUsage : null}
+                claudeContextUsage={
+                  currentProvider === 'claude' || currentProvider === 'dsh'
+                    ? claudeContextUsage
+                    : null
+                }
               />
             </div>
           )}

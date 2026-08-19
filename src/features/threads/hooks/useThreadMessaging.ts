@@ -74,6 +74,16 @@ import { templateToStageBindings } from "../../multi-agent/templates/types";
 import { subscribeMultiAgentConversationItems } from "../../multi-agent/runtime/conversationBridge";
 import { readExternalAbsoluteFile } from "../../../services/tauri/workspaceFiles";
 import { reconcileAtomicReasoningEffort } from "../../models/atomicModelReasoning";
+import {
+  consumeExplicitComposerEngineSwitch,
+  shouldSpawnNativeThreadForEngineMismatch,
+} from "../../composer/hooks/explicitComposerEngineSwitch";
+import { resolveSendProviderProfileId } from "./sessionLifecycleController";
+import { getComposerEnginePrefForEngine } from "../../composer/hooks/composerEnginePrefsStore";
+import {
+  persistableDshAgentPreset,
+  resolveDshComposerAgentPreset,
+} from "../../composer/components/ChatInputBox/selectors/dshAgentPresets";
 import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
 import {
   injectSelectedMemoriesContext,
@@ -215,7 +225,9 @@ import {
 } from "../../shared-session/utils/sharedSessionEngines";
 import {
   engineSupportsImageInput,
+  findOversizedImageAttachment,
   formatEngineImageInputUnsupportedMessage,
+  formatEngineImageTooLargeMessage,
   sanitizeImageAttachmentPaths,
 } from "../../engine/utils/engineImageInput";
 import {
@@ -235,6 +247,7 @@ import {
   buildReviewCommandText,
   extractSessionIdFromEngineSendResponse,
   resolveDshModelForSend,
+  resolveDshSendFallbackCatalogId,
   isCodexMissingThreadBindingError,
   isInvalidReviewThreadIdError,
   isLikelyForeignModelForGemini,
@@ -242,6 +255,7 @@ import {
   isUnknownEngineInterruptTurnMethodError,
   mapNetworkErrorToUserMessage,
   normalizeAccessMode,
+  collectOccupiedGrokSessionIds,
   pickLikelyGeminiSessionId,
   pickLikelyGrokSessionId,
   pickLikelyKimiSessionId,
@@ -300,6 +314,7 @@ type SendMessageOptions = {
   memoryReferenceMode?: LegacyMemoryReferenceMode;
   selectedNoteCardIds?: string[];
   selectedAgent?: SelectedAgentOption | null;
+  dshAgentPreset?: string | null;
   browserContextAttachment?: BrowserContextSendAttachment | null;
   intentCanvasContextAttachments?: IntentCanvasContextSendAttachment[];
   codexInvalidThreadRetryAttempted?: boolean;
@@ -402,6 +417,10 @@ type UseThreadMessagingOptions = {
     workspaceId: string,
     threadId: string,
   ) => string | null | undefined;
+  getThreadDshAgentPreset?: (
+    workspaceId: string,
+    threadId: string,
+  ) => string | null | undefined;
   markProcessing: (threadId: string, isProcessing: boolean) => void;
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
@@ -491,6 +510,7 @@ export function useThreadMessaging({
   getThreadEngine,
   getThreadKind,
   getThreadProviderProfileId,
+  getThreadDshAgentPreset,
   markProcessing,
   markReviewing,
   setActiveTurnId,
@@ -999,6 +1019,20 @@ export function useThreadMessaging({
             `agent-request-images-unsupported: engine ${collabTarget.engine} does not support image input`,
           );
         }
+        const oversizedCollabImage = findOversizedImageAttachment(
+          finalImages,
+          collabTarget.engine,
+        );
+        if (oversizedCollabImage) {
+          throw new Error(
+            `agent-request-images-too-large: ${formatEngineImageTooLargeMessage(
+              collabTarget.engine,
+              oversizedCollabImage.bytes,
+              oversizedCollabImage.maxBytes,
+              t as (key: string, options?: Record<string, unknown>) => string,
+            )}`,
+          );
+        }
         // 按当前选中模板生成每段独立 stageBindings（CLI·模型·思考强度）。
         const stageBindings = templateToStageBindings(
           getSelectedTemplate(),
@@ -1052,11 +1086,36 @@ export function useThreadMessaging({
               supportedStoredSharedTarget?.engine ?? activeEngine,
             )
           : resolvedThreadEngine;
+      const sessionDshAgentPreset =
+        getThreadDshAgentPreset?.(workspace.id, threadId) ?? null;
+      const resolvedDshAgentPreset =
+        resolvedEngine === "dsh"
+          ? resolveDshComposerAgentPreset({
+              threadId,
+              sessionHeader: sessionDshAgentPreset,
+              draftOrPref:
+                options?.dshAgentPreset?.trim() ||
+                getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+              hasUserMessages: (itemsByThread[threadId] ?? []).some(
+                (item) => item.kind === "message" && item.role === "user",
+              ),
+            }).value
+          : null;
+      const persistableSessionPreset =
+        resolvedEngine === "dsh"
+          ? persistableDshAgentPreset(
+              sessionDshAgentPreset,
+              resolvedDshAgentPreset,
+            )
+          : null;
       dispatch({
         type: "ensureThread",
         workspaceId: workspace.id,
         threadId,
         engine: resolvedEngine,
+        ...(persistableSessionPreset
+          ? { dshAgentPreset: persistableSessionPreset }
+          : {}),
       });
       dispatch({
         type: "setThreadEngine",
@@ -1064,6 +1123,14 @@ export function useThreadMessaging({
         threadId,
         engine: resolvedEngine,
       });
+      if (resolvedEngine === "dsh" && persistableSessionPreset) {
+        dispatch({
+          type: "setThreadDshAgentPreset",
+          workspaceId: workspace.id,
+          threadId,
+          dshAgentPreset: persistableSessionPreset,
+        });
+      }
       // 首页首发 / 纯图：在任何 await 之前立刻上屏用户气泡，否则 pending→session
       // rebind 期间幕布会长时间保持 emptyThread（「今天想构建什么」），用户以为没发出去。
       // 气泡用可见原文 + 附图；injection 只影响 model text，不改用户气泡正文。
@@ -1414,6 +1481,24 @@ export function useThreadMessaging({
         safeMessageActivity();
         return;
       }
+      const oversizedImage = findOversizedImageAttachment(
+        finalImages,
+        resolvedEngine,
+      );
+      if (oversizedImage) {
+        pushThreadErrorMessage(
+          workspace.id,
+          threadId,
+          formatEngineImageTooLargeMessage(
+            resolvedEngine,
+            oversizedImage.bytes,
+            oversizedImage.maxBytes,
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+        );
+        safeMessageActivity();
+        return;
+      }
       // 通过校验后立刻贴底（含无乐观气泡路径）；乐观气泡处再发一次无害。
       emitMessagesForcePinBottom();
       let resolvedSelectedAgent =
@@ -1633,7 +1718,12 @@ export function useThreadMessaging({
       const resolvedComposerSelection = resolveComposerSelection?.() ?? null;
       const modelFromOptions =
         options?.model !== undefined ? options.model : undefined;
-      const modelFromHook = resolvedComposerSelection?.model ?? model;
+      // resolver 在场时是 Native send 唯一模型权威：禁止回落到全局 / 其他会话 hook model。
+      const modelFromHook = resolveComposerSelection
+        ? (resolvedComposerSelection?.model?.trim() ||
+            resolvedComposerSelection?.id?.trim() ||
+            null)
+        : model;
       const selectedModelId =
         threadKind === "shared"
           ? (supportedStoredSharedTarget?.modelCatalogEntryId ?? null)
@@ -1730,6 +1820,10 @@ export function useThreadMessaging({
             ? resolveDshModelForSend({
                 catalogId: selectedModelId,
                 runtimeModel: sanitizedOpenCodeModel,
+                fallbackCatalogId: resolveDshSendFallbackCatalogId(
+                  threadId,
+                  getComposerEnginePrefForEngine("dsh").modelId,
+                ),
               })
             : sanitizedOpenCodeModel;
       if (resolvedEngine === "opencode") {
@@ -2109,8 +2203,10 @@ export function useThreadMessaging({
           onDebug,
           errorMessage,
           refreshErrorMessage,
-          providerProfileId:
-            getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
+          providerProfileId: resolveSendProviderProfileId({
+            threadProviderProfileId:
+              getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
+          }),
         });
         const isSameMissingThreadRebind =
           reboundThreadId === threadId &&
@@ -2617,8 +2713,10 @@ export function useThreadMessaging({
             }
 
             const sendRequestedAt = Date.now();
-            const providerProfileId =
-              getThreadProviderProfileId?.(workspace.id, threadId) ?? null;
+            const providerProfileId = resolveSendProviderProfileId({
+              threadProviderProfileId:
+                getThreadProviderProfileId?.(workspace.id, threadId) ?? null,
+            });
             response = await engineSendMessageService(workspace.id, {
               text: finalText,
               engine: resolvedEngine,
@@ -2632,6 +2730,7 @@ export function useThreadMessaging({
               threadId: threadId,
               agent: resolvedOpenCodeAgent,
               variant: resolvedOpenCodeVariant,
+              dshAgentPreset: resolvedDshAgentPreset,
               providerProfileId,
               forkSessionId:
                 resolvedEngine === "claude"
@@ -2787,14 +2886,23 @@ export function useThreadMessaging({
                 const workspacePath = workspace.path?.trim();
                 if (workspacePath) {
                   try {
-                    const sessions = await listGrokSessionsService(
-                      workspacePath,
-                      6,
-                    );
-                    responseSessionId = pickLikelyGrokSessionId(
-                      sessions,
-                      sendRequestedAt - 120_000,
-                    );
+                    const occupancy = collectOccupiedGrokSessionIds({
+                      itemsByThread,
+                      pendingSessionIdByThread:
+                        grokSessionIdByPendingThreadRef.current,
+                      currentThreadId: threadId,
+                    });
+                    if (!occupancy.hasOtherPendingWithItems) {
+                      const sessions = await listGrokSessionsService(
+                        workspacePath,
+                        6,
+                      );
+                      responseSessionId = pickLikelyGrokSessionId(
+                        sessions,
+                        sendRequestedAt - 120_000,
+                        occupancy.occupiedSessionIds,
+                      );
+                    }
                   } catch {
                     responseSessionId = null;
                   }
@@ -3350,9 +3458,17 @@ export function useThreadMessaging({
       // Detect engine switch from the selected engine to thread ownership.
       const currentEngine = normalizeEngineSelection(activeEngine);
       const resolvedComposerSelection = resolveComposerSelection?.() ?? null;
+      const threadProviderProfileId = activeThreadId
+        ? getThreadProviderProfileId?.(activeWorkspace.id, activeThreadId) ??
+          null
+        : null;
       const codexFirstSendProviderProfileId =
         currentEngine === "codex"
-          ? resolvedComposerSelection?.providerProfileId?.trim() || null
+          ? resolveSendProviderProfileId({
+              threadProviderProfileId,
+              composerProviderProfileId:
+                resolvedComposerSelection?.providerProfileId,
+            })
           : null;
       const codexFirstSendOptions = codexFirstSendProviderProfileId
         ? { providerProfileId: codexFirstSendProviderProfileId }
@@ -3391,8 +3507,16 @@ export function useThreadMessaging({
           return;
         }
         assertEngineExecutionEnabled(currentEngine);
-        // If current thread differs from current selection, or threadId prefix is incompatible, create a new thread.
-        if (threadEngine !== currentEngine || !threadIdCompatible) {
+        const explicitEngine = consumeExplicitComposerEngineSwitch();
+        const shouldSpawn = shouldSpawnNativeThreadForEngineMismatch({
+          threadEngine,
+          currentEngine,
+          threadIdCompatible,
+          explicitEngine,
+        });
+        // Implicit rematch / same-name runtime drift must stay on this thread.
+        // Only an explicit engine-group switch may spawn another native CLI.
+        if (shouldSpawn) {
           onDebug?.({
             id: `${Date.now()}-client-engine-switch`,
             timestamp: Date.now(),
@@ -3405,9 +3529,9 @@ export function useThreadMessaging({
               oldEngine: threadEngine,
               newEngine: currentEngine,
               threadIdCompatible,
+              explicitEngine,
             },
           });
-          // Create a new thread with the current engine
           const newThreadId = await startThreadForMessageSend(
             activeWorkspace,
             currentEngine,
@@ -3416,7 +3540,6 @@ export function useThreadMessaging({
           if (!newThreadId) {
             return;
           }
-          // Send message to the new thread
           await sendMessageToThread(
             activeWorkspace,
             newThreadId,
@@ -3428,6 +3551,22 @@ export function useThreadMessaging({
             },
           );
           return;
+        }
+        if (threadEngine !== currentEngine || !threadIdCompatible) {
+          onDebug?.({
+            id: `${Date.now()}-client-engine-stay`,
+            timestamp: Date.now(),
+            source: "client",
+            label: "engine/stay-on-thread",
+            payload: {
+              workspaceId: activeWorkspace.id,
+              threadId: activeThreadId,
+              threadEngine,
+              currentEngine,
+              threadIdCompatible,
+              explicitEngine,
+            },
+          });
         }
       }
 

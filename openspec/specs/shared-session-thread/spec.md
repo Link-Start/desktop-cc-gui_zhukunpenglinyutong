@@ -41,6 +41,12 @@ A `shared session` MUST append all user turns and assistant outputs into one can
 
 Native bindings owned by a `shared session` are runtime internals and MUST NOT become user-facing native conversations. This rule applies to every Shared-supported engine (`Claude`, `Codex`, `Kimi`, `Grok`, `OpenCode`), not only `Claude` / `Codex`.
 
+Ownership MUST include:
+
+- 当前 durable binding id
+- Shared 续跑新写的 native 文件 sessionId（Claude `{fileUuid}.jsonl` 与信封 `binding:` 不必相同）
+- 首条真实 user 为 MOSSX 协议包的 session，即使预览标题已被抽成用户原话
+
 #### Scenario: selector change does not create a visible native conversation
 
 - **WHEN** the user switches selected engine inside a `shared session` but has not sent a new turn
@@ -65,6 +71,13 @@ Native bindings owned by a `shared session` are runtime internals and MUST NOT b
 - **WHEN** a Shared Session turn executes on Kimi or OpenCode and the runtime later finalizes a real native session id
 - **THEN** the durable binding MUST be updated to that real identity
 - **AND** subsequent thread list / catalog merges MUST hide that native id from user-facing native surfaces
+
+#### Scenario: claude continuation file ids stay hidden from sidebar
+
+- **WHEN** Shared 续跑为同一 `session:{sharedId}` 新写 `{fileUuid}.jsonl`，信封 binding 仍为旧 id
+- **AND** 首条 user 为 `MOSSX_SHARED_CONTEXT_V1`，预览标题为「继续」
+- **THEN** 侧栏 MUST NOT 展示 `claude:{fileUuid}` 为用户 native 会话
+- **AND** hide set MUST 能以 `{fileUuid}` 命中其子代理 parent
 
 ### Requirement: Shared Session Folder Assignment Stays Separate From Native Assignment
 

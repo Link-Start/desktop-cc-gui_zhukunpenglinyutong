@@ -2949,6 +2949,7 @@ describe("tauri invoke wrappers", () => {
       variant: null,
       customSpecRoot: null,
       autoSession: null,
+      dshAgentPreset: null,
     });
   });
 
@@ -3006,6 +3007,7 @@ describe("tauri invoke wrappers", () => {
       variant: null,
       customSpecRoot: "/tmp/external-openspec",
       autoSession: null,
+      dshAgentPreset: null,
     });
   });
 
@@ -3050,6 +3052,7 @@ describe("tauri invoke wrappers", () => {
         autoArchive: true,
         createdBy: "system",
       },
+      dshAgentPreset: null,
     });
   });
 
@@ -3130,6 +3133,7 @@ describe("tauri invoke wrappers", () => {
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: null,
+      dshAgentPreset: null,
     });
   });
 
@@ -3168,6 +3172,7 @@ describe("tauri invoke wrappers", () => {
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: null,
+      dshAgentPreset: null,
     });
   });
 
@@ -3201,6 +3206,7 @@ describe("tauri invoke wrappers", () => {
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: null,
+      dshAgentPreset: null,
     });
   });
 
@@ -3233,6 +3239,7 @@ describe("tauri invoke wrappers", () => {
       customSpecRoot: null,
       autoSession: null,
       skillInvocations: [{ name: "Code-Review" }],
+      dshAgentPreset: null,
     });
   });
 

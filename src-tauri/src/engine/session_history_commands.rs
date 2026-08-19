@@ -1,5 +1,5 @@
 use serde_json::{json, Value};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::remote_backend;
 use crate::state::AppState;
@@ -615,10 +615,14 @@ pub async fn list_dsh_sessions(
 }
 
 /// Load DSH session history. Does not resume the agent.
+/// `limit` is a folded-message budget (default 200 = one host page).
+/// `before` is the previous page's `nextCursor` (`beforeSeq`).
 #[tauri::command]
 pub async fn load_dsh_session(
     workspace_path: String,
     session_id: String,
+    limit: Option<u32>,
+    before: Option<String>,
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Value, String> {
@@ -628,7 +632,12 @@ pub async fn load_dsh_session(
             &*state,
             app,
             "load_dsh_session",
-            json!({ "workspacePath": workspace_path, "sessionId": session_id }),
+            json!({
+                "workspacePath": workspace_path,
+                "sessionId": session_id,
+                "limit": limit,
+                "before": before,
+            }),
         )
         .await;
     }
@@ -636,7 +645,27 @@ pub async fn load_dsh_session(
     let settings = state.app_settings.lock().await.clone();
     let runtime = crate::engine::dsh::runtime_settings_from_app(&settings);
     let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
-    let result = crate::engine::dsh::history::load_dsh_session(&client, &session_id).await?;
+    let app_handle = app.clone();
+    let result = crate::engine::dsh::history::load_dsh_session_with_options(
+        &client,
+        &session_id,
+        limit,
+        before.as_deref(),
+        Some(move |progress: &crate::engine::dsh::history::DshHistoryLoadProgress| {
+            if let Err(error) = app_handle.emit(
+                crate::engine::dsh::history::DSH_HISTORY_LOAD_PROGRESS_EVENT,
+                progress,
+            ) {
+                log::warn!(
+                    "[dsh] session_id={} history_progress_emit_failed page={} error={}",
+                    progress.session_id,
+                    progress.page_index,
+                    error
+                );
+            }
+        }),
+    )
+    .await?;
     serde_json::to_value(result).map_err(|error| error.to_string())
 }
 

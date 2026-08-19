@@ -1021,9 +1021,11 @@ pub(crate) async fn delete_workspace_sessions_core(
                 let raw_id = target.native_session_id.clone();
                 let dsh_config = dsh_config.clone();
                 let handle = tokio::spawn(async move {
-                    let runtime =
-                        crate::engine::dsh::runtime_settings_from_engine_config(dsh_config.as_ref());
-                    let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
+                    let runtime = crate::engine::dsh::runtime_settings_from_engine_config(
+                        dsh_config.as_ref(),
+                    );
+                    let (_snapshot, client) =
+                        crate::engine::dsh::connect_existing(&runtime).await?;
                     crate::engine::dsh::history::archive_dsh_session(&client, &raw_id).await
                 });
                 async_delete_handles.push((target, handle));
@@ -2031,6 +2033,65 @@ pub(crate) fn provider_profile_id_for_session_at_path(
     )
 }
 
+/// Session Index list overlay：对缺 provider 的行按绑定账本补齐，
+/// codex 额外从 physical_path 的 provider-home 段落兜底推断。
+/// 账本缺失 / 损坏时静默降级为无标签，绝不让 list 失败。
+pub(crate) fn overlay_session_index_provider_bindings(
+    storage_path: &Path,
+    workspace_id: &str,
+    rows: &mut [crate::session_index::store::SessionIndexRow],
+) {
+    let needs_overlay = rows
+        .iter()
+        .any(|row| row.provider_profile_id.is_none() || row.provider_profile_name.is_none());
+    if !needs_overlay {
+        return;
+    }
+    let metadata = read_catalog_metadata(storage_path, workspace_id).unwrap_or_default();
+    for row in rows.iter_mut() {
+        if row.provider_profile_id.is_some() && row.provider_profile_name.is_some() {
+            continue;
+        }
+        let binding = engine_provider_binding_for_session(
+            &metadata,
+            workspace_id,
+            &row.session_id,
+            &row.engine,
+        );
+        if let Some(binding) = binding {
+            if row.provider_profile_id.is_none() {
+                row.provider_profile_id = Some(binding.provider_profile_id);
+            }
+            if row.provider_profile_name.is_none() {
+                row.provider_profile_name = Some(binding.provider_profile_name);
+            }
+            continue;
+        }
+        // codex 兜底：rollout 落在 codex-provider-homes/<profileId>/ 下但账本缺行。
+        if !row.engine.eq_ignore_ascii_case("codex") || row.provider_profile_id.is_some() {
+            continue;
+        }
+        let physical_path = row
+            .physical_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let Some(profile_id) = physical_path.and_then(|path| {
+            crate::local_usage::infer_managed_codex_provider_profile_id_from_session_path(
+                Path::new(path),
+            )
+        }) else {
+            continue;
+        };
+        let binding =
+            crate::codex::provider_profile::codex_provider_binding_for_profile_id(&profile_id);
+        row.provider_profile_id = Some(binding.provider_profile_id);
+        if row.provider_profile_name.is_none() {
+            row.provider_profile_name = Some(binding.provider_profile_name);
+        }
+    }
+}
+
 pub(crate) fn resolve_engine_provider_profile_id(
     storage_path: &Path,
     workspace_id: &str,
@@ -2911,7 +2972,8 @@ async fn build_global_engine_catalog_entries(
     let metadata_by_workspace_id =
         read_catalog_metadata_for_scope(storage_path, &workspace_entries)?;
     let mut entries = if include_engine("codex") {
-        build_global_codex_catalog_entries(workspaces, storage_path, scan_mode, scan_quality).await?
+        build_global_codex_catalog_entries(workspaces, storage_path, scan_mode, scan_quality)
+            .await?
     } else {
         Vec::new()
     };
@@ -3261,7 +3323,8 @@ async fn build_global_engine_catalog_entries(
         }
 
         if include_engine("dsh") {
-            let runtime = crate::engine::dsh::runtime_settings_from_engine_config(dsh_config.as_ref());
+            let runtime =
+                crate::engine::dsh::runtime_settings_from_engine_config(dsh_config.as_ref());
             match async {
                 let (_snapshot, client) = crate::engine::dsh::connect_existing(&runtime).await?;
                 crate::engine::dsh::history::list_dsh_sessions(

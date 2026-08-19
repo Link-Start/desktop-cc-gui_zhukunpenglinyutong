@@ -41,6 +41,7 @@ struct MuxHub {
     bindings: HashMap<String, DshSessionBinding>,
     goal_states: HashMap<String, DshGoalSessionState>,
     turn_waiters: HashMap<String, Vec<oneshot::Sender<String>>>,
+    pending_questions: HashMap<String, Value>,
     app: Option<AppHandle>,
     stop: Option<oneshot::Sender<()>>,
     url: Option<String>,
@@ -54,6 +55,7 @@ fn mux() -> &'static Mutex<MuxHub> {
             bindings: HashMap::new(),
             goal_states: HashMap::new(),
             turn_waiters: HashMap::new(),
+            pending_questions: HashMap::new(),
             app: None,
             stop: None,
             url: None,
@@ -81,6 +83,19 @@ pub async fn session_ids_for_workspace(workspace_id: &str) -> Vec<String> {
         .filter(|(_, binding)| binding.workspace_id == workspace_id)
         .map(|(session_id, _)| session_id.clone())
         .collect()
+}
+
+pub async fn pending_questions(rpc_id: &str) -> Option<Value> {
+    mux()
+        .lock()
+        .await
+        .pending_questions
+        .get(rpc_id)
+        .cloned()
+}
+
+pub async fn forget_pending_questions(rpc_id: &str) {
+    mux().lock().await.pending_questions.remove(rpc_id);
 }
 
 pub async fn session_id_for_turn(turn_id: &str) -> Option<String> {
@@ -390,6 +405,14 @@ async fn dispatch_mux_text(text: &str) {
         let Some(binding) = hub.bindings.get(&session_id).cloned() else {
             return;
         };
+        if frame_type == "question/requested" {
+            if let Some(rpc_id) = rpc_id.as_deref() {
+                if let Some(questions) = extract_question_array(&frame) {
+                    hub.pending_questions
+                        .insert(rpc_id.to_string(), questions);
+                }
+            }
+        }
         let projected = project_mux_frame(
             frame_type,
             &frame,
@@ -449,6 +472,20 @@ fn item_id_for_event(
             .clone()
             .unwrap_or_else(|| format!("dsh-item-{session_id}")),
     }
+}
+
+fn extract_question_array(frame: &Value) -> Option<Value> {
+    frame
+        .get("questions")
+        .cloned()
+        .filter(|value| value.is_array())
+        .or_else(|| {
+            frame
+                .get("payload")
+                .and_then(|payload| payload.get("questions"))
+                .cloned()
+                .filter(|value| value.is_array())
+        })
 }
 
 fn unwrap_mux_envelope(raw: &Value) -> (Value, Option<String>) {
@@ -517,11 +554,8 @@ pub fn project_mux_frame(
             let Some(rpc_id) = rpc_id.filter(|value| !value.is_empty()) else {
                 return Vec::new();
             };
-            let questions = frame
-                .get("questions")
-                .or_else(|| frame.get("payload"))
-                .cloned()
-                .unwrap_or(Value::Array(vec![]));
+            let questions =
+                extract_question_array(frame).unwrap_or_else(|| Value::Array(vec![]));
             vec![EngineEvent::RequestUserInput {
                 workspace_id: binding.workspace_id.clone(),
                 request_id: super::encode_question_request_id(rpc_id, session_id),
@@ -565,6 +599,33 @@ fn project_session_projection(
                 "kind": "dsh-session-stats",
                 "threadId": binding.thread_id,
                 "sessionStats": value,
+            }),
+        }],
+        "todos" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-todos",
+                "threadId": binding.thread_id,
+                "todos": if value.is_array() { value } else { Value::Array(vec![]) },
+            }),
+        }],
+        "contextPressure" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-context-usage",
+                "threadId": binding.thread_id,
+                "contextPressure": value,
+            }),
+        }],
+        "contextBreakdown" => vec![EngineEvent::Raw {
+            workspace_id: binding.workspace_id.clone(),
+            engine: EngineType::Dsh,
+            data: serde_json::json!({
+                "kind": "dsh-context-usage",
+                "threadId": binding.thread_id,
+                "contextBreakdown": value,
             }),
         }],
         _ => Vec::new(),
@@ -1013,6 +1074,58 @@ mod tests {
     }
 
     #[test]
+    fn unwraps_server_request_envelope_and_encodes_question_request() {
+        let raw = json!({
+            "type": "server-request",
+            "rpcId": "rpc-question-1",
+            "method": "question/requested",
+            "payload": {
+                "type": "question/requested",
+                "sessionId": "session-1",
+                "questions": [{
+                    "id": "example_type",
+                    "header": "示例类型",
+                    "question": "你的「写个示例」，具体想做哪一种？",
+                    "options": [{ "label": "补齐文档", "description": "只补 README" }]
+                }]
+            }
+        });
+        let (frame, rpc_id) = unwrap_mux_envelope(&raw);
+        let events = project_mux_frame(
+            "question/requested",
+            &frame,
+            &binding(),
+            "session-1",
+            rpc_id.as_deref(),
+        );
+        match events.first() {
+            Some(EngineEvent::RequestUserInput {
+                request_id,
+                questions,
+                completed,
+                ..
+            }) => {
+                assert_eq!(*completed, false);
+                assert_eq!(
+                    questions.pointer("/0/id").and_then(Value::as_str),
+                    Some("example_type")
+                );
+                match super::super::parse_control_request(request_id) {
+                    Some(super::super::DshControlKind::Question {
+                        rpc_id,
+                        session_id,
+                    }) => {
+                        assert_eq!(rpc_id, "rpc-question-1");
+                        assert_eq!(session_id, "session-1");
+                    }
+                    other => panic!("unexpected control request: {other:?}"),
+                }
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+
+    #[test]
     fn skips_unknown_event() {
         let event = json!({ "type": "web/deepseek-search-llm-request", "data": {} });
         assert!(project_session_event(&event, &binding(), "session-1").is_empty());
@@ -1326,6 +1439,117 @@ mod tests {
                 assert_eq!(*cached_tokens, Some(400));
             }
             other => panic!("expected UsageUpdate, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_todos_projection_as_raw() {
+        let todos = json!([
+            { "content": "step", "status": "in_progress" }
+        ]);
+        let events = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "sessionId": "session-1",
+                "key": "todos",
+                "value": todos,
+                "seq": 11
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match events.first() {
+            Some(EngineEvent::Raw { engine, data, .. }) => {
+                assert_eq!(*engine, EngineType::Dsh);
+                assert_eq!(data.get("kind").and_then(Value::as_str), Some("dsh-todos"));
+                assert_eq!(data.get("todos"), Some(&todos));
+            }
+            other => panic!("expected Raw todos, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_empty_todos_projection_as_cleared_list() {
+        let events = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "sessionId": "session-1",
+                "key": "todos",
+                "value": [],
+                "seq": 12
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match events.first() {
+            Some(EngineEvent::Raw { data, .. }) => {
+                assert_eq!(data.get("kind").and_then(Value::as_str), Some("dsh-todos"));
+                assert_eq!(data.get("todos"), Some(&json!([])));
+            }
+            other => panic!("expected Raw empty todos, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn projects_context_pressure_and_breakdown_as_raw() {
+        let pressure = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "key": "contextPressure",
+                "value": { "projectedTokens": 209000, "contextWindow": 262000 }
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match pressure.first() {
+            Some(EngineEvent::Raw { data, .. }) => {
+                assert_eq!(
+                    data.get("kind").and_then(Value::as_str),
+                    Some("dsh-context-usage")
+                );
+                assert_eq!(
+                    data.pointer("/contextPressure/projectedTokens")
+                        .and_then(Value::as_i64),
+                    Some(209000)
+                );
+            }
+            other => panic!("expected Raw contextPressure, got {other:?}"),
+        }
+
+        let breakdown = project_mux_frame(
+            "session/projection",
+            &json!({
+                "type": "session/projection",
+                "key": "contextBreakdown",
+                "value": {
+                    "systemTokens": 1500,
+                    "toolsTokens": 6400,
+                    "messageTokens": 196000
+                }
+            }),
+            &binding(),
+            "session-1",
+            None,
+        );
+        match breakdown.first() {
+            Some(EngineEvent::Raw { data, .. }) => {
+                assert_eq!(
+                    data.get("kind").and_then(Value::as_str),
+                    Some("dsh-context-usage")
+                );
+                assert_eq!(
+                    data.pointer("/contextBreakdown/messageTokens")
+                        .and_then(Value::as_i64),
+                    Some(196000)
+                );
+            }
+            other => panic!("expected Raw contextBreakdown, got {other:?}"),
         }
     }
 

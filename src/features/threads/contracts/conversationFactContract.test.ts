@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyConversationObservation,
+  CONTROL_PROBE_SCAN_LIMIT,
   formatCompactControlToolItem,
   isRequestUserInputSettled,
 } from "./conversationFactContract";
@@ -156,6 +157,48 @@ describe("conversationFactContract", () => {
     expect(isRequestUserInputSettled("cancelled")).toBe(true);
     expect(isRequestUserInputSettled("stale")).toBe(true);
     expect(isRequestUserInputSettled("pending")).toBe(false);
+  });
+
+  it("does not join or line-scan a megabyte tool output to classify a visible tool", () => {
+    const hugeOutput = "payload-line\n".repeat(20_000);
+    expect(hugeOutput.length).toBeGreaterThan(CONTROL_PROBE_SCAN_LIMIT * 10);
+    const fact = classifyConversationObservation({
+      engine: "claude",
+      threadId: "thread-1",
+      source: "history",
+      rawType: "bash",
+      rawText: `Bash ran\n${hugeOutput}`,
+      item: {
+        id: "tool-huge-output",
+        kind: "tool",
+        toolType: "bash",
+        title: "Bash",
+        detail: "ran",
+        output: hugeOutput,
+      },
+    });
+
+    expect(fact.factKind).toBe("tool");
+    expect(fact.visibility).toBe("visible");
+    expect(fact.semanticKey).toBe("bash:Bash");
+  });
+
+  it("still hides a control marker that sits in the probe head of a long payload", () => {
+    const fact = classifyConversationObservation({
+      engine: "claude",
+      threadId: "thread-1",
+      source: "history",
+      rawText: `<ccgui-approval-resume>[]</ccgui-approval-resume>\n${"later mention\n".repeat(4000)}`,
+      item: {
+        id: "assistant-approval-head",
+        kind: "message",
+        role: "assistant",
+        text: `<ccgui-approval-resume>[]</ccgui-approval-resume>\n${"later mention\n".repeat(4000)}`,
+      },
+    });
+
+    expect(fact.visibility).toBe("hidden");
+    expect(fact.factKind).toBe("hidden-control-plane");
   });
 
   it("keeps unknown Gemini payload legacy-safe visible instead of dropping it", () => {

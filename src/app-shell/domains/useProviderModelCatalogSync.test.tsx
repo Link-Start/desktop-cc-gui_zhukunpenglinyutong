@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { EngineType } from "../../types";
 import { useProviderModelCatalogSync } from "./useProviderModelCatalogSync";
@@ -18,7 +18,7 @@ describe("useProviderModelCatalogSync", () => {
     activateMock.mockResolvedValue(undefined);
   });
 
-  it("refreshes catalog and activates provider when the active scope changes", async () => {
+  it("does not fetch catalogs or activate L1 when switching threads", () => {
     const addDebugEntry = vi.fn();
     const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
     const view = renderHook(
@@ -35,38 +35,19 @@ describe("useProviderModelCatalogSync", () => {
       { initialProps: { providerProfileId: "provider-a" } },
     );
 
-    expect(refreshEngineModels).toHaveBeenCalledTimes(1);
-    expect(refreshEngineModels).toHaveBeenCalledWith("claude", {
-      providerProfileId: "provider-a",
-      forceRefresh: true,
-      phase: "on-demand",
-    });
-    await waitFor(() => {
-      expect(activateMock).toHaveBeenCalledWith("claude", "provider-a");
-    });
-    expect(addDebugEntry).toHaveBeenCalledTimes(1);
-
-    view.rerender({ providerProfileId: "provider-a" });
-    expect(refreshEngineModels).toHaveBeenCalledTimes(1);
+    expect(refreshEngineModels).not.toHaveBeenCalled();
+    expect(activateMock).not.toHaveBeenCalled();
 
     view.rerender({ providerProfileId: "provider-b" });
-    expect(refreshEngineModels).toHaveBeenCalledTimes(2);
-    expect(refreshEngineModels).toHaveBeenLastCalledWith("claude", {
-      providerProfileId: "provider-b",
-      forceRefresh: true,
-      phase: "on-demand",
-    });
-    await waitFor(() => {
-      expect(activateMock).toHaveBeenLastCalledWith("claude", "provider-b");
-    });
-    expect(addDebugEntry).toHaveBeenCalledTimes(2);
+    expect(refreshEngineModels).not.toHaveBeenCalled();
+    expect(activateMock).not.toHaveBeenCalled();
   });
 
-  it("supports Codex, Grok and Kimi but ignores engines without provider profiles", async () => {
+  it("does not fetch catalogs when switching among provider-scoped engines", () => {
     const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
     const addDebugEntry = vi.fn();
     type HookProps = {
-      activeEngine: "codex" | "grok" | "kimi" | "gemini";
+      activeEngine: "codex" | "grok" | "kimi" | "gemini" | "pi";
     };
     const view = renderHook(
       ({ activeEngine }: HookProps) =>
@@ -86,32 +67,15 @@ describe("useProviderModelCatalogSync", () => {
       },
     );
 
-    expect(refreshEngineModels).toHaveBeenCalledWith("codex", {
-      providerProfileId: "provider-a",
-      forceRefresh: true,
-      phase: "on-demand",
-    });
-    await waitFor(() => {
-      expect(activateMock).toHaveBeenCalledWith("codex", "provider-a");
-    });
     view.rerender({ activeEngine: "grok" });
-    expect(refreshEngineModels).toHaveBeenLastCalledWith("grok", {
-      providerProfileId: "provider-a",
-      forceRefresh: true,
-      phase: "on-demand",
-    });
     view.rerender({ activeEngine: "kimi" });
-    expect(refreshEngineModels).toHaveBeenLastCalledWith("kimi", {
-      providerProfileId: "provider-a",
-      forceRefresh: true,
-      phase: "on-demand",
-    });
     view.rerender({ activeEngine: "gemini" });
-
-    expect(refreshEngineModels).toHaveBeenCalledTimes(3);
+    view.rerender({ activeEngine: "pi" });
+    expect(refreshEngineModels).not.toHaveBeenCalled();
+    expect(activateMock).not.toHaveBeenCalled();
   });
 
-  it("uses the active thread engine while the global engine is still switching", () => {
+  it("uses the active thread engine only for skip bookkeeping", () => {
     const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
     const addDebugEntry = vi.fn();
     type HookProps = {
@@ -131,15 +95,8 @@ describe("useProviderModelCatalogSync", () => {
       { initialProps: { activeEngine: "claude" } },
     );
 
-    expect(refreshEngineModels).toHaveBeenCalledTimes(1);
-    expect(refreshEngineModels).toHaveBeenCalledWith("codex", {
-      providerProfileId: "__disk__",
-      forceRefresh: true,
-      phase: "on-demand",
-    });
-
     view.rerender({ activeEngine: "codex" });
-    expect(refreshEngineModels).toHaveBeenCalledTimes(1);
+    expect(refreshEngineModels).not.toHaveBeenCalled();
   });
 
   it("keeps the last-good catalog when a provider-bound thread has no engine scope", () => {
@@ -158,27 +115,6 @@ describe("useProviderModelCatalogSync", () => {
     );
 
     expect(refreshEngineModels).not.toHaveBeenCalled();
-    expect(activateMock).not.toHaveBeenCalled();
-  });
-
-  it("does not activate L1 when the session has no providerProfileId", () => {
-    const refreshEngineModels = vi.fn().mockResolvedValue(undefined);
-    renderHook(() =>
-      useProviderModelCatalogSync({
-        activeEngine: "claude",
-        activeThreadEngineSource: "claude",
-        activeThreadId: "claude:legacy",
-        activeWorkspaceId: "ws-1",
-        providerProfileId: null,
-        addDebugEntry: vi.fn(),
-        refreshEngineModels,
-      }),
-    );
-    expect(refreshEngineModels).toHaveBeenCalledWith("claude", {
-      providerProfileId: null,
-      forceRefresh: true,
-      phase: "on-demand",
-    });
     expect(activateMock).not.toHaveBeenCalled();
   });
 });

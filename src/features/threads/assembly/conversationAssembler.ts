@@ -74,6 +74,82 @@ function findIdentityIndex(items: ConversationItem[], next: ConversationItem): n
   );
 }
 
+type SnapshotWorkingSet = {
+  items: ConversationItem[];
+  identityIndexByKey: Map<string, number>;
+};
+
+function findWorkingSetIdentityIndex(
+  workingSet: SnapshotWorkingSet,
+  next: ConversationItem,
+): number {
+  return (
+    workingSet.identityIndexByKey.get(buildConversationItemIdentityKey(next)) ?? -1
+  );
+}
+
+function replaceWorkingSetItem(
+  workingSet: SnapshotWorkingSet,
+  index: number,
+  next: ConversationItem,
+): ConversationItem[] {
+  if (index >= 0 && workingSet.items[index] === next) {
+    return workingSet.items;
+  }
+  const normalizedNext = normalizeItem(next);
+  if (index < 0) {
+    const nextIndex = workingSet.items.length;
+    workingSet.items.push(normalizedNext);
+    workingSet.identityIndexByKey.set(
+      buildConversationItemIdentityKey(normalizedNext),
+      nextIndex,
+    );
+    return workingSet.items;
+  }
+  if (workingSet.items[index] === normalizedNext) {
+    return workingSet.items;
+  }
+  const previous = workingSet.items[index];
+  const previousKey = previous
+    ? buildConversationItemIdentityKey(previous)
+    : null;
+  const nextKey = buildConversationItemIdentityKey(normalizedNext);
+  workingSet.items[index] = normalizedNext;
+  if (previousKey && previousKey !== nextKey) {
+    const mappedIndex = workingSet.identityIndexByKey.get(previousKey);
+    if (mappedIndex === index) {
+      workingSet.identityIndexByKey.delete(previousKey);
+    }
+  }
+  workingSet.identityIndexByKey.set(nextKey, index);
+  return workingSet.items;
+}
+
+function retargetGeneratedImageAnchorsInPlace(
+  items: ConversationItem[],
+  replacementByUserId: Map<string, string>,
+) {
+  if (replacementByUserId.size === 0) {
+    return;
+  }
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    if (item?.kind !== "generatedImage") {
+      continue;
+    }
+    const replacementAnchorId = replacementByUserId.get(
+      item.anchorUserMessageId ?? "",
+    );
+    if (!replacementAnchorId || replacementAnchorId === item.anchorUserMessageId) {
+      continue;
+    }
+    items[index] = {
+      ...item,
+      anchorUserMessageId: replacementAnchorId,
+    } satisfies GeneratedImageConversationItem;
+  }
+}
+
 function sliceByComparableLength(text: string, targetLength: number): string {
   if (targetLength <= 0) {
     return text;
@@ -509,13 +585,15 @@ function upsertSnapshotItem(
   event: Pick<NormalizedThreadEvent, "engine" | "threadId" | "turnId"> & {
     source: ConversationFactSource;
   },
+  workingSet?: SnapshotWorkingSet,
 ): ConversationItem[] {
   const factRawType = next.kind === "tool" ? next.toolType : next.kind;
+  // Tool output can be hundreds of KB. Control-line classify only needs type/title/detail.
   const factRawText =
     next.kind === "message"
       ? next.text
       : next.kind === "tool"
-        ? [next.title, next.detail, next.output].filter(Boolean).join(" ")
+        ? [next.title, next.detail].filter(Boolean).join(" ")
         : null;
   const fact = classifyConversationObservation({
     engine: event.engine,
@@ -538,32 +616,35 @@ function upsertSnapshotItem(
   const normalizedNext = isAssistantMessageItem(normalizedNextCandidate)
     ? normalizeAssistantSnapshotItem(normalizedNextCandidate)
     : normalizedNextCandidate;
-  const identityIndex = findIdentityIndex(items, normalizedNext);
+  const identityIndex = workingSet
+    ? findWorkingSetIdentityIndex(workingSet, normalizedNext)
+    : findIdentityIndex(items, normalizedNext);
   const existingByIdentity = identityIndex >= 0 ? items[identityIndex] : undefined;
+  const replaceAt = (index: number, nextItem: ConversationItem) =>
+    workingSet
+      ? replaceWorkingSetItem(workingSet, index, nextItem)
+      : replaceItemAtIndex(items, index, nextItem);
 
   if (isToolItem(existingByIdentity) && isToolItem(normalizedNext)) {
-    return replaceItemAtIndex(
-      items,
+    return replaceAt(
       identityIndex,
       mergeToolSnapshot(existingByIdentity, normalizedNext),
     );
   }
   if (isReasoningItem(existingByIdentity) && isReasoningItem(normalizedNext)) {
-    return replaceItemAtIndex(
-      items,
+    return replaceAt(
       identityIndex,
       mergeReasoningSnapshot(existingByIdentity, normalizedNext, event.threadId),
     );
   }
   if (isAssistantMessageItem(existingByIdentity) && isAssistantMessageItem(normalizedNext)) {
-    return replaceItemAtIndex(
-      items,
+    return replaceAt(
       identityIndex,
       mergeAssistantSnapshot(existingByIdentity, normalizedNext),
     );
   }
   if (identityIndex >= 0) {
-    return replaceItemAtIndex(items, identityIndex, normalizedNext);
+    return replaceAt(identityIndex, normalizedNext);
   }
 
   if (isUserMessageItem(normalizedNext)) {
@@ -571,15 +652,18 @@ function upsertSnapshotItem(
     if (userIndex >= 0) {
       const existing = items[userIndex];
       if (isUserMessageItem(existing)) {
-        const retargetedItems =
-          existing.id === normalizedNext.id
-            ? items
-            : retargetGeneratedImageAnchors(
-                items,
-                new Map([[existing.id, normalizedNext.id]]),
-              );
-        return replaceItemAtIndex(
-          retargetedItems,
+        if (existing.id !== normalizedNext.id) {
+          const replacementByUserId = new Map([[existing.id, normalizedNext.id]]);
+          if (workingSet) {
+            retargetGeneratedImageAnchorsInPlace(
+              workingSet.items,
+              replacementByUserId,
+            );
+          } else {
+            items = retargetGeneratedImageAnchors(items, replacementByUserId);
+          }
+        }
+        return replaceAt(
           userIndex,
           mergeUserMessageSnapshot(existing, normalizedNext),
         );
@@ -597,8 +681,7 @@ function upsertSnapshotItem(
     if (reasoningIndex >= 0) {
       const existing = items[reasoningIndex];
       if (isReasoningItem(existing)) {
-        return replaceItemAtIndex(
-          items,
+        return replaceAt(
           reasoningIndex,
           mergeReasoningSnapshot(existing, normalizedNext, event.threadId),
         );
@@ -614,8 +697,7 @@ function upsertSnapshotItem(
     if (assistantIndex >= 0) {
       const existing = items[assistantIndex];
       if (isAssistantMessageItem(existing)) {
-        return replaceItemAtIndex(
-          items,
+        return replaceAt(
           assistantIndex,
           mergeAssistantSnapshot(existing, normalizedNext),
         );
@@ -623,7 +705,7 @@ function upsertSnapshotItem(
     }
   }
 
-  return replaceItemAtIndex(items, -1, normalizedNext);
+  return replaceAt(-1, normalizedNext);
 }
 
 function appendMessageDelta(
@@ -842,18 +924,21 @@ export function appendEvent(
 }
 
 export function hydrateHistory(snapshot: NormalizedHistorySnapshot): ConversationState {
-  const items = snapshot.items.reduce<ConversationItem[]>(
-    (current, item) =>
-      upsertSnapshotItem(current, item, {
-        engine: snapshot.engine,
-        threadId: snapshot.threadId,
-        turnId: null,
-        source: "history",
-      }),
-    [],
-  );
+  const workingSet: SnapshotWorkingSet = {
+    items: [],
+    identityIndexByKey: new Map(),
+  };
+  const event = {
+    engine: snapshot.engine,
+    threadId: snapshot.threadId,
+    turnId: null,
+    source: "history" as const,
+  };
+  for (const item of snapshot.items) {
+    upsertSnapshotItem(workingSet.items, item, event, workingSet);
+  }
   return {
-    items,
+    items: workingSet.items,
     plan: snapshot.plan,
     userInputQueue: [...snapshot.userInputQueue],
     meta: snapshot.meta,

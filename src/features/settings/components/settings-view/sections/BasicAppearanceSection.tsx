@@ -51,6 +51,7 @@ import {
 import type {
   AppSettings,
   ThemePresetId,
+  WorkspaceWallpaperFluidMotion,
   WorkspaceWallpaperFluidPreset,
   WorkspaceWallpaperMode,
 } from "../../../../../types";
@@ -66,11 +67,11 @@ import {
   type DockIconId,
 } from "../../../../theme/utils/dockIcon";
 import {
+  WORKSPACE_FLUID_MOTIONS,
   WORKSPACE_FLUID_PRESETS,
-  fluidToneColors,
+  fluidPresetToneColors,
 } from "../../../../onboarding/utils/fluidTones";
 import {
-  isWorkspaceFluidWallpaperSupported,
   MAX_WORKSPACE_WALLPAPER_VEIL_OPACITY,
   MIN_WORKSPACE_WALLPAPER_VEIL_OPACITY,
   sanitizeWorkspaceWallpaper,
@@ -344,7 +345,6 @@ export function BasicAppearanceSection({
   const selectedOpenAppIconSrc = resolveSelectedOpenAppIconSrc(appSettings);
   const selectedDockIconId = sanitizeDockIconId(appSettings.dockIconId);
   const wallpaper = sanitizeWorkspaceWallpaper(appSettings.workspaceWallpaper);
-  const showWorkspaceWallpaper = isWorkspaceFluidWallpaperSupported();
 
   // Local draft for the frost slider: onChange only moves the draft, the
   // (expensive) full-settings persist runs once on release. Committing per
@@ -360,6 +360,7 @@ export function BasicAppearanceSection({
       mode: WorkspaceWallpaperMode;
       customImagePath: string | null;
       fluidPreset: WorkspaceWallpaperFluidPreset;
+      fluidMotion: WorkspaceWallpaperFluidMotion;
       veilOpacity: number;
     }>,
   ) => {
@@ -504,15 +505,14 @@ export function BasicAppearanceSection({
           </div>
         </div>
 
-        {showWorkspaceWallpaper ? (
-          <div
-            className={`settings-pref-row settings-pref-row--stack${
-              wallpaper.mode === "custom" || wallpaper.mode === "fluid"
-                ? " is-expanded"
-                : ""
-            }`}
-            data-testid="settings-workspace-wallpaper"
-          >
+        <div
+          className={`settings-pref-row settings-pref-row--stack${
+            wallpaper.mode === "custom" || wallpaper.mode === "fluid"
+              ? " is-expanded"
+              : ""
+          }`}
+          data-testid="settings-workspace-wallpaper"
+        >
             <div className="settings-pref-row-main">
               <div className="settings-pref-meta">
                 <div className="settings-pref-title">
@@ -563,34 +563,57 @@ export function BasicAppearanceSection({
               </div>
             </div>
             {wallpaper.mode === "fluid" ? (
-              <div
-                className="settings-pref-inline-control settings-wallpaper-presets"
-                role="radiogroup"
-                aria-label={t("settings.workspaceWallpaperPreset")}
-              >
-                {WORKSPACE_FLUID_PRESETS.map((preset) => {
-                  const tones = fluidToneColors(false, preset.hue, preset.depth);
-                  const active = wallpaper.fluidPreset === preset.id;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      className={`settings-wallpaper-swatch${active ? " is-active" : ""}`}
-                      title={t(`settings.workspaceWallpaperPreset_${preset.id}`)}
-                      aria-label={t(`settings.workspaceWallpaperPreset_${preset.id}`)}
-                      onClick={() => persistWallpaper({ fluidPreset: preset.id })}
-                    >
-                      <span
-                        style={{
-                          background: `linear-gradient(135deg, ${tones.color1} 0%, ${tones.color2} 52%, ${tones.color3} 100%)`,
-                        }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div
+                  className="settings-pref-inline-control settings-wallpaper-presets"
+                  role="radiogroup"
+                  aria-label={t("settings.workspaceWallpaperPreset")}
+                >
+                  {WORKSPACE_FLUID_PRESETS.map((preset) => {
+                    const tones = fluidPresetToneColors(false, preset);
+                    const active = wallpaper.fluidPreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        className={`settings-wallpaper-swatch${active ? " is-active" : ""}`}
+                        title={t(`settings.workspaceWallpaperPreset_${preset.id}`)}
+                        aria-label={t(`settings.workspaceWallpaperPreset_${preset.id}`)}
+                        onClick={() => persistWallpaper({ fluidPreset: preset.id })}
+                      >
+                        <span
+                          style={{
+                            background: `linear-gradient(135deg, ${tones.color1} 0%, ${tones.color2} 52%, ${tones.color3} 100%)`,
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  className="settings-pref-inline-control settings-wallpaper-motions"
+                  role="radiogroup"
+                  aria-label={t("settings.workspaceWallpaperMotion")}
+                >
+                  {WORKSPACE_FLUID_MOTIONS.map((motion) => {
+                    const active = wallpaper.fluidMotion === motion.id;
+                    return (
+                      <button
+                        key={motion.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        className={`settings-wallpaper-motion${active ? " is-active" : ""}`}
+                        onClick={() => persistWallpaper({ fluidMotion: motion.id })}
+                      >
+                        {t(`settings.workspaceWallpaperMotion_${motion.id}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             ) : null}
             {wallpaper.mode === "custom" ? (
               <div className="settings-pref-inline-control settings-wallpaper-custom">
@@ -656,7 +679,6 @@ export function BasicAppearanceSection({
               </div>
             ) : null}
           </div>
-        ) : null}
 
         {appSettings.theme === "custom" ? (
           <div className="settings-pref-row">
@@ -843,6 +865,29 @@ export function BasicAppearanceSection({
             >
               <span>{t("settings.layoutModeSwapped")}</span>
             </button>
+          </div>
+        </div>
+
+        <div
+          className="settings-pref-row"
+          data-testid="settings-top-session-tabs"
+        >
+          <div className="settings-pref-meta">
+            <div className="settings-pref-title">
+              {t("settings.clientUiVisibility.panels.topSessionTabs")}
+            </div>
+            <div className="settings-pref-desc">
+              {t("settings.clientUiVisibility.panelDescriptions.topSessionTabs")}
+            </div>
+          </div>
+          <div className="settings-pref-control">
+            <Switch
+              checked={clientUiVisibility.isPanelVisible("topSessionTabs")}
+              aria-label={t("settings.clientUiVisibility.panels.topSessionTabs")}
+              onCheckedChange={(checked) =>
+                clientUiVisibility.setPanelVisible("topSessionTabs", checked)
+              }
+            />
           </div>
         </div>
 

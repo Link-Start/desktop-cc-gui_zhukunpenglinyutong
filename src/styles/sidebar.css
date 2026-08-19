@@ -2106,6 +2106,39 @@
   padding: 0 4px;
 }
 
+.sidebar-pinned-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-pinned-day {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-pinned-day-header {
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  z-index: 3;
+}
+
+.sidebar-pinned-day-header:hover,
+.sidebar-pinned-day-header:focus-visible {
+  background: var(
+    --desktop-sidebar-background,
+    var(--surface-sidebar-opaque, var(--surface-sidebar))
+  );
+}
+
+.sidebar-pinned-day-label {
+  font-variant-numeric: tabular-nums;
+}
+
 .thread-list-nested {
   margin-left: 0;
 }

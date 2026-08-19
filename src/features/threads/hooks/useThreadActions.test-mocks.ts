@@ -51,6 +51,7 @@ vi.mock("../../../services/tauri", () => ({
   listWorkspaceSessions: vi.fn(),
   listWorkspaceSessionArchiveEvidence: vi.fn(),
   listSessionIndexForWorkspace: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
   listDshSessions: vi.fn(),
   listPiSessions: vi.fn(),
   loadClaudeSession: vi.fn(),

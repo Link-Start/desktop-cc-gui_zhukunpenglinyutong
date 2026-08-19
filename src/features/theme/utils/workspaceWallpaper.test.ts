@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_WORKSPACE_WALLPAPER,
-  isWorkspaceFluidWallpaperSupported,
   resolveWorkspaceWallpaperMode,
   sanitizeCustomWallpaperPath,
   sanitizeWorkspaceWallpaper,
@@ -27,6 +26,7 @@ describe("workspaceWallpaper", () => {
       mode: "none",
       customImagePath: "/Users/me/Wall.png",
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -39,6 +39,54 @@ describe("workspaceWallpaper", () => {
       mode: "fluid",
       customImagePath: "C:\\Pictures\\bg.webp",
       fluidPreset: "orchid",
+      fluidMotion: "drift",
+      veilOpacity: 12,
+    });
+  });
+
+  it("keeps a valid motion and falls unknown motion back to drift", () => {
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        fluidMotion: "tornado",
+      }),
+    ).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "ash",
+      fluidMotion: "tornado",
+      veilOpacity: 12,
+    });
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "ash",
+        fluidMotion: "chase",
+      }).fluidMotion,
+    ).toBe("chase");
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "mist",
+        fluidMotion: "typhoon" as never,
+      }).fluidMotion,
+    ).toBe("drift");
+    expect(
+      sanitizeWorkspaceWallpaper({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "nope" as never,
+        fluidMotion: "storm",
+      }),
+    ).toEqual({
+      mode: "fluid",
+      customImagePath: null,
+      fluidPreset: "mist",
+      fluidMotion: "storm",
       veilOpacity: 12,
     });
   });
@@ -53,6 +101,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -64,6 +113,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -75,6 +125,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
     expect(
@@ -86,6 +137,7 @@ describe("workspaceWallpaper", () => {
       mode: "custom",
       customImagePath: null,
       fluidPreset: "mist",
+      fluidMotion: "drift",
       veilOpacity: 12,
     });
   });
@@ -98,42 +150,39 @@ describe("workspaceWallpaper", () => {
     );
   });
 
-  it("disables fluid wallpaper on Windows and keeps it elsewhere", () => {
-    expect(isWorkspaceFluidWallpaperSupported(true)).toBe(false);
-    expect(isWorkspaceFluidWallpaperSupported(false)).toBe(true);
+  it("resolves persisted fluid and custom modes without a platform gate", () => {
     expect(
-      resolveWorkspaceWallpaperMode(
-        {
-          mode: "fluid",
-          customImagePath: null,
-          fluidPreset: "mist",
-          veilOpacity: 12,
-        },
-        true,
-      ),
-    ).toBe("none");
-    expect(
-      resolveWorkspaceWallpaperMode(
-        {
-          mode: "custom",
-          customImagePath: "/tmp/wall.png",
-          fluidPreset: "mist",
-          veilOpacity: 12,
-        },
-        true,
-      ),
-    ).toBe("none");
-    expect(
-      resolveWorkspaceWallpaperMode(
-        {
-          mode: "fluid",
-          customImagePath: null,
-          fluidPreset: "mist",
-          veilOpacity: 12,
-        },
-        false,
-      ),
+      resolveWorkspaceWallpaperMode({
+        mode: "fluid",
+        customImagePath: null,
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
     ).toBe("fluid");
+    expect(
+      resolveWorkspaceWallpaperMode({
+        mode: "custom",
+        customImagePath: "/tmp/wall.png",
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
+    ).toBe("custom");
+    expect(
+      resolveWorkspaceWallpaperMode({
+        mode: "custom",
+        customImagePath: null,
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
+    ).toBe("fluid");
+    expect(
+      resolveWorkspaceWallpaperMode({
+        mode: "none",
+        customImagePath: null,
+        fluidPreset: "mist",
+        veilOpacity: 12,
+      }),
+    ).toBe("none");
   });
 
   it("clamps frost blur to the readable chrome range", () => {

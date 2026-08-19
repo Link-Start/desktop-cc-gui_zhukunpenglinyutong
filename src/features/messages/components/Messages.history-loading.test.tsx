@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationItem, RequestUserInputRequest } from "../../../types";
 import { Messages } from "./Messages";
@@ -46,9 +46,54 @@ describe("Messages history loading", () => {
     );
 
     expect(screen.getByRole("status")).toBeTruthy();
+    expect(screen.getByRole("status").getAttribute("data-history-loading-mode")).toBe(
+      "native",
+    );
     expect(screen.getByText("messages.restoringHistory")).toBeTruthy();
     expect(screen.getByText("messages.restoringHistoryHint")).toBeTruthy();
     expect(screen.getByRole("progressbar")).toBeTruthy();
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBeNull();
+    expect(document.querySelector(".messages-history-loading-traveler")).toBeTruthy();
+    expect(document.querySelector(".working-spinner")).toBeNull();
+    expect(screen.queryByText("messages.emptyThread")).toBeNull();
+    expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeTruthy();
+  });
+
+  it("does not block Shared canvas on leftover projection progress after V0 items are visible", () => {
+    render(
+      <Messages
+        items={[
+          {
+            id: "v0-user",
+            kind: "message",
+            role: "user",
+            text: "already painted from V0",
+          },
+        ]}
+        threadId="shared:session-phase-a"
+        workspaceId="ws-1"
+        isThinking={false}
+        isHistoryLoading={false}
+        historyLoadingProgress={{
+          phase: "projection",
+          percent: 58,
+          titleKey: "restoringSharedHistory",
+          detailKey: "restoringSharedHistoryProjection",
+        }}
+        activeEngine="claude"
+        onUserInputSubmit={vi.fn()}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("already painted from V0")).toBeTruthy();
+    expect(screen.queryByText("messages.restoringSharedHistory")).toBeNull();
+    expect(
+      screen.queryByText("messages.restoringSharedHistoryProjection"),
+    ).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeNull();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
@@ -77,10 +122,16 @@ describe("Messages history loading", () => {
     expect(
       screen.getByText("messages.restoringSharedHistoryProjection"),
     ).toBeTruthy();
+    expect(screen.getByRole("status").getAttribute("data-history-loading-mode")).toBe(
+      "shared",
+    );
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe(
       "58",
     );
-    expect(screen.getByText("58%")).toBeTruthy();
+    expect(screen.getByText(/58%/)).toBeTruthy();
+    expect(document.querySelectorAll(".messages-history-loading-node")).toHaveLength(4);
+    expect(document.querySelector(".messages-history-loading-node.is-current")).toBeTruthy();
+    expect(document.querySelector(".messages-history-loading-traveler")).toBeNull();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 
@@ -120,9 +171,10 @@ describe("Messages history loading", () => {
 
     expect(screen.getByText("messages.emptyThread")).toBeTruthy();
     expect(screen.queryByText("messages.restoringHistory")).toBeNull();
+    expect(document.querySelector(".messages-timeline-root.is-history-loading")).toBeNull();
   });
 
-  it("shows a bounded retry surface instead of empty-thread after history recovery fails", () => {
+  it("does not paint the legacy Native recovery card after history recovery fails", () => {
     const onRetryHistory = vi.fn();
 
     render(
@@ -139,14 +191,11 @@ describe("Messages history loading", () => {
       />,
     );
 
-    expect(screen.getByRole("alert", { name: "messages.threadRecoveryTitle" })).toBeTruthy();
-    expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
-    expect(screen.queryByText("messages.emptyThread")).toBeNull();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "messages.threadRecoveryAction" }),
-    );
-    expect(onRetryHistory).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("alert", { name: "messages.threadRecoveryTitle" }),
+    ).toBeNull();
+    expect(screen.queryByText("messages.threadRecoveryFailed")).toBeNull();
+    expect(screen.getByText("messages.emptyThread")).toBeTruthy();
   });
 
   it("does not show the Native recovery card for Shared sessions", () => {
@@ -171,7 +220,7 @@ describe("Messages history loading", () => {
     expect(screen.getByText("messages.emptyThread")).toBeTruthy();
   });
 
-  it("keeps last-good history visible beside the recovery failure surface", () => {
+  it("keeps last-good history visible without the legacy recovery card", () => {
     render(
       <Messages
         items={[
@@ -194,7 +243,10 @@ describe("Messages history loading", () => {
     );
 
     expect(screen.getByText("上一次成功恢复的消息")).toBeTruthy();
-    expect(screen.getByText("messages.threadRecoveryFailed")).toBeTruthy();
+    expect(screen.queryByText("messages.threadRecoveryFailed")).toBeNull();
+    expect(
+      screen.queryByRole("alert", { name: "messages.threadRecoveryTitle" }),
+    ).toBeNull();
     expect(screen.queryByText("messages.emptyThread")).toBeNull();
   });
 

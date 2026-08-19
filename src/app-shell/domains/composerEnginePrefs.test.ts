@@ -18,7 +18,8 @@ describe("composerEnginePrefs", () => {
   });
 
   it("merges a partial patch without touching other fields", () => {
-    const start = { claude: { modelId: "fable-5", effort: "high", accessMode: null, collaborationModeId: null } };
+    const start = { claude: { modelId: "fable-5", effort: "high", accessMode: null, collaborationModeId: null,
+      dshAgentPreset: null } };
     const next = upsertComposerEnginePref(start, "claude", {
       accessMode: "read-only",
     });
@@ -27,12 +28,14 @@ describe("composerEnginePrefs", () => {
       effort: "high",
       accessMode: "read-only",
       collaborationModeId: null,
+      dshAgentPreset: null,
     });
   });
 
   it("keeps other engines intact when patching one engine", () => {
     const start = {
-      claude: { modelId: "fable-5", effort: null, accessMode: null, collaborationModeId: null },
+      claude: { modelId: "fable-5", effort: null, accessMode: null, collaborationModeId: null,
+      dshAgentPreset: null },
     };
     const next = upsertComposerEnginePref(start, "gemini", {
       modelId: "gemini-pro",
@@ -43,16 +46,40 @@ describe("composerEnginePrefs", () => {
 
   it("returns the same reference when the patch changes nothing", () => {
     const start = {
-      claude: { modelId: "fable-5", effort: null, accessMode: null, collaborationModeId: null },
+      claude: { modelId: "fable-5", effort: null, accessMode: null, collaborationModeId: null,
+      dshAgentPreset: null },
     };
     expect(upsertComposerEnginePref(start, "claude", { modelId: "fable-5" })).toBe(
       start,
     );
   });
 
+  it("stores a DSH agent preset without wiping other fields", () => {
+    const start = {
+      dsh: {
+        modelId: "ggggg/grok-4.6",
+        effort: "high",
+        accessMode: null,
+        collaborationModeId: null,
+        dshAgentPreset: null,
+      },
+    };
+    const next = upsertComposerEnginePref(start, "dsh", {
+      dshAgentPreset: "minimal",
+    });
+    expect(next.dsh).toEqual({
+      modelId: "ggggg/grok-4.6",
+      effort: "high",
+      accessMode: null,
+      collaborationModeId: null,
+      dshAgentPreset: "minimal",
+    });
+  });
+
   it("does not wipe a stored model when only effort is patched", () => {
     const start = {
-      claude: { modelId: "fable-5", effort: "high", accessMode: null, collaborationModeId: null },
+      claude: { modelId: "fable-5", effort: "high", accessMode: null, collaborationModeId: null,
+      dshAgentPreset: null },
     };
     const next = upsertComposerEnginePref(start, "claude", { effort: "low" });
     expect(next.claude).toEqual({
@@ -60,6 +87,7 @@ describe("composerEnginePrefs", () => {
       effort: "low",
       accessMode: null,
       collaborationModeId: null,
+      dshAgentPreset: null,
     });
   });
 
@@ -73,6 +101,7 @@ describe("composerEnginePrefs", () => {
       effort: null,
       accessMode: null,
       collaborationModeId: "plan",
+      dshAgentPreset: null,
     });
     expect("martian" in normalized).toBe(false);
   });
@@ -87,6 +116,7 @@ describe("composerEnginePrefs", () => {
       effort: "high",
       accessMode: null,
       collaborationModeId: null,
+      dshAgentPreset: null,
     });
     expect(normalized.claude?.modelId).toBe("fable-5");
   });

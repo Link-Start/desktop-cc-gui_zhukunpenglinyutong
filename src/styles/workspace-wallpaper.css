@@ -44,6 +44,12 @@
     saturate(1.2);
 }
 
+/* WebView2: blur over WebGL composites black. */
+:root[data-platform="windows"] .workspace-wallpaper::after {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .workspace-wallpaper .first-run-fluid::after {
   background: color-mix(
     in srgb,

@@ -1,10 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { useEngineController } from "../../features/engine/hooks/useEngineController";
 import type { DebugEntry, EngineType } from "../../types";
-import {
-  activateEngineProviderProfileAndNotify,
-  isActivatableProviderEngine,
-} from "../../features/vendors/activateEngineProviderProfile";
 
 type EngineControllerSection = ReturnType<typeof useEngineController>;
 
@@ -24,13 +20,18 @@ const PROVIDER_SCOPED_ENGINES = new Set<EngineType>([
   "grok",
   "kimi",
   "opencode",
+  "pi",
+  "dsh",
+  "gemini",
 ]);
 
 /**
- * 切到会话时：
- * 1) 按该会话创建时的 providerProfileId 刷新 provider-scoped model catalog
- * 2) 同步 L1「使用中」+ Claude 模型映射（不盖盘）——老会话 m3/k3 切换自动适配 UI
- * 发送仍以 thread.providerProfileId 为准，不因 L1 切换改写 binding。
+ * 切会话不得拉 model catalog。
+ *
+ * 今天之前大量会话没有 providerProfileId，catalog key 停在 `__global__`，点击是空转。
+ * 标签补齐后每个会话都有 binding，再 refreshEngineModels 会变成
+ * get_engine_models IPC（on-demand，最多 8s），点一下侧栏就卡死。
+ * 发送仍以 thread.providerProfileId 为准；catalog 只在打开模型选择器时再拉。
  */
 export function useProviderModelCatalogSync({
   activeEngine,
@@ -39,7 +40,6 @@ export function useProviderModelCatalogSync({
   activeWorkspaceId,
   providerProfileId,
   addDebugEntry,
-  refreshEngineModels,
 }: ProviderModelCatalogSyncParams) {
   const activeCatalogKeyRef = useRef<string | null>(null);
 
@@ -67,43 +67,13 @@ export function useProviderModelCatalogSync({
       id: `${Date.now()}-provider-model-catalog-sync`,
       timestamp: Date.now(),
       source: "client",
-      label: "engine/models sync active provider",
+      label: "engine/models sync skipped on thread select",
       payload: {
         workspaceId: activeWorkspaceId,
         threadId: normalizedThreadId,
         engine: catalogEngine,
         providerProfileId: normalizedProviderProfileId,
       },
-    });
-
-    // 有会话绑定 profile 时：对齐 L1 启动配置 + 模型映射（老会话切换适配）
-    // 无 profile 的遗留会话：不强制 switch，仅刷全局 catalog
-    if (
-      normalizedProviderProfileId &&
-      isActivatableProviderEngine(catalogEngine)
-    ) {
-      void activateEngineProviderProfileAndNotify(
-        catalogEngine,
-        normalizedProviderProfileId,
-      ).catch((error: unknown) => {
-        addDebugEntry({
-          id: `${Date.now()}-provider-activate-on-thread-switch-error`,
-          timestamp: Date.now(),
-          source: "error",
-          label: "engine/provider activate on thread switch failed",
-          payload: {
-            engine: catalogEngine,
-            providerProfileId: normalizedProviderProfileId,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        });
-      });
-    }
-
-    void refreshEngineModels(catalogEngine, {
-      providerProfileId: normalizedProviderProfileId,
-      forceRefresh: true,
-      phase: "on-demand",
     });
   }, [
     activeEngine,
@@ -112,6 +82,5 @@ export function useProviderModelCatalogSync({
     activeWorkspaceId,
     addDebugEntry,
     providerProfileId,
-    refreshEngineModels,
   ]);
 }

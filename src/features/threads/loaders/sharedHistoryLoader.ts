@@ -52,6 +52,11 @@ type SharedHistoryLoaderOptions = {
   /** Override soft timeout (ms). Tests inject short values. */
   projectionTimeoutMs?: number;
   /**
+   * V0 session snapshot is ready. Caller MUST hydrate and clear the blocking
+   * history-loading curtain here — do not wait for projection.
+   */
+  onPhaseAReady?: (snapshot: NormalizedHistorySnapshot) => void;
+  /**
    * Projection finished after Phase-A returned (timeout path).
    * Caller MUST guard with resume generation / active thread and avoid
    * clobbering an in-flight live turn.
@@ -111,6 +116,7 @@ export function createSharedHistoryLoader({
   loadSharedProjection,
   onProgress,
   projectionTimeoutMs = DEFAULT_SHARED_PROJECTION_TIMEOUT_MS,
+  onPhaseAReady,
   onProjectionMerged,
 }: SharedHistoryLoaderOptions): HistoryLoader {
   const report: HistoryLoadingProgressListener = (progress) => {
@@ -193,6 +199,9 @@ export function createSharedHistoryLoader({
         });
 
       const phaseASnapshot = buildSnapshot(legacyItems);
+      // Phase-A: V0 is enough to paint and drop the blocking curtain.
+      // Projection may still run; it must not keep historyLoading locked.
+      onPhaseAReady?.(phaseASnapshot);
 
       if (!isSharedProjectionDataSourceEnabled()) {
         report(buildSharedHistoryProjectionProgress("skip"));

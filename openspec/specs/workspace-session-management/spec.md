@@ -26,7 +26,7 @@ Defines the workspace-session-management behavior contract, covering Session Man
 
 #### Scenario: unset workspace setting falls back to default visibility count
 - **WHEN** 某个 workspace 尚未配置 root 会话显示阈值
-- **THEN** 系统 MUST 使用默认值 `20`
+- **THEN** 系统 MUST 使用默认值 `12`
 - **AND** 会话管理页 SHOULD 让用户可见当前默认值正在生效
 
 ### Requirement: Session Management SHALL Read Workspace Session History With Real Pagination

@@ -39,6 +39,16 @@ Text-only Grok turns MUST keep the legacy `-p` path.
 
 - **WHEN** all attached image paths are unreadable or oversized
 - **THEN** the send MUST fail with a clear load error before spawning a text-only turn
+- **AND** the error MUST NOT include raw `data:` URL payloads or base64 image bytes
+- **AND** the error MUST identify the attachment by mime type and approximate size
+
+#### Scenario: Grok oversized paste is rejected before spawn
+
+- **WHEN** the resolved engine is Grok and a pasted data URL decodes above the
+  2MiB per-image soft-cap
+- **THEN** the client MUST fail the send before calling the engine
+- **AND** the user-visible message MUST include the engine label, actual size,
+  and the 2MiB limit
 
 ### Requirement: Grok history presentation boundary
 

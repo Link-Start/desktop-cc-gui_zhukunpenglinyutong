@@ -234,6 +234,58 @@ describe("chat canvas smoke", () => {
     expect(screen.queryByText("This feature requires Plan mode")).toBeNull();
   });
 
+  it("renders dsh ask_user_question as the shared request card without plan-mode hint", () => {
+    const request: RequestUserInputRequest = {
+      workspace_id: "ws-dsh",
+      request_id: "req-dsh-1",
+      params: {
+        thread_id: "dsh:session-1",
+        turn_id: "turn-dsh-1",
+        item_id: "tool-ask-dsh-1",
+        questions: [
+          {
+            id: "example_type",
+            header: "示例类型",
+            question: "你的「写个示例」，具体想做哪一种？",
+            options: [
+              { label: "补齐文档", description: "只补 README" },
+            ],
+          },
+        ],
+      },
+    };
+
+    render(
+      <Messages
+        items={[
+          {
+            ...createAskUserQuestionTool("tool-ask-dsh-1"),
+            title: "Tool: ask_user_question",
+            detail: JSON.stringify({
+              questions: request.params.questions,
+            }),
+          },
+        ]}
+        threadId="dsh:session-1"
+        workspaceId="ws-dsh"
+        isThinking={false}
+        activeEngine="dsh"
+        activeCollaborationModeId="code"
+        onUserInputSubmit={vi.fn()}
+        userInputRequests={[request]}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(
+      screen.getAllByText("你的「写个示例」，具体想做哪一种？").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("补齐文档")).toBeTruthy();
+    expect(screen.queryByText("This feature requires Plan mode")).toBeNull();
+    expect(screen.getByRole("button", { name: "approval.submit" })).toBeTruthy();
+  });
+
   it("anchors queued request input at the matching transcript item instead of the bottom", () => {
     const request: RequestUserInputRequest = {
       workspace_id: "ws-anchor",

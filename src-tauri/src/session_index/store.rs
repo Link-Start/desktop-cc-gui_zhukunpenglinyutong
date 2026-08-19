@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-const DDL: &str = r#"
+pub(crate) const DDL: &str = r#"
 CREATE TABLE IF NOT EXISTS session_index (
   engine TEXT NOT NULL,
   session_id TEXT NOT NULL,
@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS session_index (
   physical_path TEXT,
   parent_session_id TEXT,
   size_bytes INTEGER,
+  provider_profile_id TEXT,
+  provider_profile_name TEXT,
   source_fingerprint TEXT,
   indexed_at INTEGER NOT NULL,
   tombstoned_at INTEGER,
@@ -38,6 +40,13 @@ CREATE TABLE IF NOT EXISTS session_index_sources (
   fingerprint TEXT NOT NULL,
   last_sync_ms INTEGER NOT NULL,
   row_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS session_index_backfill (
+  source_key TEXT PRIMARY KEY,
+  cursor TEXT NOT NULL DEFAULT '',
+  complete INTEGER NOT NULL DEFAULT 0,
+  updated_ms INTEGER NOT NULL
 );
 "#;
 
@@ -62,6 +71,10 @@ pub struct SessionIndexRow {
     pub parent_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_profile_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_profile_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -116,6 +129,14 @@ pub(crate) fn open_connection() -> Result<Connection, String> {
         "ALTER TABLE session_index ADD COLUMN tombstoned_at INTEGER",
         [],
     );
+    let _ = connection.execute(
+        "ALTER TABLE session_index ADD COLUMN provider_profile_id TEXT",
+        [],
+    );
+    let _ = connection.execute(
+        "ALTER TABLE session_index ADD COLUMN provider_profile_name TEXT",
+        [],
+    );
     let _ = connection.execute_batch(
         "CREATE TABLE IF NOT EXISTS session_index_backfill (
            source_key TEXT PRIMARY KEY,
@@ -140,11 +161,43 @@ pub(crate) fn normalize_path_key(path: &str) -> String {
         return String::new();
     }
     let mut normalized = trimmed.replace('\\', "/");
-    while normalized.len() > 1 && normalized.ends_with('/') {
+
+    // Windows extended-length prefixes after slash unification:
+    // \\?\C:\foo → //?/C:/foo → C:/foo
+    // \\?\UNC\server\share → //?/UNC/server/share → //server/share
+    if let Some(rest) = normalized.strip_prefix("//?/UNC/") {
+        normalized = format!("//{rest}");
+    } else if let Some(rest) = normalized.strip_prefix("//?/") {
+        normalized = rest.to_string();
+    }
+
+    while should_strip_trailing_slash(&normalized) {
         normalized.pop();
     }
-    // Case-fold on Windows-style paths is left to comparison helper.
+
+    if is_windows_style_path(&normalized) {
+        normalized.make_ascii_lowercase();
+    }
     normalized
+}
+
+fn should_strip_trailing_slash(path: &str) -> bool {
+    if path.len() <= 1 || !path.ends_with('/') {
+        return false;
+    }
+    // Keep drive roots such as C:/
+    if path.len() == 3 && path.as_bytes()[1] == b':' {
+        return false;
+    }
+    path != "//"
+}
+
+fn is_windows_style_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
+        return true;
+    }
+    path.starts_with("//")
 }
 
 pub(crate) fn paths_equivalent(left: &str, right: &str) -> bool {
@@ -156,17 +209,16 @@ pub(crate) fn paths_equivalent(left: &str, right: &str) -> bool {
     if left == right {
         return true;
     }
-    #[cfg(windows)]
-    {
+    if is_windows_style_path(&left) && is_windows_style_path(&right) {
         return left.eq_ignore_ascii_case(&right);
     }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+    false
 }
 
-pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> Result<usize, String> {
+pub(crate) fn upsert_rows(
+    connection: &Connection,
+    rows: &[SessionIndexRow],
+) -> Result<usize, String> {
     if rows.is_empty() {
         return Ok(0);
     }
@@ -180,18 +232,21 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                 "INSERT INTO session_index (
                     engine, session_id, title, native_title, updated_at, created_at,
                     cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name,
                     source_fingerprint, indexed_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
                  ON CONFLICT(engine, session_id) DO UPDATE SET
                     title = excluded.title,
                     native_title = excluded.native_title,
                     updated_at = excluded.updated_at,
-                    created_at = COALESCE(excluded.created_at, session_index.created_at),
+                    created_at = COALESCE(session_index.created_at, excluded.created_at, session_index.updated_at),
                     cwd = COALESCE(excluded.cwd, session_index.cwd),
                     workspace_path = COALESCE(excluded.workspace_path, session_index.workspace_path),
                     physical_path = COALESCE(excluded.physical_path, session_index.physical_path),
                     parent_session_id = COALESCE(excluded.parent_session_id, session_index.parent_session_id),
                     size_bytes = COALESCE(excluded.size_bytes, session_index.size_bytes),
+                    provider_profile_id = COALESCE(excluded.provider_profile_id, session_index.provider_profile_id),
+                    provider_profile_name = COALESCE(excluded.provider_profile_name, session_index.provider_profile_name),
                     source_fingerprint = excluded.source_fingerprint,
                     indexed_at = excluded.indexed_at
                  WHERE session_index.tombstoned_at IS NULL",
@@ -232,7 +287,9 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                         .map(str::trim)
                         .filter(|value| !value.is_empty()),
                     row.updated_at.max(0),
-                    row.created_at.filter(|value| *value > 0),
+                    row.created_at
+                        .filter(|value| *value > 0)
+                        .or(Some(row.updated_at.max(0))),
                     cwd,
                     workspace_path,
                     row.physical_path
@@ -244,6 +301,14 @@ pub(crate) fn upsert_rows(connection: &Connection, rows: &[SessionIndexRow]) -> 
                         .map(str::trim)
                         .filter(|value| !value.is_empty()),
                     row.size_bytes.map(|value| value as i64),
+                    row.provider_profile_id
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty()),
+                    row.provider_profile_name
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty()),
                     row.physical_path
                         .as_deref()
                         .map(str::trim)
@@ -302,6 +367,29 @@ pub(crate) fn source_is_fresh(
     Ok(age <= max_age_ms)
 }
 
+pub(crate) fn max_updated_at_for_engine(
+    connection: &Connection,
+    engine: &str,
+    workspace_path: &str,
+) -> Result<Option<i64>, String> {
+    let key = normalize_path_key(workspace_path);
+    let engine = engine.trim().to_ascii_lowercase();
+    if key.is_empty() || engine.is_empty() {
+        return Ok(None);
+    }
+    let max: Option<i64> = connection
+        .query_row(
+            "SELECT MAX(updated_at) FROM session_index
+             WHERE engine = ?1
+               AND tombstoned_at IS NULL
+               AND (workspace_path = ?2 OR cwd = ?2)",
+            params![engine, key],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(max.filter(|value| *value > 0))
+}
+
 /// True when a send/create marked this workspace's Index sources stale.
 /// Restart first-paint / next non-force list must rescan writers even if
 /// some Claude/Codex rows already exist.
@@ -325,8 +413,21 @@ pub(crate) fn workspace_index_sources_invalidated(
     Ok(count > 0)
 }
 
+pub(crate) fn invalidate_source_freshness(
+    connection: &Connection,
+    source_key: &str,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "UPDATE session_index_sources SET last_sync_ms = 0 WHERE source_key = ?1",
+            [source_key],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 const INDEX_LIST_ENGINES: &[&str] = &[
-    "claude", "codex", "gemini", "grok", "kimi", "opencode", "pi",
+    "claude", "codex", "gemini", "grok", "kimi", "opencode", "pi", "dsh",
 ];
 
 fn list_slice_for_workspace_engine(
@@ -338,7 +439,8 @@ fn list_slice_for_workspace_engine(
     let mut statement = connection
         .prepare(
             "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                    cwd, workspace_path, physical_path, parent_session_id, size_bytes
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name
              FROM session_index
              WHERE (workspace_path = ?1 OR cwd = ?1)
                AND engine = ?2
@@ -353,6 +455,81 @@ fn list_slice_for_workspace_engine(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
     Ok(rows)
+}
+
+fn row_matches_workspace(row: &SessionIndexRow, key: &str) -> bool {
+    row.workspace_path
+        .as_deref()
+        .is_some_and(|value| paths_equivalent(value, key))
+        || row
+            .cwd
+            .as_deref()
+            .is_some_and(|value| paths_equivalent(value, key))
+}
+
+fn row_is_before_cursor(row: &SessionIndexRow, before: Option<&(i64, String)>) -> bool {
+    let Some((before_updated, before_id)) = before else {
+        return true;
+    };
+    row.updated_at < *before_updated
+        || (row.updated_at == *before_updated && row.session_id.as_str() > before_id.as_str())
+}
+
+/// Scan recent Index rows and fold in path-equivalent matches.
+/// Read-only: never rewrites workspace_path. Always run — not only when
+/// the exact-key page is empty — so a non-empty Claude page still surfaces
+/// Grok/PI written under a drifted Windows key.
+fn merge_equivalent_workspace_rows(
+    connection: &Connection,
+    key: &str,
+    limit: usize,
+    existing: &mut std::collections::HashSet<(String, String)>,
+    rows: &mut Vec<SessionIndexRow>,
+    before: Option<(i64, String)>,
+) -> Result<(), String> {
+    let scan_limit = (limit.saturating_mul(20).max(100)) as i64;
+    let mut fallback = connection
+        .prepare(
+            "SELECT engine, session_id, title, native_title, updated_at, created_at,
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name
+             FROM session_index
+             WHERE tombstoned_at IS NULL
+             ORDER BY updated_at DESC, session_id ASC
+             LIMIT ?1",
+        )
+        .map_err(|error| error.to_string())?;
+    let recent = fallback
+        .query_map(params![scan_limit], map_row)
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let mut per_engine: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for row in rows.iter() {
+        *per_engine.entry(row.engine.clone()).or_insert(0) += 1;
+    }
+    for row in recent {
+        if !row_matches_workspace(&row, key) {
+            continue;
+        }
+        if !row_is_before_cursor(&row, before.as_ref()) {
+            continue;
+        }
+        if !INDEX_LIST_ENGINES.contains(&row.engine.as_str()) {
+            continue;
+        }
+        let identity = (row.engine.clone(), row.session_id.clone());
+        if !existing.insert(identity) {
+            continue;
+        }
+        let count = per_engine.entry(row.engine.clone()).or_insert(0);
+        if *count >= limit {
+            continue;
+        }
+        *count += 1;
+        rows.push(row);
+    }
+    Ok(())
 }
 
 pub(crate) fn list_for_workspace_path(
@@ -378,51 +555,7 @@ pub(crate) fn list_for_workspace_path(
         }
     }
 
-    if rows.is_empty() {
-        // Fallback: scan a larger recent window and path-equivalent filter.
-        let mut fallback = connection
-            .prepare(
-                "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                        cwd, workspace_path, physical_path, parent_session_id, size_bytes
-                 FROM session_index
-                 WHERE tombstoned_at IS NULL
-                 ORDER BY updated_at DESC, session_id ASC
-                 LIMIT ?1",
-            )
-            .map_err(|error| error.to_string())?;
-        let recent = fallback
-            .query_map(params![(limit.saturating_mul(20).max(100)) as i64], map_row)
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        let mut per_engine: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
-        for row in recent {
-            let matches = row
-                .workspace_path
-                .as_deref()
-                .map(|value| paths_equivalent(value, &key))
-                .unwrap_or(false)
-                || row
-                    .cwd
-                    .as_deref()
-                    .map(|value| paths_equivalent(value, &key))
-                    .unwrap_or(false);
-            if !matches {
-                continue;
-            }
-            let identity = (row.engine.clone(), row.session_id.clone());
-            if !existing.insert(identity) {
-                continue;
-            }
-            let count = per_engine.entry(row.engine.clone()).or_insert(0);
-            if *count >= limit {
-                continue;
-            }
-            *count += 1;
-            rows.push(row);
-        }
-    }
+    merge_equivalent_workspace_rows(connection, &key, limit, &mut existing, &mut rows, None)?;
     rows.sort_by(|left, right| {
         right
             .updated_at
@@ -443,13 +576,12 @@ pub(crate) fn list_for_workspace_path_before(
     if key.is_empty() {
         return Ok(Vec::new());
     }
-    // Prefer exact workspace_path / cwd match in SQL; post-filter with
-    // paths_equivalent for Windows case folding edge cases.
     let fetch_limit = (limit.saturating_add(1)) as i64;
     let mut statement = connection
         .prepare(
             "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                    cwd, workspace_path, physical_path, parent_session_id, size_bytes
+                    cwd, workspace_path, physical_path, parent_session_id, size_bytes,
+                    provider_profile_id, provider_profile_name
              FROM session_index
              WHERE (workspace_path = ?1 OR cwd = ?1)
                AND tombstoned_at IS NULL
@@ -476,62 +608,24 @@ pub(crate) fn list_for_workspace_path_before(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
 
-    if rows.len() < limit {
-        // Fallback: scan a larger recent window and path-equivalent filter.
-        // Handles path normalization mismatches (trailing slash, case).
-        let mut fallback = connection
-            .prepare(
-                "SELECT engine, session_id, title, native_title, updated_at, created_at,
-                        cwd, workspace_path, physical_path, parent_session_id, size_bytes
-                 FROM session_index
-                 WHERE tombstoned_at IS NULL
-                 ORDER BY updated_at DESC, session_id ASC
-                 LIMIT ?1",
-            )
-            .map_err(|error| error.to_string())?;
-        let recent = fallback
-            .query_map(params![(limit.saturating_mul(20).max(100)) as i64], map_row)
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        let existing: std::collections::HashSet<(String, String)> = rows
-            .iter()
-            .map(|row| (row.engine.clone(), row.session_id.clone()))
-            .collect();
-        for row in recent {
-            if rows.len() >= limit {
-                break;
-            }
-            let matches = row
-                .workspace_path
-                .as_deref()
-                .map(|value| paths_equivalent(value, &key))
-                .unwrap_or(false)
-                || row
-                    .cwd
-                    .as_deref()
-                    .map(|value| paths_equivalent(value, &key))
-                    .unwrap_or(false);
-            if !matches {
-                continue;
-            }
-            if existing.contains(&(row.engine.clone(), row.session_id.clone())) {
-                continue;
-            }
-            rows.push(row);
-        }
-        rows.sort_by(|left, right| {
-            right
-                .updated_at
-                .cmp(&left.updated_at)
-                .then_with(|| left.session_id.cmp(&right.session_id))
-        });
-        rows.truncate(limit);
-    }
+    let mut existing: std::collections::HashSet<(String, String)> = rows
+        .iter()
+        .map(|row| (row.engine.clone(), row.session_id.clone()))
+        .collect();
+    merge_equivalent_workspace_rows(connection, &key, limit, &mut existing, &mut rows, before)?;
+    rows.sort_by(|left, right| {
+        right
+            .updated_at
+            .cmp(&left.updated_at)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
+    rows.truncate(limit);
     Ok(rows)
 }
 
 /// Count all non-tombstoned rows matching a workspace (any engine).
+/// Includes path-equivalent keys so has_more does not drop Grok on a drifted
+/// Windows path while Claude sits on the current key.
 pub(crate) fn count_for_workspace_path(
     connection: &Connection,
     workspace_path: &str,
@@ -540,15 +634,31 @@ pub(crate) fn count_for_workspace_path(
     if key.is_empty() {
         return Ok(0);
     }
-    connection
-        .query_row(
-            "SELECT COUNT(*) FROM session_index
-             WHERE (workspace_path = ?1 OR cwd = ?1)
-               AND tombstoned_at IS NULL",
-            params![key],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())
+    let mut statement = connection
+        .prepare("SELECT cwd, workspace_path FROM session_index WHERE tombstoned_at IS NULL")
+        .map_err(|error| error.to_string())?;
+    let mapped = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, Option<String>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+    let mut count = 0i64;
+    for item in mapped {
+        let (cwd, workspace) = item.map_err(|error| error.to_string())?;
+        let matches = workspace
+            .as_deref()
+            .is_some_and(|value| paths_equivalent(value, &key))
+            || cwd
+                .as_deref()
+                .is_some_and(|value| paths_equivalent(value, &key));
+        if matches {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 /// Persisted incremental-backfill state for one `{engine}:{workspace_path}`.
@@ -673,6 +783,75 @@ pub(crate) fn tombstone_session_ids(
     Ok(updated)
 }
 
+/// Prune-only tombstone: match exact `(engine, session_id)`.
+/// Never mark the same bare id on other engines (that would revive the Grok vanish class).
+pub(crate) fn tombstone_engine_sessions(
+    connection: &Connection,
+    pairs: &[(String, String)],
+) -> Result<usize, String> {
+    if pairs.is_empty() {
+        return Ok(0);
+    }
+    let marked_at = now_ms();
+    let mut updated = 0usize;
+    let mut statement = connection
+        .prepare(
+            "UPDATE session_index
+             SET tombstoned_at = COALESCE(tombstoned_at, ?1)
+             WHERE engine = ?2 AND session_id = ?3",
+        )
+        .map_err(|error| error.to_string())?;
+    let mut marker = connection
+        .prepare(
+            "INSERT INTO session_index (
+                engine, session_id, title, updated_at, indexed_at, tombstoned_at
+             ) VALUES (?1, ?2, '', ?3, ?3, ?3)
+             ON CONFLICT(engine, session_id) DO NOTHING",
+        )
+        .map_err(|error| error.to_string())?;
+    for (engine, session_id) in pairs {
+        let engine = engine.trim().to_ascii_lowercase();
+        let session_id = session_id.trim();
+        if engine.is_empty() || session_id.is_empty() {
+            continue;
+        }
+        updated += statement
+            .execute(params![marked_at, engine, session_id])
+            .map_err(|error| error.to_string())? as usize;
+        marker
+            .execute(params![engine, session_id, marked_at])
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(updated)
+}
+
+/// Hard-delete Index rows that should never have been imported (empty /
+/// control-plane Claude jsonl). Unlike tombstone, this does not block a later
+/// upsert when the same session grows a real user prompt.
+pub(crate) fn delete_engine_session_rows(
+    connection: &Connection,
+    pairs: &[(String, String)],
+) -> Result<usize, String> {
+    if pairs.is_empty() {
+        return Ok(0);
+    }
+    let mut deleted = 0usize;
+    let mut statement = connection
+        .prepare("DELETE FROM session_index WHERE engine = ?1 AND session_id = ?2")
+        .map_err(|error| error.to_string())?;
+    for (engine, session_id) in pairs {
+        let engine = engine.trim().to_ascii_lowercase();
+        let session_id = session_id.trim();
+        if engine.is_empty() || session_id.is_empty() {
+            continue;
+        }
+        deleted += statement
+            .execute(params![engine, session_id])
+            .map_err(|error| error.to_string())? as usize;
+    }
+    Ok(deleted)
+}
+
 fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionIndexRow> {
     Ok(SessionIndexRow {
         engine: row.get(0)?,
@@ -685,9 +864,15 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<SessionIndexRow> {
         workspace_path: row.get(7)?,
         physical_path: row.get(8)?,
         parent_session_id: row.get(9)?,
-        size_bytes: row
-            .get::<_, Option<i64>>(10)?
-            .and_then(|value| if value >= 0 { Some(value as u64) } else { None }),
+        size_bytes: row.get::<_, Option<i64>>(10)?.and_then(|value| {
+            if value >= 0 {
+                Some(value as u64)
+            } else {
+                None
+            }
+        }),
+        provider_profile_id: row.get(11)?,
+        provider_profile_name: row.get(12)?,
     })
 }
 
@@ -708,10 +893,44 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         }
     }
 
     #[test]
+    fn provider_columns_roundtrip_and_survive_reupsert_without_provider() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        let row = SessionIndexRow {
+            engine: "codex".into(),
+            session_id: "sp1".into(),
+            title: "Hello".into(),
+            native_title: None,
+            updated_at: 200,
+            created_at: Some(100),
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: Some("profile-a".into()),
+            provider_profile_name: Some("Provider A".into()),
+        };
+        upsert_rows(&connection, &[row]).expect("upsert with provider");
+
+        // 不知道 provider 的 writer 重 upsert（COALESCE）不得清掉已有值。
+        let mut stripped = index_row("codex", "sp1", 300);
+        stripped.title = "Hello v2".into();
+        upsert_rows(&connection, &[stripped]).expect("re-upsert without provider");
+
+        let rows = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].title, "Hello v2");
+        assert_eq!(rows[0].provider_profile_id.as_deref(), Some("profile-a"));
+        assert_eq!(rows[0].provider_profile_name.as_deref(), Some("Provider A"));
+    }
+
     fn upsert_and_list_by_workspace() {
         let connection = Connection::open_in_memory().expect("open");
         connection.execute_batch(DDL).expect("ddl");
@@ -729,12 +948,22 @@ mod tests {
                 physical_path: Some("/tmp/s1.jsonl".into()),
                 parent_session_id: None,
                 size_bytes: Some(12),
+                provider_profile_id: None,
+                provider_profile_name: None,
             }],
         )
         .expect("upsert");
         let rows = list_for_workspace_path(&connection, "/Users/me/proj/", 10).expect("list");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].session_id, "s1");
+        assert_eq!(
+            max_updated_at_for_engine(&connection, "claude", "/Users/me/proj/").expect("max"),
+            Some(200)
+        );
+        assert_eq!(
+            max_updated_at_for_engine(&connection, "grok", "/Users/me/proj/").expect("empty"),
+            None
+        );
     }
 
     #[test]
@@ -767,9 +996,95 @@ mod tests {
             },
         )
         .expect("save complete");
-        assert!(load_backfill_state(&connection, "codex:/tmp/proj")
-            .expect("reload")
-            .complete);
+        assert!(
+            load_backfill_state(&connection, "codex:/tmp/proj")
+                .expect("reload")
+                .complete
+        );
+    }
+
+    #[test]
+    fn upsert_keeps_existing_created_at_when_refresh_sends_newer() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        let first = SessionIndexRow {
+            engine: "dsh".into(),
+            session_id: "dsh-clock".into(),
+            title: "dsh session".into(),
+            native_title: None,
+            updated_at: 1_000,
+            created_at: Some(1_000),
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        };
+        upsert_rows(&connection, &[first]).expect("insert");
+        let refresh = SessionIndexRow {
+            engine: "dsh".into(),
+            session_id: "dsh-clock".into(),
+            title: "dsh session".into(),
+            native_title: None,
+            updated_at: 20 * 60 * 1000,
+            created_at: Some(20 * 60 * 1000),
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        };
+        upsert_rows(&connection, &[refresh]).expect("refresh");
+        let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].created_at, Some(1_000));
+        assert_eq!(listed[0].updated_at, 20 * 60 * 1000);
+    }
+
+    #[test]
+    fn upsert_backfills_missing_created_at_from_first_updated_at() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        let first = SessionIndexRow {
+            engine: "claude".into(),
+            session_id: "claude-clock".into(),
+            title: "claude session".into(),
+            native_title: None,
+            updated_at: 1_000,
+            created_at: None,
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        };
+        upsert_rows(&connection, &[first]).expect("insert");
+        let refresh = SessionIndexRow {
+            engine: "claude".into(),
+            session_id: "claude-clock".into(),
+            title: "claude session".into(),
+            native_title: None,
+            updated_at: 9_000,
+            created_at: None,
+            cwd: Some("/tmp/proj".into()),
+            workspace_path: Some("/tmp/proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        };
+        upsert_rows(&connection, &[refresh]).expect("refresh");
+        let listed = list_for_workspace_path(&connection, "/tmp/proj", 10).expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].created_at, Some(1_000));
+        assert_eq!(listed[0].updated_at, 9_000);
     }
 
     #[test]
@@ -790,14 +1105,20 @@ mod tests {
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: Some(32),
+                provider_profile_id: None,
+                provider_profile_name: None,
             }],
         )
         .expect("upsert");
 
-        let updated = tombstone_session_ids(&connection, &["pi:ses_pi_1".into()]).expect("tombstone");
+        let updated =
+            tombstone_session_ids(&connection, &["pi:ses_pi_1".into()]).expect("tombstone");
         assert_eq!(updated, 1);
         let listed = list_for_workspace_path(&connection, "/tmp/codex", 10).expect("list");
-        assert!(listed.is_empty(), "tombstoned PI rows must leave the sidebar page");
+        assert!(
+            listed.is_empty(),
+            "tombstoned PI rows must leave the sidebar page"
+        );
     }
 
     #[test]
@@ -805,7 +1126,8 @@ mod tests {
         let connection = Connection::open_in_memory().expect("open");
         connection.execute_batch(DDL).expect("ddl");
         // 行尚不存在（会话只经磁盘列表进过侧栏）：tombstone 也要留下持久标记
-        let updated = tombstone_session_ids(&connection, &["pi:ses_ghost".into()]).expect("tombstone");
+        let updated =
+            tombstone_session_ids(&connection, &["pi:ses_ghost".into()]).expect("tombstone");
         assert_eq!(updated, 0);
         // 重启后 rescan 重新 upsert 同一个 (engine, session_id)
         upsert_rows(&connection, &[index_row("pi", "ses_ghost", 300)]).expect("upsert");
@@ -836,7 +1158,11 @@ mod tests {
         connection.execute_batch(DDL).expect("ddl");
         let mut rows = Vec::new();
         for index in 0..8 {
-            rows.push(index_row("claude", &format!("claude-{index}"), 1000 + index));
+            rows.push(index_row(
+                "claude",
+                &format!("claude-{index}"),
+                1000 + index,
+            ));
         }
         rows.push(index_row("pi", "pi-old", 1));
         upsert_rows(&connection, &rows).expect("upsert");
@@ -854,9 +1180,7 @@ mod tests {
         connection.execute_batch(DDL).expect("ddl");
         upsert_rows(&connection, &[index_row("claude", "claude-1", 100)]).expect("upsert");
         mark_source_synced(&connection, "pi:/tmp/proj", "fp-a", 1).expect("mark");
-        assert!(
-            !workspace_index_sources_invalidated(&connection, "/tmp/proj").expect("fresh")
-        );
+        assert!(!workspace_index_sources_invalidated(&connection, "/tmp/proj").expect("fresh"));
         connection
             .execute(
                 "UPDATE session_index_sources SET last_sync_ms = 0 WHERE source_key = ?1",
@@ -866,6 +1190,160 @@ mod tests {
         assert!(
             workspace_index_sources_invalidated(&connection, "/tmp/proj")
                 .expect("stale after PI send")
+        );
+    }
+
+    #[test]
+    fn normalize_path_key_folds_windows_drive_and_extended_prefix() {
+        assert_eq!(normalize_path_key(r"C:\Users\me\proj"), "c:/users/me/proj");
+        assert_eq!(normalize_path_key(r"c:\Users\me\proj\"), "c:/users/me/proj");
+        assert_eq!(
+            normalize_path_key(r"\\?\C:\Users\me\proj"),
+            "c:/users/me/proj"
+        );
+        assert_eq!(
+            normalize_path_key(r"\\?\UNC\server\share\proj"),
+            "//server/share/proj"
+        );
+        assert_eq!(normalize_path_key("C:/"), "c:/");
+        assert!(paths_equivalent(
+            r"C:\Users\me\proj",
+            r"\\?\c:\Users\me\proj\"
+        ));
+        assert!(paths_equivalent(
+            r"\\server\share\proj",
+            r"\\?\UNC\SERVER\share\proj\"
+        ));
+        assert!(!paths_equivalent("/tmp/proj", "/tmp/other"));
+    }
+
+    fn index_row_at(
+        engine: &str,
+        session_id: &str,
+        updated_at: i64,
+        workspace_path: &str,
+    ) -> SessionIndexRow {
+        SessionIndexRow {
+            engine: engine.into(),
+            session_id: session_id.into(),
+            title: session_id.into(),
+            native_title: None,
+            updated_at,
+            created_at: None,
+            cwd: Some(workspace_path.into()),
+            workspace_path: Some(workspace_path.into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        }
+    }
+
+    #[test]
+    fn list_always_merges_equivalent_keys_when_claude_page_is_nonempty() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        upsert_rows(
+            &connection,
+            &[
+                index_row_at("claude", "claude-b", 200, "C:/Users/me/proj"),
+                index_row_at("grok", "grok-a", 150, r"c:\Users\me\proj"),
+                index_row_at("pi", "pi-a", 140, r"\\?\C:\Users\me\proj"),
+                index_row_at("dsh", "dsh-a", 130, "C:/Users/me/proj"),
+            ],
+        )
+        .expect("upsert");
+        let listed = list_for_workspace_path(&connection, r"C:\Users\me\proj", 10).expect("list");
+        let engines: Vec<_> = listed.iter().map(|row| row.engine.as_str()).collect();
+        assert!(engines.contains(&"claude"), "{engines:?}");
+        assert!(engines.contains(&"grok"), "{engines:?}");
+        assert!(engines.contains(&"pi"), "{engines:?}");
+        assert!(engines.contains(&"dsh"), "{engines:?}");
+        assert_eq!(
+            count_for_workspace_path(&connection, r"C:\Users\me\proj").expect("count"),
+            4
+        );
+    }
+
+    #[test]
+    fn keyset_list_includes_equivalent_grok_and_dsh() {
+        let connection = Connection::open_in_memory().expect("open");
+        connection.execute_batch(DDL).expect("ddl");
+        upsert_rows(
+            &connection,
+            &[
+                index_row_at("claude", "claude-new", 300, "C:/Users/me/proj"),
+                index_row_at("grok", "grok-old", 100, r"c:\Users\me\proj"),
+                index_row_at("dsh", "dsh-old", 90, r"\\?\C:\Users\me\proj"),
+            ],
+        )
+        .expect("upsert");
+        let page = list_for_workspace_path_before(
+            &connection,
+            r"C:\Users\me\proj",
+            10,
+            Some((300, "claude-new".into())),
+        )
+        .expect("keyset");
+        assert!(page.iter().any(|row| row.session_id == "grok-old"));
+        assert!(page.iter().any(|row| row.session_id == "dsh-old"));
+    }
+
+    #[test]
+    fn engine_table_sentinel_keeps_sync_backfill_list_and_timeout_aligned() {
+        let store = include_str!("store.rs");
+        let writers = include_str!("writers.rs");
+        let commands = include_str!("commands.rs");
+        let required = [
+            "claude", "codex", "gemini", "grok", "kimi", "opencode", "pi", "dsh",
+        ];
+        let engine_table = store
+            .split("const INDEX_LIST_ENGINES")
+            .nth(1)
+            .and_then(|rest| rest.split(';').next())
+            .expect("INDEX_LIST_ENGINES table missing");
+        for engine in required {
+            assert!(
+                engine_table.contains(&format!("\"{engine}\"")),
+                "INDEX_LIST_ENGINES missing {engine}"
+            );
+        }
+        for writer in [
+            "sync_claude_for_workspace",
+            "sync_codex_for_workspace",
+            "sync_kimi_for_workspace",
+            "rows_from_gemini_summaries",
+            "rows_from_grok_summaries",
+            "rows_from_pi_summaries",
+            "rows_from_dsh_summaries",
+            "rows_from_opencode_entries",
+        ] {
+            assert!(writers.contains(writer), "writers.rs missing {writer}");
+        }
+        for command in [
+            "sync_claude_for_workspace",
+            "sync_codex_for_workspace",
+            "sync_kimi_for_workspace",
+            "sync_opencode_engine",
+            "list_gemini_sessions",
+            "list_grok_sessions",
+            "list_pi_sessions",
+            "list_dsh_sessions",
+        ] {
+            assert!(commands.contains(command), "commands.rs missing {command}");
+        }
+        assert!(
+            commands.contains("SKIP_BACKFILL: opencode"),
+            "OpenCode must declare SKIP_BACKFILL"
+        );
+        assert!(
+            commands.contains("const ASYNC_ENGINE_LIST_TIMEOUT"),
+            "async timeout contract missing"
+        );
+        assert!(
+            commands.contains("Duration::from_secs(3)"),
+            "async engine list timeout must stay 3s"
         );
     }
 }

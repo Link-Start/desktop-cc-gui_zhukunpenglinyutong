@@ -40,6 +40,7 @@ const baseProps = {
   setCopiedMessageId: () => {},
   onAssistantVisibleTextRender: undefined,
   onShowAllHistoryItems: () => {},
+  onLoadAllEarlierHistory: () => {},
   pendingJumpMessageId: null,
   setPendingJumpMessageId: () => {},
   liveAutoFollowEnabled: true,

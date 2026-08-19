@@ -46,6 +46,7 @@ vi.mock("../utils/threadNormalize", () => ({
     }
     return value;
   },
+  normalizeDshTodos: (value: unknown) => (Array.isArray(value) ? value : null),
 }));
 
 type SetupOverrides = {
@@ -1998,6 +1999,40 @@ describe("useThreadTurnEvents", () => {
     expect(dispatch).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "setThreadTokenUsage" }),
     );
+  });
+
+  it("patches DSH todos without replacing token counts", () => {
+    const { result, dispatch } = makeOptions();
+    act(() => {
+      result.current.onThreadTokenUsageUpdated("ws-1", "dsh:session-1", {
+        dshTodos: [{ content: "step", status: "pending" }],
+      });
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadDshTodos",
+      threadId: "dsh:session-1",
+      todos: [{ content: "step", status: "pending" }],
+    });
+  });
+
+  it("patches DSH occupancy without replacing token counts", () => {
+    const { result, dispatch } = makeOptions();
+    act(() => {
+      result.current.onThreadTokenUsageUpdated("ws-1", "dsh:session-1", {
+        dshContextPatch: {
+          contextUsedTokens: 209000,
+          modelContextWindow: 262000,
+        },
+      });
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "patchThreadDshContextUsage",
+      threadId: "dsh:session-1",
+      patch: {
+        contextUsedTokens: 209000,
+        modelContextWindow: 262000,
+      },
+    });
   });
 
   it("dispatches normalized rate limits updates", () => {

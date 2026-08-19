@@ -60,6 +60,7 @@ vi.mock("../../../services/tauri", () => ({
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listSessionIndexForWorkspace: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
   loadCodexSession: vi.fn(),
@@ -268,7 +269,7 @@ describe("useThreadActions native session bridges", () => {
         scanQuality: "preview",
       },
       cursor: null,
-      limit: 5,
+      limit: 12,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
@@ -503,6 +504,38 @@ describe("useThreadActions native session bridges", () => {
     });
   });
 
+  it("tombstones ghost index rows when unified delete cannot resolve workspace ownership", async () => {
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValueOnce({
+      results: [
+        {
+          sessionId: "claude:hello-ghost",
+          ok: false,
+          archivedAt: null,
+          error: "session does not belong to target workspace",
+          code: "OWNER_WORKSPACE_UNRESOLVED",
+          deletedFromDisk: false,
+          metadataCleaned: false,
+        },
+      ],
+    });
+
+    const { result } = renderActions();
+
+    await act(async () => {
+      await result.current.deleteThreadForWorkspace(
+        "ws-1",
+        "claude:hello-ghost",
+      );
+    });
+
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "claude:hello-ghost",
+    ]);
+    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith([
+      "claude:hello-ghost",
+    ]);
+  });
+
   it("routes opencode delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
@@ -623,6 +656,7 @@ describe("useThreadActions native session bridges", () => {
       type: "setThreads",
       workspaceId: "ws-1",
       threads: [],
+      unionMembership: false,
     });
   });
 
@@ -750,7 +784,7 @@ describe("useThreadActions native session bridges", () => {
     );
   });
 
-  it("first-paint still lists DSH host sessions when Session Index has no dsh rows", async () => {
+  it("first-paint does not probe DSH host when Session Index has no dsh rows", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: {
         data: [],
@@ -777,7 +811,7 @@ describe("useThreadActions native session bridges", () => {
       },
     ]);
 
-    const { result, dispatch } = renderActions();
+    const { result } = renderActions();
 
     await act(async () => {
       await result.current.listThreadsForWorkspace(workspace, {
@@ -786,25 +820,51 @@ describe("useThreadActions native session bridges", () => {
       });
     });
 
-    await waitFor(() => {
-      expect(listDshSessions).toHaveBeenCalledWith(workspace.path, 50);
+    expect(listDshSessions).not.toHaveBeenCalled();
+    expect(listPiSessions).not.toHaveBeenCalled();
+  });
+
+  it("skips Index early-paint when rematerialize merges into the current list", async () => {
+    vi.mocked(listThreads).mockResolvedValue({
+      result: {
+        data: [],
+        nextCursor: null,
+      },
+    } as never);
+    vi.mocked(listClaudeSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [
+        {
+          engine: "claude",
+          sessionId: "session-real-1",
+          title: "帮我看一下这段代码",
+          updatedAt: 1_730_000_000_000,
+        },
+      ],
+      source: "session-index",
+      synced: true,
+      engines: ["claude"],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
+    const onDebug = vi.fn();
+    const { result } = renderActions({ onDebug });
+
+    await act(async () => {
+      await result.current.listThreadsForWorkspace(workspace, {
+        preserveState: true,
+        startupHydrationMode: "first-paint",
+        mergeExistingThreads: true,
+      });
     });
 
-    await waitFor(() => {
-      const setThreadsCalls = dispatch.mock.calls.filter(
-        ([action]) =>
-          action?.type === "setThreads" &&
-          action.workspaceId === workspace.id,
-      );
-      const hasDshRow = setThreadsCalls.some(([action]) =>
-        Array.isArray(action.threads) &&
-        action.threads.some(
-          (thread: { id?: string; engineSource?: string }) =>
-            thread.id === "dsh:session-dsh-history-1" ||
-            thread.engineSource === "dsh",
-        ),
-      );
-      expect(hasDshRow).toBe(true);
-    });
+    expect(onDebug).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/list session-index early-paint",
+      }),
+    );
   });
 });

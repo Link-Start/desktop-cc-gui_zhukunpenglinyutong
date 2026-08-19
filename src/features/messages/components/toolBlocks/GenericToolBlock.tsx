@@ -15,6 +15,7 @@ import {
   isSearchTool,
   isWebTool,
 } from './toolConstants';
+import { isAskUserQuestionToolName } from '../../../../utils/toolSemantics';
 import { FileIcon } from './FileIcon';
 import { cn } from '@/lib/utils';
 import { Marker, MarkerContent, MarkerIcon } from '../../../../components/ui/marker';
@@ -295,20 +296,18 @@ export const GenericToolBlock = memo(function GenericToolBlock({
     [imageCandidate],
   );
 
-  const shouldShowDetails = otherParams.length > 0 && isExpanded;
-  const isAskUserQuestionTool =
-    toolName.toLowerCase() === "askuserquestion" ||
-    toolName.toLowerCase().replace(/[^a-z0-9]/g, "").endsWith("askuserquestion") ||
-    item.title.toLowerCase().replace(/[^a-z0-9]/g, "").includes("askuserquestion");
-  const suppressPlanModeHintForClaude =
-    isAskUserQuestionTool &&
-    activeEngine === "claude" &&
-    hasPendingUserInputRequest;
+  const isAskUserQuestionTool = isAskUserQuestionToolName(toolName, item.title);
+  const usesNativeAskUserQuestion =
+    activeEngine === "claude" || activeEngine === "dsh";
   const showPlanModeHint =
     isAskUserQuestionTool &&
     activeCollaborationModeId === "code" &&
-    activeEngine !== "claude" &&
-    !suppressPlanModeHintForClaude;
+    !usesNativeAskUserQuestion;
+  const suppressAskUserQuestionDump =
+    isAskUserQuestionTool &&
+    (usesNativeAskUserQuestion || hasPendingUserInputRequest);
+  const shouldShowDetails =
+    !suppressAskUserQuestionDump && otherParams.length > 0 && isExpanded;
   const isInteractive = Boolean(
     isCollapsible || otherParams.length > 0 || item.output || hasChanges,
   );
@@ -430,6 +429,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
 
       <CollapsibleReveal
         open={Boolean(
+          !suppressAskUserQuestionDump &&
           isExpanded && item.output && !hasChanges && (!isImageViewTool || !imageViewPreviewSrc),
         )}
       >
@@ -474,6 +474,7 @@ export const GenericToolBlock = memo(function GenericToolBlock({
 
       <CollapsibleReveal
         open={Boolean(
+          !suppressAskUserQuestionDump &&
           isExpanded && !shouldShowDetails && !item.output && !hasChanges && item.detail,
         )}
       >

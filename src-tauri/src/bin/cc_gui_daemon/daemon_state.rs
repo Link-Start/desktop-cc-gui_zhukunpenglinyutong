@@ -1089,6 +1089,7 @@ impl DaemonState {
         provider_profile_id: Option<String>,
         custom_spec_root: Option<String>,
         auto_session: Option<session_management::AutoSessionMetadata>,
+        dsh_agent_preset: Option<String>,
     ) -> Result<Value, String> {
         self.sync_engine_configs().await;
         let active_engine = self.get_active_engine().await;
@@ -2629,6 +2630,7 @@ impl DaemonState {
                     images.as_deref(),
                     resume_id,
                     continue_session,
+                    dsh_agent_preset.as_deref(),
                 )
                 .await?;
                 self.record_auto_session_metadata_if_present(
@@ -2674,6 +2676,7 @@ impl DaemonState {
         variant: Option<String>,
         custom_spec_root: Option<String>,
         auto_session: Option<session_management::AutoSessionMetadata>,
+        dsh_agent_preset: Option<String>,
     ) -> Result<Value, String> {
         self.sync_engine_configs().await;
         if text.trim().is_empty() {
@@ -3086,6 +3089,7 @@ impl DaemonState {
                     images.as_deref(),
                     resume_id,
                     continue_session,
+                    dsh_agent_preset.as_deref(),
                 )
                 .await?;
                 let (_snapshot, client) = engine::dsh::ensure_ready(&runtime).await?;

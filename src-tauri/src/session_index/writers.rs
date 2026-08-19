@@ -8,7 +8,8 @@ use rusqlite::Connection;
 use serde_json::Value;
 
 use super::store::{
-    load_backfill_state, mark_source_synced, normalize_path_key, save_backfill_state,
+    delete_engine_session_rows, invalidate_source_freshness, load_backfill_state,
+    mark_source_synced, max_updated_at_for_engine, normalize_path_key, save_backfill_state,
     source_is_fresh, upsert_rows, BackfillState, SessionIndexRow,
 };
 use crate::engine::claude_history::encode_project_path;
@@ -46,6 +47,36 @@ fn file_mtime_ms(path: &Path) -> i64 {
         .unwrap_or(0)
 }
 
+fn file_created_at_ms(path: &Path) -> i64 {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.created())
+        .ok()
+        .and_then(|created| created.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn optional_file_created_at_ms(path: &Path) -> Option<i64> {
+    let created_at = file_created_at_ms(path);
+    (created_at > 0).then_some(created_at)
+}
+
+fn created_at_from_json_value(value: &Value) -> Option<i64> {
+    value
+        .get("createdAt")
+        .or_else(|| value.get("created_at"))
+        .and_then(|raw| {
+            raw.as_i64()
+                .or_else(|| raw.as_u64().map(|n| n as i64))
+                .or_else(|| {
+                    raw.as_f64()
+                        .filter(|n| n.is_finite() && *n > 0.0)
+                        .map(|n| n as i64)
+                })
+        })
+        .filter(|value| *value > 0)
+}
+
 /// Result of one bounded historical-backfill batch (import daemon tail).
 #[derive(Debug, Default)]
 pub(crate) struct BackfillBatchResult {
@@ -80,11 +111,7 @@ fn list_claude_project_session_files(project_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn claude_index_row_from_file(
-    path: &Path,
-    workspace_path: &Path,
-    titles: &HashMap<String, String>,
-) -> Option<SessionIndexRow> {
+fn claude_session_id_from_path(path: &Path) -> Option<String> {
     let session_id = path
         .file_stem()
         .and_then(|name| name.to_str())
@@ -92,14 +119,162 @@ fn claude_index_row_from_file(
         .trim()
         .to_string();
     if session_id.is_empty() {
+        None
+    } else {
+        Some(session_id)
+    }
+}
+
+fn is_claude_agent_session_id(session_id: &str) -> bool {
+    session_id.starts_with("agent-")
+}
+
+fn is_mossx_program_control_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    trimmed.len() >= 6 && trimmed[..6].eq_ignore_ascii_case("MOSSX_")
+}
+
+/// Shared 协议包（完整 token）。截断占位 `MOSSX_CONTE` 不算，避免 empty-prune 把续跑 jsonl 当空会话删盘。
+pub(crate) fn is_mossx_shared_protocol_owner_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    const TOKENS: &[&str] = &[
+        "MOSSX_CONTEXT_PACKAGE",
+        "MOSSX_SHARED_CONTEXT",
+        "MOSSX_NATIVE_CONTEXT",
+        "MOSSX_CONTEXT_ACCEPTED",
+    ];
+    TOKENS
+        .iter()
+        .any(|token| trimmed.len() >= token.len() && trimmed[..token.len()].eq_ignore_ascii_case(token))
+}
+
+fn is_generic_claude_session_title(title: &str) -> bool {
+    title.trim().eq_ignore_ascii_case("claude session")
+}
+
+fn is_claude_control_plane_title(title: &str) -> bool {
+    let trimmed = title.trim();
+    if trimmed.is_empty() || is_generic_claude_session_title(trimmed) {
+        return false;
+    }
+    is_mossx_program_control_text(trimmed) || is_claude_control_or_synthetic_user_text(trimmed)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeTranscriptPeek {
+    RealUser,
+    MediaOnly,
+    Empty,
+}
+
+fn peek_claude_transcript_kind(path: &Path) -> ClaudeTranscriptPeek {
+    let Some(file) = File::open(path).ok() else {
+        return ClaudeTranscriptPeek::Empty;
+    };
+    let mut reader = BufReader::new(file);
+    let mut saw_media_only = false;
+    for _ in 0..80 {
+        let line = match read_jsonl_line_capped(&mut reader, 256 * 1024) {
+            Ok(Some(JsonlLine::Text(line))) => line,
+            Ok(Some(JsonlLine::SkippedHuge)) => continue,
+            Ok(None) => break,
+            Err(_) => break,
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if !is_claude_user_or_human_entry(&value) {
+            continue;
+        }
+        if let Some(text) = extract_text_preview(&value) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() && !is_claude_control_or_synthetic_user_text(trimmed) {
+                return ClaudeTranscriptPeek::RealUser;
+            }
+        }
+        if claude_value_has_media_part(&value) {
+            saw_media_only = true;
+        }
+    }
+    if saw_media_only {
+        ClaudeTranscriptPeek::MediaOnly
+    } else {
+        ClaudeTranscriptPeek::Empty
+    }
+}
+
+fn should_omit_claude_index_row(session_id: &str, title: &str, path: &Path) -> bool {
+    if is_claude_agent_session_id(session_id) {
+        return true;
+    }
+    // Shared 协议 owner 必须留在 Index，供 protocol hide 收录文件 UUID。
+    // 侧栏投影再用 MOSSX_ 标题闸藏行；禁止用 history.jsonl「继续」顶替后 omit 失败。
+    if is_mossx_program_control_text(title) {
+        return false;
+    }
+    if is_claude_control_plane_title(title) {
+        return true;
+    }
+    if is_generic_claude_session_title(title) {
+        return peek_claude_transcript_kind(path) == ClaudeTranscriptPeek::Empty;
+    }
+    false
+}
+
+fn peek_claude_first_user_raw(path: &Path) -> Option<String> {
+    let file = File::open(path).ok()?;
+    let mut reader = BufReader::new(file);
+    for _ in 0..80 {
+        let line = match read_jsonl_line_capped(&mut reader, 256 * 1024) {
+            Ok(Some(JsonlLine::Text(line))) => line,
+            Ok(Some(JsonlLine::SkippedHuge)) => continue,
+            Ok(None) => break,
+            Err(_) => break,
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if !is_claude_user_or_human_entry(&value) {
+            continue;
+        }
+        if let Some(text) = extract_text_preview(&value) {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn claude_index_row_from_file(
+    path: &Path,
+    workspace_path: &Path,
+    titles: &HashMap<String, String>,
+) -> Option<SessionIndexRow> {
+    let session_id = claude_session_id_from_path(path)?;
+    if is_claude_agent_session_id(&session_id) {
         return None;
     }
     let updated_at = file_mtime_ms(path);
-    let title_from_history = titles.get(&session_id).cloned();
-    let title = title_from_history
-        .clone()
-        .or_else(|| peek_claude_first_user_preview(path))
-        .unwrap_or_else(|| "Claude Session".to_string());
+    let protocol_raw = peek_claude_first_user_raw(path)
+        .filter(|text| is_mossx_program_control_text(text));
+    let (title, title_from_history) = if let Some(raw) = protocol_raw {
+        (truncate_title(&raw, 80), None)
+    } else {
+        let title_from_history = titles
+            .get(&session_id)
+            .cloned()
+            .filter(|title| !is_claude_control_plane_title(title));
+        let title = title_from_history
+            .clone()
+            .or_else(|| peek_claude_first_user_preview(path))
+            .unwrap_or_else(|| "Claude Session".to_string());
+        (title, title_from_history)
+    };
+    if should_omit_claude_index_row(&session_id, &title, path) {
+        return None;
+    }
     let size_bytes = fs::metadata(path).ok().map(|metadata| metadata.len());
     let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
     Some(SessionIndexRow {
@@ -108,33 +283,114 @@ fn claude_index_row_from_file(
         title: title.clone(),
         native_title: title_from_history,
         updated_at,
-        created_at: None,
+        created_at: optional_file_created_at_ms(path),
         cwd: Some(workspace_key.clone()),
         workspace_path: Some(workspace_key),
         physical_path: Some(path.to_string_lossy().to_string()),
-        parent_session_id: super::shared_visibility::extract_claude_parent_session_id(
-            &session_id,
-        ),
+        parent_session_id: super::shared_visibility::extract_claude_parent_session_id(&session_id),
         size_bytes,
+        provider_profile_id: None,
+        provider_profile_name: None,
     })
+}
+
+fn collect_claude_index_rows(
+    files: &[PathBuf],
+    workspace_path: &Path,
+    titles: &HashMap<String, String>,
+    limit: Option<usize>,
+) -> (Vec<SessionIndexRow>, Vec<(String, String)>) {
+    let mut rows = Vec::new();
+    let mut omitted = Vec::new();
+    for path in files {
+        let Some(session_id) = claude_session_id_from_path(path) else {
+            continue;
+        };
+        match claude_index_row_from_file(path, workspace_path, titles) {
+            Some(row) => {
+                rows.push(row);
+                if limit.is_some_and(|max| rows.len() >= max) {
+                    break;
+                }
+            }
+            None => omitted.push(("claude".to_string(), session_id)),
+        }
+    }
+    (rows, omitted)
+}
+
+fn is_generic_codex_session_title(title: &str) -> bool {
+    title.trim().eq_ignore_ascii_case("codex session")
+}
+
+pub(crate) fn should_omit_codex_index_title(title: &str) -> bool {
+    let trimmed = title.trim();
+    if trimmed.is_empty() || is_generic_codex_session_title(trimmed) {
+        return true;
+    }
+    is_mossx_program_control_text(trimmed)
+        || crate::local_usage::is_codex_background_helper_text(trimmed)
+}
+
+fn collect_codex_index_rows(
+    summaries: impl IntoIterator<Item = crate::types::LocalUsageSessionSummary>,
+    workspace_key: &str,
+) -> (Vec<SessionIndexRow>, Vec<(String, String)>) {
+    let mut rows = Vec::new();
+    let mut omitted = Vec::new();
+    // provider id → 显示名 per-collect cache，避免每行重复读 config。
+    let mut provider_name_cache: HashMap<String, String> = HashMap::new();
+    for summary in summaries {
+        let session_id = summary.session_id.clone();
+        match codex_summary_to_index_row(summary, workspace_key, &mut provider_name_cache) {
+            Some(row) => rows.push(row),
+            None => omitted.push(("codex".to_string(), session_id)),
+        }
+    }
+    (rows, omitted)
 }
 
 fn codex_summary_to_index_row(
     summary: crate::types::LocalUsageSessionSummary,
     workspace_key: &str,
-) -> SessionIndexRow {
+    provider_name_cache: &mut HashMap<String, String>,
+) -> Option<SessionIndexRow> {
     let title = summary
         .native_title
         .clone()
         .or(summary.summary.clone())
         .unwrap_or_else(|| "Codex Session".to_string());
-    SessionIndexRow {
+    if should_omit_codex_index_title(&title) {
+        return None;
+    }
+    // scan 已从 physical path 推断 managed provider id（provider-home 会话）；
+    // 这里解析显示名，让 first paint 就能画供应商标签。
+    let provider_profile_id = summary
+        .provider_profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+    let provider_profile_name = provider_profile_id.as_ref().map(|profile_id| {
+        provider_name_cache
+            .entry(profile_id.clone())
+            .or_insert_with(|| {
+                crate::codex::provider_profile::codex_provider_binding_for_profile_id(profile_id)
+                    .provider_profile_name
+            })
+            .clone()
+    });
+    Some(SessionIndexRow {
         engine: "codex".into(),
         session_id: summary.session_id,
         title: title.clone(),
         native_title: summary.native_title.or(summary.summary),
         updated_at: summary.timestamp,
-        created_at: None,
+        created_at: summary
+            .physical_path
+            .as_deref()
+            .map(Path::new)
+            .and_then(optional_file_created_at_ms),
         cwd: summary
             .cwd
             .as_deref()
@@ -144,7 +400,9 @@ fn codex_summary_to_index_row(
         physical_path: summary.physical_path,
         parent_session_id: summary.parent_session_id,
         size_bytes: summary.file_size_bytes,
-    }
+        provider_profile_id,
+        provider_profile_name,
+    })
 }
 
 fn kimi_session_index_path() -> Option<PathBuf> {
@@ -209,12 +467,15 @@ fn parse_kimi_index_line(line: &str, target: &str) -> Option<SessionIndexRow> {
         title,
         native_title: None,
         updated_at,
-        created_at: None,
+        created_at: created_at_from_json_value(&value)
+            .or_else(|| session_dir.as_deref().and_then(optional_file_created_at_ms)),
         cwd: Some(target.to_string()),
         workspace_path: Some(target.to_string()),
         physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
         parent_session_id: None,
         size_bytes: None,
+        provider_profile_id: None,
+        provider_profile_name: None,
     })
 }
 
@@ -283,11 +544,10 @@ pub(crate) fn backfill_claude_for_workspace(
         });
     }
     let end = offset.saturating_add(batch_size).min(files.len());
-    let mut rows = Vec::new();
-    for path in &files[offset..end] {
-        if let Some(row) = claude_index_row_from_file(path, workspace_path, &titles) {
-            rows.push(row);
-        }
+    let (rows, omitted) =
+        collect_claude_index_rows(&files[offset..end], workspace_path, &titles, None);
+    if !omitted.is_empty() {
+        delete_engine_session_rows(connection, &omitted)?;
     }
     let upserted = upsert_rows(connection, &rows)?;
     let complete = end >= files.len();
@@ -344,10 +604,8 @@ pub(crate) fn backfill_codex_for_workspace(
                 Some(workspace_path),
                 files,
             )?;
-            let rows: Vec<SessionIndexRow> = summaries
-                .into_iter()
-                .map(|summary| codex_summary_to_index_row(summary, &workspace_key))
-                .collect();
+            let (rows, omitted) = collect_codex_index_rows(summaries, &workspace_key);
+            delete_engine_session_rows(connection, &omitted)?;
             upserted += upsert_rows(connection, &rows)?;
         }
         plain_done = true;
@@ -394,10 +652,8 @@ pub(crate) fn backfill_codex_for_workspace(
         Some(workspace_path),
         &selected,
     )?;
-    let rows: Vec<SessionIndexRow> = summaries
-        .into_iter()
-        .map(|summary| codex_summary_to_index_row(summary, &workspace_key))
-        .collect();
+    let (rows, omitted) = collect_codex_index_rows(summaries, &workspace_key);
+    delete_engine_session_rows(connection, &omitted)?;
     upserted += upsert_rows(connection, &rows)?;
 
     let oldest = batch_dates.last().cloned().unwrap_or_default();
@@ -502,13 +758,25 @@ pub(crate) fn sync_claude_for_workspace(
     let project_dir = projects_dir.join(&encoded);
     let history_path = claude_home.join("history.jsonl");
 
-    let source_key = format!("claude:{}", normalize_path_key(&workspace_path.to_string_lossy()));
+    let source_key = format!(
+        "claude:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
     let fingerprint = format!(
         "{}|{}",
         mtime_fingerprint(&project_dir),
         mtime_fingerprint(&history_path)
     );
-    if !force && source_is_fresh(connection, &source_key, &fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+    if !force
+        && source_should_skip_as_fresh(
+            connection,
+            &source_key,
+            &fingerprint,
+            "claude",
+            workspace_path,
+            newest_child_mtime_ms(&project_dir, 1),
+        )?
+    {
         return Ok(WriterResult {
             skipped_fresh: true,
             engines: vec!["claude".into()],
@@ -518,56 +786,16 @@ pub(crate) fn sync_claude_for_workspace(
 
     let titles = read_claude_history_titles(&history_path, workspace_path);
     let mut rows = Vec::new();
+    let mut omitted = Vec::new();
     if project_dir.is_dir() {
-        let mut files: Vec<PathBuf> = fs::read_dir(&project_dir)
-            .map_err(|error| error.to_string())?
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
-            .collect();
-        files.sort_by(|left, right| {
-            file_mtime_ms(right)
-                .cmp(&file_mtime_ms(left))
-                .then_with(|| left.to_string_lossy().cmp(&right.to_string_lossy()))
-        });
+        let mut files = list_claude_project_session_files(&project_dir);
         files.truncate(limit.saturating_mul(2).max(limit));
-        for path in files {
-            let session_id = path
-                .file_stem()
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            if session_id.is_empty() {
-                continue;
-            }
-            let updated_at = file_mtime_ms(&path);
-            let title_from_history = titles.get(&session_id).cloned();
-            let title = title_from_history
-                .clone()
-                .or_else(|| peek_claude_first_user_preview(&path))
-                .unwrap_or_else(|| "Claude Session".to_string());
-            let size_bytes = fs::metadata(&path).ok().map(|metadata| metadata.len());
-            let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
-            rows.push(SessionIndexRow {
-                engine: "claude".into(),
-                session_id: session_id.clone(),
-                title: title.clone(),
-                native_title: title_from_history,
-                updated_at,
-                created_at: None,
-                cwd: Some(workspace_key.clone()),
-                workspace_path: Some(workspace_key),
-                physical_path: Some(path.to_string_lossy().to_string()),
-                parent_session_id: super::shared_visibility::extract_claude_parent_session_id(
-                    &session_id,
-                ),
-                size_bytes,
-            });
-            if rows.len() >= limit {
-                break;
-            }
-        }
+        let collected = collect_claude_index_rows(&files, workspace_path, &titles, Some(limit));
+        rows = collected.0;
+        omitted = collected.1;
+    }
+    if !omitted.is_empty() {
+        delete_engine_session_rows(connection, &omitted)?;
     }
 
     let upserted = upsert_rows(connection, &rows)?;
@@ -629,10 +857,7 @@ fn read_claude_history_titles(
         let Some(display) = display else {
             continue;
         };
-        let timestamp = value
-            .get("timestamp")
-            .and_then(Value::as_i64)
-            .unwrap_or(0);
+        let timestamp = value.get("timestamp").and_then(Value::as_i64).unwrap_or(0);
         let entry = titles
             .entry(session_id.to_string())
             .or_insert((timestamp, display.to_string()));
@@ -647,42 +872,198 @@ fn read_claude_history_titles(
         .collect()
 }
 
+const CLAUDE_INJECTION_ENVELOPE_TAGS: &[&str] = &[
+    "system-reminder",
+    "user_info",
+    "git_status",
+    "open_and_recently_viewed_files",
+    "agent_skills",
+    "mcp_servers",
+    "image_compression_notice",
+    "available_skills",
+    "goal_round",
+    "rules",
+];
+
+pub(crate) fn is_claude_control_or_synthetic_user_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    if is_mossx_program_control_text(trimmed) {
+        return true;
+    }
+    if trimmed.contains("Warmup")
+        || trimmed.contains(
+            "Caveat: The messages below were generated by the user while running local commands",
+        )
+    {
+        return true;
+    }
+    if trimmed.starts_with("<command-") || trimmed.starts_with("<local-command-") {
+        return !has_non_empty_command_args(trimmed);
+    }
+    strip_claude_injection_envelopes(trimmed).is_empty()
+}
+
+fn has_non_empty_command_args(text: &str) -> bool {
+    let Some(start) = text.find("<command-args>") else {
+        return false;
+    };
+    let after = &text[start + "<command-args>".len()..];
+    let Some(end) = after.find("</command-args>") else {
+        return false;
+    };
+    !after[..end].trim().is_empty()
+}
+
+pub(crate) fn strip_claude_injection_envelopes(text: &str) -> String {
+    let mut remaining = text.to_string();
+    for tag in CLAUDE_INJECTION_ENVELOPE_TAGS {
+        remaining = strip_xml_tag_blocks(&remaining, tag);
+    }
+    remaining.trim().to_string()
+}
+
+fn strip_xml_tag_blocks(text: &str, tag: &str) -> String {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    let mut output = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find(&open) {
+        output.push_str(&rest[..start]);
+        let after_open = &rest[start + open.len()..];
+        if let Some(end) = after_open.find(&close) {
+            rest = &after_open[end + close.len()..];
+        } else {
+            rest = "";
+            break;
+        }
+    }
+    output.push_str(rest);
+    output
+}
+
+pub(crate) fn claude_value_has_media_part(value: &Value) -> bool {
+    let content = value
+        .pointer("/message/content")
+        .or_else(|| value.get("content"));
+    let Some(items) = content.and_then(Value::as_array) else {
+        return false;
+    };
+    items.iter().any(|item| {
+        matches!(
+            item.get("type").and_then(Value::as_str),
+            Some("image" | "image_url" | "input_image" | "file" | "document")
+        )
+    })
+}
+
 fn peek_claude_first_user_preview(path: &Path) -> Option<String> {
     let file = File::open(path).ok()?;
-    let reader = BufReader::new(file).take(64 * 1024);
-    for line in reader.lines().flatten().take(40) {
-        if line.len() > 200_000 {
-            continue;
-        }
+    let mut reader = BufReader::new(file);
+    for _ in 0..80 {
+        let line = match read_jsonl_line_capped(&mut reader, 256 * 1024) {
+            Ok(Some(JsonlLine::Text(line))) => line,
+            Ok(Some(JsonlLine::SkippedHuge)) => continue,
+            Ok(None) => break,
+            Err(_) => break,
+        };
         let Ok(value) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
-        let role = value
-            .get("type")
-            .and_then(Value::as_str)
-            .or_else(|| value.get("role").and_then(Value::as_str))
-            .unwrap_or("");
-        if role != "user" && role != "human" {
-            // Claude JSONL often wraps messages; try nested message.role.
-            let nested_role = value
-                .pointer("/message/role")
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            if nested_role != "user" {
-                continue;
-            }
+        if !is_claude_user_or_human_entry(&value) {
+            continue;
         }
         if let Some(text) = extract_text_preview(&value) {
             let trimmed = text.trim();
-            if !trimmed.is_empty() {
-                return Some(truncate_title(trimmed, 80));
+            if !trimmed.is_empty() && !is_claude_control_or_synthetic_user_text(trimmed) {
+                let cleaned = strip_claude_injection_envelopes(trimmed);
+                let preview = if cleaned.is_empty() {
+                    trimmed
+                } else {
+                    cleaned.as_str()
+                };
+                return Some(truncate_title(preview, 80));
             }
+        }
+        if claude_value_has_media_part(&value) {
+            // Image/file-only user turn is real content, but not a usable title.
+            return None;
         }
     }
     None
 }
 
-fn extract_text_preview(value: &Value) -> Option<String> {
+pub(crate) fn is_claude_user_or_human_entry(value: &Value) -> bool {
+    let role = value
+        .get("type")
+        .and_then(Value::as_str)
+        .or_else(|| value.get("role").and_then(Value::as_str))
+        .unwrap_or("");
+    if role == "user" || role == "human" {
+        return true;
+    }
+    matches!(
+        value.pointer("/message/role").and_then(Value::as_str),
+        Some("user" | "human")
+    )
+}
+
+#[derive(Debug)]
+pub(crate) enum JsonlLine {
+    Text(String),
+    SkippedHuge,
+}
+
+/// Read one JSONL line without loading a multi-MB snapshot into a title/scan buffer.
+pub(crate) fn read_jsonl_line_capped(
+    reader: &mut impl BufRead,
+    cap: usize,
+) -> std::io::Result<Option<JsonlLine>> {
+    let mut buf = Vec::new();
+    let mut skipped = false;
+    loop {
+        let available = {
+            let data = reader.fill_buf()?;
+            if data.is_empty() {
+                if buf.is_empty() && !skipped {
+                    return Ok(None);
+                }
+                break;
+            }
+            data.to_vec()
+        };
+        if let Some(nl) = available.iter().position(|&byte| byte == b'\n') {
+            if !skipped {
+                if buf.len().saturating_add(nl) > cap {
+                    skipped = true;
+                } else {
+                    buf.extend_from_slice(&available[..nl]);
+                }
+            }
+            reader.consume(nl + 1);
+            break;
+        }
+        if !skipped {
+            if buf.len().saturating_add(available.len()) > cap {
+                skipped = true;
+            } else {
+                buf.extend_from_slice(&available);
+            }
+        }
+        reader.consume(available.len());
+    }
+    if skipped {
+        Ok(Some(JsonlLine::SkippedHuge))
+    } else {
+        Ok(Some(JsonlLine::Text(
+            String::from_utf8_lossy(&buf).into_owned(),
+        )))
+    }
+}
+
+pub(crate) fn extract_text_preview(value: &Value) -> Option<String> {
     if let Some(text) = value.get("text").and_then(Value::as_str) {
         return Some(text.to_string());
     }
@@ -718,7 +1099,10 @@ fn truncate_title(value: &str, max_chars: usize) -> String {
     if trimmed.chars().count() <= max_chars {
         return trimmed.to_string();
     }
-    let mut out = trimmed.chars().take(max_chars.saturating_sub(1)).collect::<String>();
+    let mut out = trimmed
+        .chars()
+        .take(max_chars.saturating_sub(1))
+        .collect::<String>();
     out.push('…');
     out
 }
@@ -732,7 +1116,10 @@ pub(crate) fn sync_codex_for_workspace(
     force: bool,
 ) -> Result<WriterResult, String> {
     let limit = limit.clamp(1, 500);
-    let source_key = format!("codex:{}", normalize_path_key(&workspace_path.to_string_lossy()));
+    let source_key = format!(
+        "codex:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
     let fingerprint = sessions_roots
         .iter()
         .map(|root| mtime_fingerprint(root))
@@ -747,7 +1134,20 @@ pub(crate) fn sync_codex_for_workspace(
             fingerprint.push_str(&mtime_fingerprint(&index));
         }
     }
-    if !force && source_is_fresh(connection, &source_key, &fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+    let disk_newest = sessions_roots
+        .iter()
+        .filter_map(|root| newest_child_mtime_ms(root, 2))
+        .max();
+    if !force
+        && source_should_skip_as_fresh(
+            connection,
+            &source_key,
+            &fingerprint,
+            "codex",
+            workspace_path,
+            disk_newest,
+        )?
+    {
         return Ok(WriterResult {
             skipped_fresh: true,
             engines: vec!["codex".into()],
@@ -761,33 +1161,8 @@ pub(crate) fn sync_codex_for_workspace(
         limit,
     )?;
     let workspace_key = normalize_path_key(&workspace_path.to_string_lossy());
-    let rows: Vec<SessionIndexRow> = summaries
-        .into_iter()
-        .map(|summary| {
-            let title = summary
-                .native_title
-                .clone()
-                .or(summary.summary.clone())
-                .unwrap_or_else(|| "Codex Session".to_string());
-            SessionIndexRow {
-                engine: "codex".into(),
-                session_id: summary.session_id,
-                title: title.clone(),
-                native_title: summary.native_title.or(summary.summary),
-                updated_at: summary.timestamp,
-                created_at: None,
-                cwd: summary
-                    .cwd
-                    .as_deref()
-                    .map(normalize_path_key)
-                    .or_else(|| Some(workspace_key.clone())),
-                workspace_path: Some(workspace_key.clone()),
-                physical_path: summary.physical_path,
-                parent_session_id: summary.parent_session_id,
-                size_bytes: summary.file_size_bytes,
-            }
-        })
-        .collect();
+    let (rows, omitted) = collect_codex_index_rows(summaries, &workspace_key);
+    delete_engine_session_rows(connection, &omitted)?;
     let upserted = upsert_rows(connection, &rows)?;
     mark_source_synced(connection, &source_key, &fingerprint, rows.len())?;
     Ok(WriterResult {
@@ -822,9 +1197,21 @@ pub(crate) fn sync_kimi_for_workspace(
         })
         .unwrap_or(home);
     let index_path = home.join("session_index.jsonl");
-    let source_key = format!("kimi:{}", normalize_path_key(&workspace_path.to_string_lossy()));
+    let source_key = format!(
+        "kimi:{}",
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
     let fingerprint = mtime_fingerprint(&index_path);
-    if !force && source_is_fresh(connection, &source_key, &fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+    if !force
+        && source_should_skip_as_fresh(
+            connection,
+            &source_key,
+            &fingerprint,
+            "kimi",
+            workspace_path,
+            newest_child_mtime_ms(index_path.parent().unwrap_or(&home), 2),
+        )?
+    {
         return Ok(WriterResult {
             skipped_fresh: true,
             engines: vec!["kimi".into()],
@@ -893,18 +1280,22 @@ pub(crate) fn sync_kimi_for_workspace(
             .filter(|value| !value.is_empty())
             .map(str::to_string)
             .unwrap_or_else(|| "Kimi Session".to_string());
+        let created_at = created_at_from_json_value(&value)
+            .or_else(|| session_dir.as_deref().and_then(optional_file_created_at_ms));
         rows.push(SessionIndexRow {
             engine: "kimi".into(),
             session_id: session_id.to_string(),
             title,
             native_title: None,
             updated_at,
-            created_at: None,
+            created_at,
             cwd: Some(target.clone()),
             workspace_path: Some(target.clone()),
             physical_path: session_dir.map(|path| path.to_string_lossy().to_string()),
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         });
     }
     let upserted = upsert_rows(connection, &rows)?;
@@ -942,14 +1333,134 @@ pub(crate) fn commit_engine_rows(
         engine,
         normalize_path_key(&workspace_path.to_string_lossy())
     );
+    let is_partial = partial_source.is_some();
+    if is_partial && rows.is_empty() {
+        invalidate_source_freshness(connection, &source_key)?;
+        return Ok(WriterResult {
+            upserted: 0,
+            engines: vec![engine],
+            partial_source,
+            skipped_fresh: false,
+        });
+    }
     let upserted = upsert_rows(connection, &rows)?;
-    mark_source_synced(connection, &source_key, fingerprint, rows.len())?;
+    if is_partial {
+        invalidate_source_freshness(connection, &source_key)?;
+    } else {
+        mark_source_synced(connection, &source_key, fingerprint, rows.len())?;
+    }
     Ok(WriterResult {
         upserted,
         engines: vec![engine],
         partial_source,
         skipped_fresh: false,
     })
+}
+
+pub(crate) fn source_should_skip_as_fresh(
+    connection: &Connection,
+    source_key: &str,
+    fingerprint: &str,
+    engine: &str,
+    workspace_path: &Path,
+    disk_newest_mtime: Option<i64>,
+) -> Result<bool, String> {
+    if !source_is_fresh(connection, source_key, fingerprint, SOURCE_FRESH_MAX_AGE_MS)? {
+        return Ok(false);
+    }
+    let Some(disk_newest) = disk_newest_mtime.filter(|value| *value > 0) else {
+        return Ok(true);
+    };
+    let ledger_max =
+        max_updated_at_for_engine(connection, engine, &workspace_path.to_string_lossy())?;
+    match ledger_max {
+        Some(max) if disk_newest <= max => Ok(true),
+        _ => Ok(false),
+    }
+}
+
+fn newest_child_mtime_ms(dir: &Path, extra_depth: usize) -> Option<i64> {
+    if !dir.exists() {
+        return None;
+    }
+    let mut newest = file_mtime_ms(dir);
+    let Ok(entries) = fs::read_dir(dir) else {
+        return (newest > 0).then_some(newest);
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path
+            .file_name()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if name.starts_with('.') {
+            continue;
+        }
+        let mtime = file_mtime_ms(&path);
+        if mtime > newest {
+            newest = mtime;
+        }
+        if extra_depth > 0 && path.is_dir() {
+            if let Some(child) = newest_child_mtime_ms(&path, extra_depth.saturating_sub(1)) {
+                if child > newest {
+                    newest = child;
+                }
+            }
+        }
+    }
+    (newest > 0).then_some(newest)
+}
+
+fn peek_engine_disk_newest_mtime(engine: &str, workspace_path: &Path) -> Option<i64> {
+    match engine.trim().to_ascii_lowercase().as_str() {
+        "gemini" => {
+            let home = std::env::var("GEMINI_HOME")
+                .ok()
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".gemini")))
+                .unwrap_or_else(|| PathBuf::from(".gemini"));
+            newest_child_mtime_ms(&home, 2)
+        }
+        "grok" => {
+            let home = std::env::var("GROK_HOME")
+                .ok()
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".grok")))
+                .unwrap_or_else(|| PathBuf::from(".grok"));
+            newest_child_mtime_ms(&home.join("sessions"), 2)
+                .or_else(|| newest_child_mtime_ms(&home, 2))
+        }
+        "pi" => {
+            let sessions = crate::engine::pi_history::resolve_pi_sessions_root(None);
+            newest_child_mtime_ms(&sessions, 2)
+        }
+        "dsh" => {
+            let home = std::env::var_os("DSH_HOME")
+                .map(PathBuf::from)
+                .or_else(|| dirs::home_dir().map(|home| home.join(".dsh")))
+                .unwrap_or_else(|| PathBuf::from(".dsh"));
+            newest_child_mtime_ms(&home, 2)
+        }
+        "claude" => {
+            let claude_home = crate::claude_home::resolve_effective_claude_home(None)?;
+            let encoded = encode_project_path(&workspace_path.to_string_lossy());
+            newest_child_mtime_ms(&claude_home.join("projects").join(encoded), 1)
+        }
+        "kimi" => {
+            let home = std::env::var("KIMI_HOME")
+                .ok()
+                .and_then(|value| {
+                    let trimmed = value.trim();
+                    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
+                })
+                .or_else(|| dirs::home_dir().map(|home| home.join(".kimi")))
+                .unwrap_or_else(|| PathBuf::from(".kimi"));
+            newest_child_mtime_ms(&home, 2)
+        }
+        // OpenCode has no durable disk index (15s fingerprint bucket).
+        // Codex writers pass session-root child mtimes directly.
+        _ => None,
+    }
 }
 
 pub(crate) fn engine_source_is_fresh(
@@ -963,7 +1474,33 @@ pub(crate) fn engine_source_is_fresh(
         engine.trim().to_ascii_lowercase(),
         normalize_path_key(&workspace_path.to_string_lossy())
     );
-    source_is_fresh(connection, &source_key, fingerprint, SOURCE_FRESH_MAX_AGE_MS)
+    source_is_fresh(
+        connection,
+        &source_key,
+        fingerprint,
+        SOURCE_FRESH_MAX_AGE_MS,
+    )
+}
+
+pub(crate) fn engine_source_should_skip(
+    connection: &Connection,
+    engine: &str,
+    workspace_path: &Path,
+    fingerprint: &str,
+) -> Result<bool, String> {
+    let source_key = format!(
+        "{}:{}",
+        engine.trim().to_ascii_lowercase(),
+        normalize_path_key(&workspace_path.to_string_lossy())
+    );
+    source_should_skip_as_fresh(
+        connection,
+        &source_key,
+        fingerprint,
+        engine,
+        workspace_path,
+        peek_engine_disk_newest_mtime(engine, workspace_path),
+    )
 }
 
 pub(crate) fn gemini_home_fingerprint() -> String {
@@ -1076,6 +1613,8 @@ pub(crate) fn rows_from_gemini_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: session.file_size_bytes,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1109,6 +1648,8 @@ pub(crate) fn rows_from_pi_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: session.file_size_bytes,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1142,6 +1683,8 @@ pub(crate) fn rows_from_dsh_summaries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: None,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1175,6 +1718,8 @@ pub(crate) fn rows_from_grok_summaries(
                 physical_path: None,
                 parent_session_id: session.parent_session_id.clone(),
                 size_bytes: session.file_size_bytes,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1214,6 +1759,8 @@ pub(crate) fn rows_from_opencode_entries(
                 physical_path: None,
                 parent_session_id: None,
                 size_bytes: None,
+                provider_profile_id: None,
+                provider_profile_name: None,
             }
         })
         .collect()
@@ -1242,8 +1789,32 @@ pub(crate) fn invalidate_workspace_sources(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::store::mark_source_synced;
+    use super::*;
+
+    #[test]
+    fn claude_index_row_writes_file_birthtime_as_created_at() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-created-at-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("sess-created-at.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hello created at"}]}}
+"#,
+        )
+        .expect("write");
+        let row =
+            claude_index_row_from_file(&path, Path::new("/tmp/ws"), &HashMap::new()).expect("row");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(row.created_at.unwrap_or(0) > 0);
+        assert!(row.updated_at > 0);
+    }
 
     #[test]
     fn rows_from_pi_summaries_prefix_engine_and_title() {
@@ -1279,9 +1850,8 @@ mod tests {
                 created_at: 1_786_896_696_172,
                 message_count: 0,
                 engine: Some("dsh".into()),
-                canonical_session_id: Some(
-                    "session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into(),
-                ),
+                canonical_session_id: Some("session-aba863d5-ef07-4a41-94a6-4dc7c2226d3d".into()),
+                agent_preset: None,
             }],
         );
         assert_eq!(rows.len(), 1);
@@ -1351,5 +1921,305 @@ mod tests {
         assert!(
             !engine_source_is_fresh(&connection, "pi", workspace, "fp-a").expect("invalidated")
         );
+    }
+
+    #[test]
+    fn commit_engine_rows_timeout_does_not_wipe_or_mark_fresh() {
+        let connection = Connection::open_in_memory().expect("db");
+        connection
+            .execute_batch(super::super::store::DDL)
+            .expect("ddl");
+        let workspace = Path::new(r"C:\Users\me\proj");
+        let existing = SessionIndexRow {
+            engine: "grok".into(),
+            session_id: "grok-keep".into(),
+            title: "keep".into(),
+            native_title: None,
+            updated_at: 200,
+            created_at: None,
+            cwd: Some(r"C:\Users\me\proj".into()),
+            workspace_path: Some(r"C:\Users\me\proj".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        };
+        upsert_rows(&connection, &[existing]).expect("seed");
+        mark_source_synced(&connection, "grok:c:/users/me/proj", "fp-ok", 1).expect("mark");
+        assert!(engine_source_is_fresh(&connection, "grok", workspace, "fp-ok").expect("fresh"));
+
+        let result = commit_engine_rows(
+            &connection,
+            "grok",
+            workspace,
+            Vec::new(),
+            "fp-ok",
+            Some("grok-sync-timeout".into()),
+        )
+        .expect("timeout commit");
+        assert_eq!(result.upserted, 0);
+        assert_eq!(result.partial_source.as_deref(), Some("grok-sync-timeout"));
+        assert!(
+            !engine_source_is_fresh(&connection, "grok", workspace, "fp-ok")
+                .expect("must not stay fresh")
+        );
+        let listed =
+            super::super::store::list_for_workspace_path(&connection, r"C:\Users\me\proj", 10)
+                .expect("list");
+        assert!(
+            listed.iter().any(|row| row.session_id == "grok-keep"),
+            "timeout empty commit must not wipe indexed grok rows: {listed:?}"
+        );
+    }
+
+    #[test]
+    fn root_fresh_but_child_newer_does_not_skip() {
+        let connection = Connection::open_in_memory().expect("db");
+        connection
+            .execute_batch(super::super::store::DDL)
+            .expect("ddl");
+        let workspace = Path::new("/tmp/ccgui-fresh-child");
+        let existing = SessionIndexRow {
+            engine: "grok".into(),
+            session_id: "old".into(),
+            title: "old".into(),
+            native_title: None,
+            updated_at: 100,
+            created_at: None,
+            cwd: Some("/tmp/ccgui-fresh-child".into()),
+            workspace_path: Some("/tmp/ccgui-fresh-child".into()),
+            physical_path: None,
+            parent_session_id: None,
+            size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
+        };
+        upsert_rows(&connection, &[existing]).expect("seed");
+        mark_source_synced(&connection, "grok:/tmp/ccgui-fresh-child", "fp-root", 1).expect("mark");
+        assert!(engine_source_is_fresh(&connection, "grok", workspace, "fp-root").expect("fp"));
+        assert!(
+            !source_should_skip_as_fresh(
+                &connection,
+                "grok:/tmp/ccgui-fresh-child",
+                "fp-root",
+                "grok",
+                workspace,
+                Some(200),
+            )
+            .expect("child newer"),
+            "root fingerprint fresh + child newer than ledger must not skip"
+        );
+        assert!(
+            source_should_skip_as_fresh(
+                &connection,
+                "grok:/tmp/ccgui-fresh-child",
+                "fp-root",
+                "grok",
+                workspace,
+                Some(50),
+            )
+            .expect("child older"),
+            "child older than ledger may stay skipped"
+        );
+    }
+
+    #[test]
+    fn claude_injection_envelopes_are_synthetic_but_real_prompt_is_not() {
+        assert!(is_claude_control_or_synthetic_user_text(
+            "<system-reminder>\nInstructions from: AGENTS.md\n</system-reminder>"
+        ));
+        assert!(is_claude_control_or_synthetic_user_text(
+            "<user_info>\nOS Version: macos\n</user_info>"
+        ));
+        assert!(is_claude_control_or_synthetic_user_text("Warmup"));
+        assert!(is_claude_control_or_synthetic_user_text(
+            "<command-name>/resume</command-name>"
+        ));
+        assert!(!is_claude_control_or_synthetic_user_text(
+            "<command-message>review</command-message>\n<command-name>/review</command-name>\n<command-args>看一下这个 PR</command-args>"
+        ));
+        assert!(!is_claude_control_or_synthetic_user_text(
+            "<system-reminder>ctx</system-reminder>\n请帮我看一下列表"
+        ));
+        assert!(!is_claude_control_or_synthetic_user_text("你好"));
+        assert!(is_claude_control_or_synthetic_user_text(
+            "MOSSX_CONTEXT_PACKAGE:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ));
+        assert!(is_claude_control_or_synthetic_user_text("MOSSX_CONTE"));
+        assert!(super::is_mossx_shared_protocol_owner_text(
+            "MOSSX_CONTEXT_PACKAGE:sha256:dead"
+        ));
+        assert!(super::is_mossx_shared_protocol_owner_text(
+            "MOSSX_SHARED_CONTEXT_V1\nsession:x"
+        ));
+        assert!(!super::is_mossx_shared_protocol_owner_text("MOSSX_CONTE"));
+        assert!(!super::is_mossx_shared_protocol_owner_text("继续"));
+    }
+
+    #[test]
+    fn claude_index_skips_empty_control_plane_and_agent_jsonl() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-omit-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let empty = dir.join("empty-uuid.jsonl");
+        std::fs::write(&empty, "").expect("empty");
+        let control = dir.join("control-uuid.jsonl");
+        std::fs::write(
+            &control,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"MOSSX_CONTEXT_PACKAGE:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}}
+"#,
+        )
+        .expect("control");
+        let agent = dir.join("agent-deadbeef.jsonl");
+        std::fs::write(
+            &agent,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"子代理分析"}]}}
+"#,
+        )
+        .expect("agent");
+        let real = dir.join("real-uuid.jsonl");
+        std::fs::write(
+            &real,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"分析左侧栏消失问题"}]}}
+"#,
+        )
+        .expect("real");
+
+        let ws = Path::new("/tmp/ws");
+        let titles = HashMap::new();
+        assert!(claude_index_row_from_file(&empty, ws, &titles).is_none());
+        let control_row = claude_index_row_from_file(&control, ws, &titles).expect("keep mossx owner for protocol hide");
+        assert!(control_row.title.starts_with("MOSSX_CONTEXT_PACKAGE"));
+        assert!(control_row.native_title.is_none());
+        assert!(claude_index_row_from_file(&agent, ws, &titles).is_none());
+        let imported = claude_index_row_from_file(&real, ws, &titles).expect("real row");
+        assert_eq!(imported.title, "分析左侧栏消失问题");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn claude_index_keeps_mossx_title_when_history_says_continue() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-mossx-continue-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("1807f883-011c-46bd-94d5-ff483ffb1a4a.jsonl");
+        std::fs::write(
+            &path,
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"MOSSX_CONTEXT_PACKAGE:sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef:sha256:cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe\nMOSSX_SHARED_CONTEXT_V1\nsession:267c001d-932a-4a05-bfa9-a238937f7707\nbinding:claude:c65677af-c64e-4fce-9e34-76f1cd1a7c7f\n\nCurrent user request:\n继续"}]}}
+"#,
+        )
+        .expect("write");
+        let mut titles = HashMap::new();
+        titles.insert(
+            "1807f883-011c-46bd-94d5-ff483ffb1a4a".into(),
+            "继续".into(),
+        );
+        let row = claude_index_row_from_file(&path, Path::new("/tmp/ws"), &titles)
+            .expect("protocol owner stays in index");
+        assert!(
+            row.title.starts_with("MOSSX_CONTEXT_PACKAGE"),
+            "history 继续 must not replace protocol title: {}",
+            row.title
+        );
+        assert_ne!(row.title, "继续");
+        assert!(row.native_title.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn claude_index_omits_history_title_that_is_mossx_control_plane() {
+        let dir = std::env::temp_dir().join(format!(
+            "claude-omit-history-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("history-control.jsonl");
+        std::fs::write(&path, "{\"type\":\"assistant\"}\n").expect("write");
+        let mut titles = HashMap::new();
+        titles.insert(
+            "history-control".into(),
+            "MOSSX_CONTEXT_PACKAGE:sha25…".into(),
+        );
+        assert!(claude_index_row_from_file(&path, Path::new("/tmp/ws"), &titles).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn sample_codex_summary(
+        session_id: &str,
+        title: Option<&str>,
+    ) -> crate::types::LocalUsageSessionSummary {
+        crate::types::LocalUsageSessionSummary {
+            session_id: session_id.into(),
+            session_id_aliases: vec![],
+            parent_session_id: None,
+            timestamp: 1,
+            cwd: Some("/tmp/ws".into()),
+            model: "gpt-5.1".into(),
+            usage: Default::default(),
+            cost: 0.0,
+            summary: title.map(str::to_string),
+            native_title: None,
+            source: None,
+            provider: None,
+            provider_profile_id: None,
+            provider_profile_source: None,
+            provider_profile_name: None,
+            provider_availability: None,
+            physical_path: None,
+            file_size_bytes: None,
+            modified_lines: 0,
+        }
+    }
+
+    #[test]
+    fn should_omit_codex_index_title_filters_empty_helpers_and_mossx() {
+        assert!(should_omit_codex_index_title(""));
+        assert!(should_omit_codex_index_title("Codex Session"));
+        assert!(should_omit_codex_index_title("codex session"));
+        assert!(should_omit_codex_index_title("MOSSX_CONTEXT_PACKAGE:sha25"));
+        assert!(should_omit_codex_index_title(
+            "Generate a concise title for a coding chat thread from the first user message."
+        ));
+        assert!(should_omit_codex_index_title(
+            "You are generating OpenSpec project context."
+        ));
+        assert!(!should_omit_codex_index_title("分析左侧栏消失问题"));
+        assert!(!should_omit_codex_index_title("Aristotle"));
+    }
+
+    #[test]
+    fn collect_codex_index_rows_omits_empty_helpers_and_keeps_real() {
+        let (rows, omitted) = collect_codex_index_rows(
+            vec![
+                sample_codex_summary("empty", None),
+                sample_codex_summary("generic", Some("Codex Session")),
+                sample_codex_summary("mossx", Some("MOSSX_CONTEXT_PACKAGE:sha25")),
+                sample_codex_summary(
+                    "helper",
+                    Some("You are generating OpenSpec project context."),
+                ),
+                sample_codex_summary("real", Some("分析左侧栏消失问题")),
+                sample_codex_summary("nick", Some("Aristotle")),
+            ],
+            "/tmp/ws",
+        );
+        let kept: Vec<&str> = rows.iter().map(|row| row.session_id.as_str()).collect();
+        assert_eq!(kept, vec!["real", "nick"]);
+        let omitted_ids: Vec<&str> = omitted.iter().map(|(_, id)| id.as_str()).collect();
+        assert_eq!(omitted_ids, vec!["empty", "generic", "mossx", "helper"]);
     }
 }

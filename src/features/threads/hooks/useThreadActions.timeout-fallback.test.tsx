@@ -7,7 +7,10 @@ import {
   createWorkspaceDirectory,
   getOpenCodeSessionList,
   listClaudeSessions,
+  listDshSessions,
   listGeminiSessions,
+  listPiSessions,
+  listSessionIndexForWorkspace,
   listThreadTitles,
   listThreads,
   listWorkspaceSessions,
@@ -38,6 +41,19 @@ vi.mock("../../../services/tauri", () => ({
   listGeminiSessions: vi.fn(),
   listKimiSessions: vi.fn(),
   listGrokSessions: vi.fn(),
+  listDshSessions: vi.fn(),
+  listPiSessions: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(async () => ({
+    data: [],
+    source: "session-index",
+    synced: false,
+    engines: [],
+    visibility: {
+      available: true,
+      freshness: "verified",
+      hiddenNativeIds: [],
+    },
+  })),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listWorkspaceSessionArchiveEvidence: vi.fn(),
@@ -92,6 +108,17 @@ vi.mock("../../../services/globalRuntimeNotices", async () => {
 });
 
 const NEVER_RESOLVES = () => new Promise<never>(() => {});
+
+/**
+ * Index / titles / shared / Claude are sequential 30s `withTimeout` races.
+ * One 30s advance can be consumed by Index under fake timers before Claude
+ * is even scheduled; flush the whole chain so last-good tests stay deterministic.
+ */
+async function flushSequentialSidebarTimeouts(times = 4) {
+  for (let i = 0; i < times; i += 1) {
+    await vi.advanceTimersByTimeAsync(30_001);
+  }
+}
 
 function makeCachedClaudeSummary(idSuffix: string, updatedAt: number) {
   return {
@@ -169,6 +196,19 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
     vi.mocked(listSharedSessions).mockResolvedValue([]);
     vi.mocked(listClaudeSessions).mockResolvedValue([]);
     vi.mocked(listGeminiSessions).mockResolvedValue([]);
+    vi.mocked(listPiSessions).mockResolvedValue([]);
+    vi.mocked(listDshSessions).mockResolvedValue([]);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
     vi.mocked(getOpenCodeSessionList).mockResolvedValue([]);
     vi.mocked(listWorkspaceSessions).mockResolvedValue({
       data: [],
@@ -250,7 +290,7 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
       preserveState: true,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_001);
+      await flushSequentialSidebarTimeouts();
     });
     vi.useRealTimers();
     await act(async () => {
@@ -366,7 +406,7 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
       preserveState: true,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_001);
+      await flushSequentialSidebarTimeouts();
     });
     vi.useRealTimers();
     await act(async () => {
@@ -397,7 +437,7 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
       preserveState: true,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_001);
+      await flushSequentialSidebarTimeouts();
     });
     vi.useRealTimers();
     await act(async () => {
@@ -435,7 +475,7 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
       preserveState: true,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_001);
+      await flushSequentialSidebarTimeouts();
     });
     vi.useRealTimers();
     await act(async () => {
@@ -541,7 +581,7 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
       preserveState: true,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_001);
+      await flushSequentialSidebarTimeouts();
     });
     vi.useRealTimers();
     await act(async () => {
@@ -785,7 +825,7 @@ describe("useThreadActions sidebar listing timeout fallback", () => {
       preserveState: true,
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(30_001);
+      await flushSequentialSidebarTimeouts();
     });
     vi.useRealTimers();
     await act(async () => {

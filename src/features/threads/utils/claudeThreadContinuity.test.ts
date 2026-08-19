@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   isClaudeThreadId,
   resolveClaudeContinuationThreadId,
+  shouldShowHistoryLoadingForSelectionThread,
 } from "./claudeThreadContinuity";
 
 describe("claudeThreadContinuity", () => {
@@ -9,6 +10,33 @@ describe("claudeThreadContinuity", () => {
     expect(isClaudeThreadId("claude:session-1")).toBe(true);
     expect(isClaudeThreadId("claude-pending-1")).toBe(true);
     expect(isClaudeThreadId("thread-1")).toBe(false);
+  });
+
+  it("shows history loading for Claude, Shared, and DSH history selections but not pending threads", () => {
+    expect(shouldShowHistoryLoadingForSelectionThread("claude:session-1")).toBe(
+      true,
+    );
+    expect(
+      shouldShowHistoryLoadingForSelectionThread("claude-pending-1"),
+    ).toBe(false);
+    expect(shouldShowHistoryLoadingForSelectionThread("shared:session-1")).toBe(
+      true,
+    );
+    expect(shouldShowHistoryLoadingForSelectionThread("thread-history")).toBe(
+      true,
+    );
+    expect(shouldShowHistoryLoadingForSelectionThread("dsh:session-1")).toBe(
+      true,
+    );
+    expect(shouldShowHistoryLoadingForSelectionThread("dsh-pending-1")).toBe(
+      false,
+    );
+    expect(shouldShowHistoryLoadingForSelectionThread("gemini:session-1")).toBe(
+      false,
+    );
+    expect(
+      shouldShowHistoryLoadingForSelectionThread("opencode:session-1"),
+    ).toBe(false);
   });
 
   it("prefers persisted canonical aliases for Claude continuation", () => {

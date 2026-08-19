@@ -195,9 +195,13 @@ export {
   invalidateSessionIndexForWorkspace,
   listSessionIndexForWorkspace,
   syncSessionIndexForWorkspace,
+  isLocalPendingDraftSessionId,
+  scheduleTombstoneLocalPendingDraftIndexRow,
   tombstoneSessionIndexRows,
   upsertSessionIndexRows,
+  rememberSessionIndexWorkspacePath,
   writeClientCreatedSessionIndex,
+  writeRemappedClientSessionIndex,
 } from "./tauri/sessionIndex";
 export type { CodexRuntimeReloadResult, DockIconApplyResult, SettingsRecoveryNotice } from "./tauri/settings";
 export { getAppSettings, getCodexConfigPath, getCodexUnifiedExecExternalStatus, reloadCodexRuntimeConfig, restoreCodexUnifiedExecOfficialDefault, setCodexUnifiedExecOfficialOverride, setDockIcon, takeSettingsRecoveryNotice, updateAppSettings } from "./tauri/settings";

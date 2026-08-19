@@ -1,13 +1,21 @@
 // @vitest-environment jsdom
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { ThreadSummary } from "../../../types";
+import {
+  rememberVerifiedSharedHide,
+  resetSharedNativeVisibilityMemory,
+} from "../../threads/hooks/sharedNativeVisibility";
 import { useThreadRows } from "./useThreadRows";
 
 const getPinTimestamp = () => null;
 
 describe("useThreadRows", () => {
+  afterEach(() => {
+    resetSharedNativeVisibilityMemory();
+  });
+
   it("renders Codex subagent sessions under one parent root", () => {
     const parent: ThreadSummary = {
       id: "parent-session",
@@ -38,41 +46,33 @@ describe("useThreadRows", () => {
     ]);
   });
 
-  it("keeps a recent child session visible by sorting roots by subtree activity", () => {
-    const parent: ThreadSummary = {
-      id: "claude:parent",
-      name: "Older parent",
-      updatedAt: 100,
+  it("sorts roots by createdAt so later activity does not reshuffle the list", () => {
+    const older: ThreadSummary = {
+      id: "claude:older",
+      name: "Older session",
+      createdAt: 100,
+      updatedAt: 9_000,
       engineSource: "claude",
     };
-    const child: ThreadSummary = {
-      id: "claude:child",
-      name: "Recent child",
-      parentThreadId: "claude:parent",
-      updatedAt: 1_000,
-      engineSource: "claude",
-    };
-    const unrelated: ThreadSummary = {
-      id: "codex:unrelated",
-      name: "Middle unrelated",
-      updatedAt: 500,
+    const newer: ThreadSummary = {
+      id: "codex:newer",
+      name: "Newer session",
+      createdAt: 500,
+      updatedAt: 600,
       engineSource: "codex",
     };
 
     const { result } = renderHook(() => useThreadRows({}));
     const rows = result.current.getThreadRows(
-      [parent, child, unrelated],
+      [older, newer],
       false,
       "ws-1",
       getPinTimestamp,
-      1,
     );
 
-    expect(rows.totalRoots).toBe(2);
-    expect(rows.hasMoreRoots).toBe(true);
-    expect(rows.unpinnedRows.map((row) => [row.thread.id, row.depth])).toEqual([
-      ["claude:parent", 0],
-      ["claude:child", 1],
+    expect(rows.unpinnedRows.map((row) => row.thread.id)).toEqual([
+      "codex:newer",
+      "claude:older",
     ]);
   });
 
@@ -134,5 +134,144 @@ describe("useThreadRows", () => {
     const sharedRow = rows.unpinnedRows.find((row) => row.thread.id === "shared:s1");
     expect(sharedRow?.hasChildren).toBe(false);
     expect(rows.totalRoots).toBe(2);
+  });
+
+  it("hides Shared Codex pups whose parent is a rollout stem alias on any OS", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const shared: ThreadSummary = {
+      id: "shared:s-codex",
+      name: "Shared Codex",
+      updatedAt: 300,
+      engineSource: "codex",
+      threadKind: "shared",
+      nativeThreadIds: [`codex:${uuid}`],
+    };
+    const windowsLivePup: ThreadSummary = {
+      id: `codex:${rolloutStem}-child`,
+      name: "Socrates",
+      parentThreadId: rolloutStem,
+      updatedAt: 400,
+      engineSource: "codex",
+    };
+    const prefixedStemPup: ThreadSummary = {
+      id: "child-singer",
+      name: "Singer",
+      parentThreadId: `codex:${rolloutStem}`,
+      updatedAt: 390,
+      engineSource: "codex",
+    };
+    const nativeParent: ThreadSummary = {
+      id: "codex:visible-parent",
+      name: "Native Parent",
+      updatedAt: 100,
+      engineSource: "codex",
+    };
+    const nativeChild: ThreadSummary = {
+      id: "codex:visible-child",
+      name: "Native Child",
+      parentThreadId: "codex:visible-parent",
+      updatedAt: 200,
+      engineSource: "codex",
+    };
+
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [shared, windowsLivePup, prefixedStemPup, nativeParent, nativeChild],
+      true,
+      "ws-1",
+      getPinTimestamp,
+    );
+
+    const visibleIds = rows.unpinnedRows.map((row) => row.thread.id);
+    expect(visibleIds).toEqual([
+      "shared:s-codex",
+      "codex:visible-parent",
+      "codex:visible-child",
+    ]);
+    expect(visibleIds).not.toContain(windowsLivePup.id);
+    expect(visibleIds).not.toContain("child-singer");
+  });
+
+  it("does not promote Claude subagent when protocol owner is missing from the list", () => {
+    const fileUuid = "1807f883-011c-46bd-94d5-ff483ffb1a4a";
+    rememberVerifiedSharedHide(
+      "ws-protocol",
+      new Set([fileUuid, `claude:${fileUuid}`]),
+    );
+    const shared: ThreadSummary = {
+      id: "shared:267c001d-932a-4a05-bfa9-a238937f7707",
+      name: "Shared",
+      updatedAt: 300,
+      engineSource: "claude",
+      threadKind: "shared",
+      nativeThreadIds: ["claude:c65677af-c64e-4fce-9e34-76f1cd1a7c7f"],
+    };
+    const pup: ThreadSummary = {
+      id: `claude:subagent:${fileUuid}:agent-a0f4436c38b58a97e`,
+      name: "调研 Zen 代理",
+      parentThreadId: `claude:${fileUuid}`,
+      updatedAt: 400,
+      engineSource: "claude",
+    };
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [shared, pup],
+      true,
+      "ws-protocol",
+      getPinTimestamp,
+    );
+    const visibleIds = rows.unpinnedRows.map((row) => row.thread.id);
+    expect(visibleIds).toEqual(["shared:267c001d-932a-4a05-bfa9-a238937f7707"]);
+    expect(visibleIds).not.toContain(pup.id);
+  });
+
+  it("keeps local Socrates and Singer under their TUI/Desktop parents", () => {
+    const desktopParent: ThreadSummary = {
+      id: "01a00d6c-205e-7492-b344-dccefed9909d",
+      name: "Desktop parent",
+      updatedAt: 100,
+      engineSource: "codex",
+    };
+    const socrates: ThreadSummary = {
+      id: "01a00d8f-7e8d-7481-bb59-9d3f79e4b51b",
+      name: "Socrates",
+      parentThreadId: "01a00d6c-205e-7492-b344-dccefed9909d",
+      updatedAt: 200,
+      engineSource: "codex",
+    };
+    const tuiParent: ThreadSummary = {
+      id: "019fc7da-75f2-73a3-8793-9a8705e33a18",
+      name: "TUI parent",
+      updatedAt: 90,
+      engineSource: "codex",
+    };
+    const singer: ThreadSummary = {
+      id: "019fc810-0a87-7542-8cf3-5a70454f2fa4",
+      name: "Singer",
+      parentThreadId: "019fc7da-75f2-73a3-8793-9a8705e33a18",
+      updatedAt: 180,
+      engineSource: "codex",
+    };
+    rememberVerifiedSharedHide(
+      "ws-native-codex",
+      new Set(["1807f883-011c-46bd-94d5-ff483ffb1a4a", "claude:hidden-owner"]),
+    );
+    const { result } = renderHook(() => useThreadRows({}));
+    const rows = result.current.getThreadRows(
+      [desktopParent, socrates, tuiParent, singer],
+      true,
+      "ws-native-codex",
+      getPinTimestamp,
+    );
+    const visible = rows.unpinnedRows.map((row) => [row.thread.id, row.depth]);
+    expect(visible).toEqual(
+      expect.arrayContaining([
+        ["01a00d6c-205e-7492-b344-dccefed9909d", 0],
+        ["01a00d8f-7e8d-7481-bb59-9d3f79e4b51b", 1],
+        ["019fc7da-75f2-73a3-8793-9a8705e33a18", 0],
+        ["019fc810-0a87-7542-8cf3-5a70454f2fa4", 1],
+      ]),
+    );
   });
 });

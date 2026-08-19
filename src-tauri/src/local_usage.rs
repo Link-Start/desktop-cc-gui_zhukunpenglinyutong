@@ -48,6 +48,16 @@ const CODEX_THREAD_PREVIEW_MAX_BYTES: u64 = 256 * 1024;
 const CODEX_BOUNDED_CANDIDATE_LOOKAHEAD: usize = 20;
 const CODEX_PROVIDER_PROFILE_SOURCE_MANAGED: &str = "managed";
 const CODEX_PROVIDER_PROFILE_AVAILABILITY_UNKNOWN: &str = "unknown";
+const CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES: &[&str] = &[
+    "Generate a concise title for a coding chat thread from the first user message.",
+    "You create concise run metadata for a coding task.",
+    "You are generating OpenSpec project context.",
+    "## Memory Writing Agent: Phase 2",
+    "Memory Writing Agent: Phase 2",
+    "Please generate a commit message.",
+    "请生成一次提交（commit）信息",
+    "Generate a concise git commit message for the following changes.",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CodexSessionParseMode {
@@ -905,20 +915,23 @@ fn collect_codex_jsonl_candidates_recent_first(
         return candidates;
     }
 
+    // Per-root 公平收集：每个 root 各自 recent-first 取 ≤ max_candidates，
+    // 再全局 mtime 排序 + truncate。禁止「第一个 root 填满就 break」——
+    // 主 home sessions/archived 膨胀会饿死靠后的 codex-provider-homes roots，
+    // 导致 managed provider 会话永远进不了 Index（P0 回归 30b41e1b5）。
     let mut seen = HashSet::new();
     let mut candidates = Vec::new();
     for root in sessions_roots {
-        if candidates.len() >= max_candidates {
-            break;
-        }
         let codex_home = codex_home_for_sessions_root(root);
+        let mut root_candidates = Vec::new();
         collect_codex_jsonl_candidates_from_root_recent_first(
             root,
             codex_home.as_ref(),
             max_candidates,
             &mut seen,
-            &mut candidates,
+            &mut root_candidates,
         );
+        candidates.extend(root_candidates);
     }
     candidates.sort_by(|left, right| {
         right.modified_at.cmp(&left.modified_at).then_with(|| {
@@ -1649,7 +1662,7 @@ fn parse_codex_session_summary_with_mode(
     }))
 }
 
-fn infer_managed_codex_provider_profile_id_from_session_path(path: &Path) -> Option<String> {
+pub(crate) fn infer_managed_codex_provider_profile_id_from_session_path(path: &Path) -> Option<String> {
     for ancestor in path.ancestors() {
         let segment = ancestor.file_name().and_then(|value| value.to_str())?;
         if segment != "sessions" && segment != "archived_sessions" {
@@ -2099,6 +2112,34 @@ fn is_codex_session_title_candidate(text: &str) -> bool {
         return false;
     }
     true
+}
+
+pub(crate) fn is_codex_background_helper_text(value: &str) -> bool {
+    let preview = value.trim();
+    if preview.is_empty() {
+        return false;
+    }
+    if CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES
+        .iter()
+        .any(|prefix| preview.starts_with(prefix))
+    {
+        return true;
+    }
+    let lower = preview.to_ascii_lowercase();
+    let starts_with_memory_agent_header =
+        lower.starts_with("## memory writing agent:") || lower.starts_with("memory writing agent:");
+    starts_with_memory_agent_header
+        && (lower.contains("consolidation") || lower.contains("phase 2"))
+}
+
+/// Native title or first user preview Codex would show in the sidebar.
+pub(crate) fn peek_codex_session_titles(
+    path: &Path,
+) -> Result<Option<(Option<String>, Option<String>)>, String> {
+    Ok(
+        parse_codex_session_summary_with_mode(path, None, CodexSessionParseMode::ThreadPreview)?
+            .map(|summary| (summary.native_title, summary.summary)),
+    )
 }
 
 fn extract_codex_message_text(payload: &serde_json::Map<String, Value>) -> Option<String> {

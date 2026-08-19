@@ -21,13 +21,7 @@ const UNIFIED_CODEX_SCAN_LOOKAHEAD: usize = 20;
 const LOCAL_SESSION_SCAN_FALLBACK_TIMEOUT_MS: u64 = 5_000;
 const LOCAL_SESSION_SCAN_UNAVAILABLE_PARTIAL_SOURCE: &str = "local-session-scan-unavailable";
 const LIVE_THREAD_LIST_UNAVAILABLE_PARTIAL_SOURCE: &str = "live-thread-list-unavailable";
-const CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES: &[&str] = &[
-    "Generate a concise title for a coding chat thread from the first user message.",
-    "You create concise run metadata for a coding task.",
-    "You are generating OpenSpec project context.",
-    "## Memory Writing Agent: Phase 2",
-    "Memory Writing Agent: Phase 2",
-];
+
 
 static WORKSPACE_CODEX_SESSION_ID_CACHE: OnceLock<Mutex<HashMap<String, HashSet<String>>>> =
     OnceLock::new();
@@ -240,21 +234,7 @@ fn apply_thread_entry_provider_bindings(
 }
 
 fn is_codex_background_helper_text(value: &str) -> bool {
-    let preview = value.trim();
-    if preview.is_empty() {
-        return false;
-    }
-    if CODEX_BACKGROUND_HELPER_PROMPT_PREFIXES
-        .iter()
-        .any(|prefix| preview.starts_with(prefix))
-    {
-        return true;
-    }
-    let lower = preview.to_ascii_lowercase();
-    let starts_with_memory_agent_header =
-        lower.starts_with("## memory writing agent:") || lower.starts_with("memory writing agent:");
-    starts_with_memory_agent_header
-        && (lower.contains("consolidation") || lower.contains("phase 2"))
+    crate::local_usage::is_codex_background_helper_text(value)
 }
 
 fn is_codex_background_helper_thread_entry(entry: &Value) -> bool {

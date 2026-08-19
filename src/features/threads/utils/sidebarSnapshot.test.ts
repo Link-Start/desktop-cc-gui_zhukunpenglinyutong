@@ -27,7 +27,7 @@ describe("sidebarSnapshot", () => {
         },
       ],
       threadsByWorkspace: {
-        "ws-1": [{ id: "t-1", name: "Chat", updatedAt: 123 }],
+        "ws-1": [{ id: "t-1", name: "Chat", createdAt: 40, updatedAt: 123 }],
       },
     });
 
@@ -44,7 +44,7 @@ describe("sidebarSnapshot", () => {
         },
       ],
       threadsByWorkspace: {
-        "ws-1": [{ id: "t-1", name: "Chat", updatedAt: 123 }],
+        "ws-1": [{ id: "t-1", name: "Chat", createdAt: 40, updatedAt: 123 }],
       },
     });
   });

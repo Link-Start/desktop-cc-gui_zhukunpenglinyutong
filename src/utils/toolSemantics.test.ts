@@ -3,6 +3,7 @@ import {
   buildCommandSummary,
   extractToolName,
   getFirstStringField,
+  isAskUserQuestionToolName,
   isBashTool,
   isEditTool,
   isProviderToolCallId,
@@ -35,6 +36,9 @@ describe("toolSemantics", () => {
     expect(extractToolName("Tool: ccgui / AskUserQuestion")).toBe(
       "AskUserQuestion",
     );
+    expect(extractToolName("Tool: ask_user_question")).toBe("ask_user_question");
+    expect(isAskUserQuestionToolName("ask_user_question")).toBe(true);
+    expect(isAskUserQuestionToolName("Tool: ask_user_question")).toBe(true);
     expect(
       extractToolName(
         "Call-1e9622240-f623-4709-888e-97510eb8c94f-55|fc Dea0cf7d-ffe2-918e-bd8d-1f467cee29d2 0",

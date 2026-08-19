@@ -307,6 +307,8 @@ const git = {
     "historyPushDialogPushTags": "태그 push",
     "historyPushDialogRunHooks": "Git 훅 실행",
     "historyPushDialogForceWithLease": "Force with lease",
+    "historyPushDialogRecentLabel": "최근 푸시",
+    "historyPushDialogRecentGerrit": "Gerrit",
     "historyCreatePr": "PR",
     "historyCreatePrDialogTitle": "Pull Request 만들기",
     "historyCreatePrDialogSubtitle": "매개변수를 확인한 다음 사전 점검, push, PR 생성, 선택적 승인 댓글을 실행하세요.",

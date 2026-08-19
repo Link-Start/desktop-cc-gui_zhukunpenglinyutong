@@ -194,8 +194,9 @@ describe("clientUiVisibility", () => {
     expect(preference.panels.rightActivityToolbar).toBe(true);
     expect(isClientUiPanelVisible(preference, "topToolControls")).toBe(true);
     expect(isClientUiPanelVisible(preference, "rightActivityToolbar")).toBe(true);
-    // Non-essential panels still honor false.
+    // Session tabs stay a user preference, not essential chrome.
     expect(isClientUiPanelVisible(preference, "topSessionTabs")).toBe(false);
+    expect(preference.panels.topSessionTabs).toBe(false);
   });
 
   it("lets non-essential parent panel hiding override child visibility", () => {

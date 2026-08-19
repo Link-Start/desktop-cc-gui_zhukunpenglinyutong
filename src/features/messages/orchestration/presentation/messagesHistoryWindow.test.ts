@@ -6,6 +6,7 @@ import {
   HISTORY_WINDOW_SIZE_FLAG_KEY,
   __resetHistoryWindowSizeCacheForTests,
   readHistoryWindowSize,
+  resolveEarlierHistoryChip,
   resolveHistoryWindowCutIndex,
 } from "./messagesHistoryWindow";
 
@@ -158,4 +159,114 @@ describe("resolveHistoryWindowCutIndex", () => {
       }),
     ).toBe(200);
   });
+
+  it("stops turn retreat at maxDisplayed unless the active turn is pinned", () => {
+    const items: ConversationItem[] = Array.from({ length: 2000 }, (_, index) =>
+      assistantMessage(`mega-${index}`, "mega-turn"),
+    );
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 300,
+        revealedItemCount: 0,
+        activeTurnId: null,
+        maxDisplayed: 400,
+      }),
+    ).toBe(1600);
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 300,
+        revealedItemCount: 0,
+        activeTurnId: "mega-turn",
+        maxDisplayed: 400,
+      }),
+    ).toBe(0);
+  });
+
+  it("keeps a prepended page inside the window when reveal budget is retained", () => {
+    const items: ConversationItem[] = Array.from({ length: 880 }, (_, index) =>
+      assistantMessage(`row-${index}`),
+    );
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 800,
+        revealedItemCount: 80,
+        activeTurnId: null,
+      }),
+    ).toBe(0);
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 800,
+        revealedItemCount: 0,
+        activeTurnId: null,
+      }),
+    ).toBe(80);
+  });
+
+  it("still retreats a small turn that stays within maxDisplayed", () => {
+    const items: ConversationItem[] = [
+      ...Array.from({ length: 250 }, (_, index) => userMessage(`u-${index}`)),
+      ...Array.from({ length: 20 }, (_, index) =>
+        assistantMessage(`turn-${index}`, "turn-cut"),
+      ),
+      ...Array.from({ length: 290 }, (_, index) =>
+        assistantMessage(`tail-${index}`),
+      ),
+    ];
+    expect(
+      resolveHistoryWindowCutIndex({
+        items,
+        windowSize: 300,
+        revealedItemCount: 0,
+        activeTurnId: null,
+        maxDisplayed: 400,
+      }),
+    ).toBe(250);
+  });
 });
+
+describe("resolveEarlierHistoryChip", () => {
+  it("shows an uncounted chip when only disk hasMore is true", () => {
+    expect(
+      resolveEarlierHistoryChip({
+        knownCollapsedCount: 0,
+        diskHistoryHasMore: true,
+      }),
+    ).toEqual({
+      visible: true,
+      hasUncountedEarlierHistory: true,
+      countedCount: 0,
+    });
+  });
+
+  it("keeps the counted copy when local remainder is known", () => {
+    expect(
+      resolveEarlierHistoryChip({
+        knownCollapsedCount: 12,
+        diskHistoryHasMore: true,
+      }),
+    ).toEqual({
+      visible: true,
+      hasUncountedEarlierHistory: false,
+      countedCount: 12,
+    });
+  });
+
+  it("hides the chip when nothing older remains", () => {
+    expect(
+      resolveEarlierHistoryChip({
+        knownCollapsedCount: 0,
+        diskHistoryHasMore: false,
+      }),
+    ).toEqual({
+      visible: false,
+      hasUncountedEarlierHistory: false,
+      countedCount: 0,
+    });
+  });
+});
+
+

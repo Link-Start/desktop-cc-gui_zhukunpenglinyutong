@@ -1,6 +1,16 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const listenMock = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]) => {
+    return () => undefined;
+  }),
+);
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (...args: unknown[]) => listenMock(...args),
+}));
 import type { WorkspaceInfo } from "../../types";
 import {
   getStartupTraceSnapshot,
@@ -16,9 +26,9 @@ import {
 import {
   useWorkspaceThreadListHydration,
   COLD_START_IDLE_MIN_DELAY_MS,
-  POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS,
-  POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS,
-  POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS,
+  POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS,
+  POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_WAIT_MS,
+  POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MIN_DELAY_MS,
   WORKSPACE_SWITCH_INTENT_DELAY_MS,
 } from "./useWorkspaceThreadListHydration";
 import { startupOrchestrator } from "../../features/startup-orchestration/utils/startupOrchestrator";
@@ -69,6 +79,10 @@ function installImmediateIdleCallback() {
 
 describe("useWorkspaceThreadListHydration", () => {
   beforeEach(async () => {
+    listenMock.mockClear();
+    listenMock.mockImplementation(async () => {
+      return () => undefined;
+    });
     vi.useRealTimers();
     resetStartupTraceForTests();
     resetFullCatalogAutoRetryForTests();
@@ -283,7 +297,7 @@ describe("useWorkspaceThreadListHydration", () => {
     });
   });
 
-  it("keeps manual tracked refreshes on full-catalog even for the active workspace", async () => {
+  it("keeps manual tracked refreshes on first-paint for the active workspace", async () => {
     const workspaces = [createWorkspace("ws-1")];
     const listThreadsForWorkspace = vi.fn<
       (
@@ -320,7 +334,7 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
 
-    // After first-paint, manual tracked without phase map → full-catalog (active phase).
+    // After first-paint, manual tracked without explicit full-catalog stays Index.
     await act(async () => {
       await result.current.listThreadsForWorkspaceTracked(workspaces[0]!);
     });
@@ -329,19 +343,16 @@ describe("useWorkspaceThreadListHydration", () => {
       const modes = listThreadsForWorkspace.mock.calls.map(
         (call) => call[1]?.startupHydrationMode,
       );
-      expect(modes).toContain("full-catalog");
+      expect(modes.length).toBeGreaterThanOrEqual(2);
+      expect(modes.every((mode) => mode === "first-paint")).toBe(true);
+      expect(modes).not.toContain("full-catalog");
     });
 
     const fullCatalogEvents = getStartupTraceSnapshot().events.filter(
       (event): event is Extract<typeof event, { type: "task" }> =>
         event.type === "task" && event.taskId === "thread-list:full-catalog:ws-1",
     );
-    expect(
-      fullCatalogEvents.some(
-        (event) =>
-          event.phase === "active-workspace" || event.phase === "on-demand",
-      ),
-    ).toBe(true);
+    expect(fullCatalogEvents).toHaveLength(0);
   });
 
   it("does not stamp startup-gate-ready from an explicit full-catalog timeout", async () => {
@@ -463,8 +474,8 @@ describe("useWorkspaceThreadListHydration", () => {
     );
     expect(fullCatalogEvents.length).toBe(0);
     // Sanity: quiet delays export for production (non-zero) / test (0).
-    expect(POST_FIRST_PAINT_FULL_CATALOG_MIN_DELAY_MS).toBeGreaterThanOrEqual(0);
-    expect(POST_FIRST_PAINT_FULL_CATALOG_MAX_WAIT_MS).toBeGreaterThanOrEqual(0);
+    expect(POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MIN_DELAY_MS).toBeGreaterThanOrEqual(0);
+    expect(POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_WAIT_MS).toBeGreaterThanOrEqual(0);
   });
 
   it("skips focus-refresh full-catalog while catalog is still fresh", async () => {
@@ -1006,7 +1017,11 @@ describe("useWorkspaceThreadListHydration", () => {
             // Raw off-orchestrator call: a hanging promise is safe to leak.
             return new Promise<void>(() => {});
           }
-          return Promise.resolve(undefined);
+          return Promise.resolve({
+            applied: true,
+            visibleCount: 1,
+            authoritativeEmpty: false,
+          });
         },
       );
       return { softRefreshCalls, listThreadsForWorkspace };
@@ -1124,7 +1139,7 @@ describe("useWorkspaceThreadListHydration", () => {
       await reachInFlightSoftRefresh(listThreadsForWorkspace);
 
       // Each click soft-cancels the in-flight run and re-arms a fresh one.
-      for (let defer = 1; defer <= POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS; defer++) {
+      for (let defer = 1; defer <= POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS; defer++) {
         dispatchPointerDown();
         await waitFor(() => {
           expect(softRefreshCalls.length).toBe(defer + 1);
@@ -1138,7 +1153,7 @@ describe("useWorkspaceThreadListHydration", () => {
       // Ceiling reached: the next click must NOT cancel the in-flight run —
       // it is forced through even though the user is still clicking.
       const forcedRunStale =
-        softRefreshCalls[POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS]!.options!
+        softRefreshCalls[POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS]!.options!
           .isStale!;
       dispatchPointerDown();
       expect(forcedRunStale()).toBe(false);
@@ -1147,7 +1162,7 @@ describe("useWorkspaceThreadListHydration", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
       expect(softRefreshCalls.length).toBe(
-        POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS + 1,
+        POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS + 1,
       );
 
       // Counter reset: the following click may defer (soft-cancel) again.
@@ -1155,9 +1170,130 @@ describe("useWorkspaceThreadListHydration", () => {
       expect(forcedRunStale()).toBe(true);
       await waitFor(() => {
         expect(softRefreshCalls.length).toBe(
-          POST_FIRST_PAINT_FULL_CATALOG_MAX_DEFERS + 2,
+          POST_FIRST_PAINT_INDEX_SOFT_RESYNC_MAX_DEFERS + 2,
         );
       });
+    });
+  });
+
+  describe("session-index-imported rematerialize", () => {
+    type ImportedPayload = { workspaceIds?: string[]; upserted?: number };
+
+    function captureImportedHandler() {
+      let handler:
+        | ((event: { payload: ImportedPayload }) => void)
+        | undefined;
+      listenMock.mockImplementation(async (eventName, nextHandler) => {
+        if (eventName === "session-index-imported") {
+          handler = nextHandler as (event: { payload: ImportedPayload }) => void;
+        }
+        return () => undefined;
+      });
+      return {
+        emit(payload: ImportedPayload) {
+          handler?.({ payload });
+        },
+        hasHandler() {
+          return Boolean(handler);
+        },
+      };
+    }
+
+    it("re-reads active workspace Index after upserted>0 without disk lists", async () => {
+      const imported = captureImportedHandler();
+      const listThreadsForWorkspace = vi.fn(
+        async (
+          _workspace: WorkspaceInfo,
+          _options?: {
+            preserveState?: boolean;
+            mergeExistingThreads?: boolean;
+            includeEngineDiskLists?: boolean;
+            includeOpenCodeSessions?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => undefined,
+      );
+      const workspaces = [createWorkspace("ws-1")];
+      renderHook(() =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: "ws-1",
+          activeWorkspaceProjectionOwnerIds: ["ws-1"],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: new Map(
+            workspaces.map((workspace) => [workspace.id, workspace]),
+          ),
+        }),
+      );
+
+      await waitFor(() => {
+        expect(imported.hasHandler()).toBe(true);
+      });
+      const callsBeforeImport = listThreadsForWorkspace.mock.calls.length;
+      await act(async () => {
+        imported.emit({ workspaceIds: ["ws-1"], upserted: 2 });
+      });
+      await waitFor(() => {
+        expect(listThreadsForWorkspace.mock.calls.length).toBeGreaterThan(
+          callsBeforeImport,
+        );
+      });
+      const importedCall = listThreadsForWorkspace.mock.calls.find(
+        (call) =>
+          call[1]?.startupHydrationMode === "first-paint" ||
+          call[1]?.mergeExistingThreads === true,
+      );
+      expect(importedCall?.[0]).toMatchObject({ id: "ws-1" });
+      expect(importedCall?.[1]).toEqual(
+        expect.objectContaining({
+          preserveState: true,
+          startupHydrationMode: "first-paint",
+        }),
+      );
+      expect(importedCall?.[1]?.mergeExistingThreads).not.toBe(true);
+      expect(importedCall?.[1]?.includeEngineDiskLists).not.toBe(true);
+    });
+
+    it("does not rematerialize or claim empty when upserted is 0", async () => {
+      const imported = captureImportedHandler();
+      const listThreadsForWorkspace = vi.fn(
+        async (
+          _workspace: WorkspaceInfo,
+          _options?: {
+            preserveState?: boolean;
+            mergeExistingThreads?: boolean;
+            includeEngineDiskLists?: boolean;
+            startupHydrationMode?: "full-catalog" | "first-paint";
+          },
+        ) => undefined,
+      );
+      const workspaces = [createWorkspace("ws-1")];
+      renderHook(() =>
+        useWorkspaceThreadListHydration({
+          activeWorkspaceId: "ws-1",
+          activeWorkspaceProjectionOwnerIds: ["ws-1"],
+          listThreadsForWorkspace,
+          threadListLoadingByWorkspace: {},
+          workspaces,
+          workspacesById: new Map(
+            workspaces.map((workspace) => [workspace.id, workspace]),
+          ),
+        }),
+      );
+
+      await waitFor(() => {
+        expect(imported.hasHandler()).toBe(true);
+      });
+      const callsBeforeImport = listThreadsForWorkspace.mock.calls.length;
+      await act(async () => {
+        imported.emit({ workspaceIds: ["ws-1"], upserted: 0 });
+      });
+      expect(
+        listThreadsForWorkspace.mock.calls
+          .slice(callsBeforeImport)
+          .some((call) => call[1]?.mergeExistingThreads === true),
+      ).toBe(false);
     });
   });
 });

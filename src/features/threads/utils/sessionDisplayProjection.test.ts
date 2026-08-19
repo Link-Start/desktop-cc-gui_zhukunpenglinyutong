@@ -15,7 +15,10 @@ describe("sessionDisplayProjection", () => {
     expect(isWeakSessionDisplayTitle("Kimi Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("DSH Session")).toBe(true);
     expect(isWeakSessionDisplayTitle("DeepSeek Harness Session")).toBe(true);
+    expect(isWeakSessionDisplayTitle("PI session 019fe705")).toBe(true);
+    expect(isWeakSessionDisplayTitle("Warmup")).toBe(true);
     expect(isWeakSessionDisplayTitle("分析左侧栏消失问题")).toBe(false);
+    expect(isWeakSessionDisplayTitle("PI session about rust")).toBe(false);
   });
 
   it("classifies clipped raw command-tag names as weak titles", () => {
@@ -116,6 +119,24 @@ describe("sessionDisplayProjection", () => {
         updatedAt: 130,
       }).name,
     ).toBe("你好");
+  });
+
+  it("keeps a previous DSH header preset when the next row omits it", () => {
+    const previous: ThreadSummary = {
+      id: "dsh:session-1",
+      name: "你好",
+      updatedAt: 100,
+      engineSource: "dsh",
+      threadKind: "native",
+      dshAgentPreset: "minimal",
+    };
+    expect(
+      mergeSessionDisplaySummary(previous, {
+        ...previous,
+        updatedAt: 130,
+        dshAgentPreset: undefined,
+      }).dshAgentPreset,
+    ).toBe("minimal");
   });
 
   it("treats context protocol titles as weak and ignores mapped protocol titles", () => {
@@ -316,6 +337,46 @@ describe("sessionDisplayProjection", () => {
     };
 
     expect(mergeSessionDisplaySummary(previous, next).sizeBytes).toBe(0);
+  });
+
+  it("keeps the earlier createdAt when a later merge only refreshes updatedAt", () => {
+    const previous: ThreadSummary = {
+      id: "claude:stable",
+      name: "Stable",
+      createdAt: 40,
+      updatedAt: 100,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+    const next: ThreadSummary = {
+      id: "claude:stable",
+      name: "Stable",
+      updatedAt: 900,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+
+    expect(mergeSessionDisplaySummary(previous, next).createdAt).toBe(40);
+    expect(mergeSessionDisplaySummary(previous, next).updatedAt).toBe(900);
+  });
+
+  it("freezes createdAt for an existing row that still lacks one", () => {
+    const previous: ThreadSummary = {
+      id: "claude:legacy",
+      name: "Legacy",
+      updatedAt: 50,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+    const next: ThreadSummary = {
+      id: "claude:legacy",
+      name: "Legacy",
+      updatedAt: 900,
+      engineSource: "claude",
+      threadKind: "native",
+    };
+
+    expect(mergeSessionDisplaySummary(previous, next).createdAt).toBe(50);
   });
 
   it("projects degraded continuity candidates without resurrecting excluded rows", () => {

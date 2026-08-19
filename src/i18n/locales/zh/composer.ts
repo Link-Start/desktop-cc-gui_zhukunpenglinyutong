@@ -9,6 +9,7 @@ const composer = {
     attachImage: "添加图片",
     imageInputUnsupportedTitle: "不支持图片",
     imageAttachUnsupported: "{{engine}} 当前版本不支持图片附件",
+    imageTooLargeTitle: "图片过大",
     removeAttachment: "移除附件",
     queue: "队列",
     editQueued: "编辑",
@@ -287,6 +288,31 @@ const composer = {
     dshStatsTtftAverage: "首 token 平均 {{duration}}",
     dshStatsTokensPerSecond: "{{throughput}} tok/s",
     dshStatsCacheHit: "缓存命中 {{percent}}%",
+    dshAgentPreset: {
+      entry: "Agent 组装：{{preset}}",
+      lockedTitle: "组装已锁定",
+      lockedHint: "会话已开聊，组装锁定。新开会话才能换 preset。",
+      standard: {
+        short: "标准",
+        label: "标准模式",
+        description: "文件、Shell、检索、Skills、计划、目标、子代理、工作流。",
+      },
+      code: {
+        short: "PTC",
+        label: "PTC 模式",
+        description: "标准能力 + Code Mode SDK，模型写一个程序串起多步操作。",
+      },
+      minimal: {
+        short: "极简",
+        label: "极简模式",
+        description: "持久 bash 与 str_replace_editor。没有 Skills / Goal / 子代理。",
+      },
+      cordis: {
+        short: "创造",
+        label: "创造模式",
+        description: "标准能力 + 运行时检查、插件实验和 preset 创作指导。",
+      },
+    },
     runStatus: {
       label: "本轮运行状态",
       panel: "运行状态详情",

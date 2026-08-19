@@ -364,6 +364,47 @@ describe("ContextBar live canvas controls visibility", () => {
     expect(screen.queryByLabelText("chat.contextDualViewAutoCompactionEnabled")).toBeNull();
   });
 
+  it("renders DSH occupancy with approximate category rows", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <ContextBar
+        currentProvider="dsh"
+        percentage={80}
+        usedTokens={209_000}
+        maxTokens={262_000}
+        claudeContextUsage={{
+          usedTokens: 209_000,
+          contextWindow: 262_000,
+          totalTokens: 0,
+          inputTokens: 0,
+          cachedInputTokens: 0,
+          outputTokens: 0,
+          usedPercent: 80,
+          remainingPercent: 20,
+          freshness: "live",
+          source: "dsh-context-pressure",
+          hasUsage: true,
+          categoryUsages: [
+            { name: "system", tokens: 1_500 },
+            { name: "tools", tokens: 6_400 },
+            { name: "messages", tokens: 196_000 },
+          ],
+        }}
+      />,
+    );
+
+    await user.hover(container.querySelector('[data-slot="hover-card-trigger"]') as Element);
+
+    expect(await screen.findByText("~209K / 262K")).toBeTruthy();
+    expect(screen.getAllByText("80%").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("chat.dshContextSystem")).toBeTruthy();
+    expect(screen.getByText("chat.dshContextTools")).toBeTruthy();
+    expect(screen.getByText("chat.dshContextMessages")).toBeTruthy();
+    expect(screen.getByText("~1.5K")).toBeTruthy();
+    expect(screen.getByText("~6.4K")).toBeTruthy();
+    expect(screen.getByText("~196K")).toBeTruthy();
+  });
+
   it("labels Claude estimated window usage instead of waiting for CLI telemetry", async () => {
     const user = userEvent.setup();
     const { container } = render(

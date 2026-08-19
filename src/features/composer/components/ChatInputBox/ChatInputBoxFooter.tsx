@@ -224,6 +224,9 @@ export function ChatInputBoxFooter({
   selectedModel,
   models,
   permissionMode,
+  dshAgentPreset,
+  dshAgentPresetLocked,
+  onDshAgentPresetSelect,
   currentProvider,
   currentProviderProfileId = null,
   workspaceId = null,
@@ -292,6 +295,9 @@ export function ChatInputBoxFooter({
   selectedModel: string;
   models?: ModelInfo[];
   permissionMode: PermissionMode;
+  dshAgentPreset?: string | null;
+  dshAgentPresetLocked?: boolean;
+  onDshAgentPresetSelect?: (preset: string) => void;
   currentProvider: string;
   currentProviderProfileId?: string | null;
   workspaceId?: string | null;
@@ -535,6 +541,9 @@ export function ChatInputBoxFooter({
         selectedModel={selectedModel}
         models={models}
         permissionMode={permissionMode}
+        dshAgentPreset={dshAgentPreset}
+        dshAgentPresetLocked={dshAgentPresetLocked}
+        onDshAgentPresetSelect={onDshAgentPresetSelect}
         currentProvider={currentProvider}
         currentProviderProfileId={currentProviderProfileId}
         providerAvailability={providerAvailability}

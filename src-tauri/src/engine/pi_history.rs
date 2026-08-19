@@ -183,6 +183,25 @@ fn parse_iso_millis(value: &str) -> i64 {
         .unwrap_or(0)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PiUserPromptScan {
+    HasUser,
+    ScannedEmpty,
+    Unknown,
+}
+
+fn content_has_media_part(content: Option<&Value>) -> bool {
+    let Some(parts) = content.and_then(Value::as_array) else {
+        return false;
+    };
+    parts.iter().any(|part| {
+        matches!(
+            part.get("type").and_then(Value::as_str),
+            Some("image" | "image_url" | "file" | "document")
+        )
+    })
+}
+
 fn extract_text_blocks(content: Option<&Value>) -> String {
     let Some(content) = content else {
         return String::new();
@@ -215,6 +234,102 @@ fn extract_text_blocks(content: Option<&Value>) -> String {
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn encode_pi_cwd_dir_name(path: &str) -> String {
+    path.replace('\\', "/").replace(['/', ':'], "-")
+}
+
+fn find_pi_file_with_suffix(dir: &Path, suffix: &str) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten().take(512) {
+        let path = entry.path();
+        let name = path.file_name()?.to_string_lossy();
+        if name.ends_with(suffix) && path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Locate `*_{sessionId}.jsonl` under the workspace encoded-cwd, then a bounded
+/// root scan. Session ids are globally unique; miss must stay unconfirmed.
+pub(crate) fn locate_pi_session_file(
+    workspace_path: &Path,
+    session_id: &str,
+) -> Option<PathBuf> {
+    let session_id = session_id.trim();
+    if session_id.is_empty()
+        || session_id.contains('/')
+        || session_id.contains('\\')
+        || session_id.contains("..")
+    {
+        return None;
+    }
+    let suffix = format!("_{session_id}.jsonl");
+    let root = resolve_pi_sessions_root(None);
+    for variant in build_workspace_path_variants(workspace_path) {
+        let encoded = encode_pi_cwd_dir_name(&variant);
+        if let Some(found) = find_pi_file_with_suffix(&root.join(encoded), &suffix) {
+            return Some(found);
+        }
+    }
+    let Ok(dirs) = std::fs::read_dir(&root) else {
+        return None;
+    };
+    for entry in dirs.flatten().take(128) {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        if let Some(found) = find_pi_file_with_suffix(&path, &suffix) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+pub(crate) fn scan_pi_jsonl_user_prompt(path: &Path) -> PiUserPromptScan {
+    let Ok(file) = std::fs::File::open(path) else {
+        return PiUserPromptScan::Unknown;
+    };
+    let mut reached_eof = true;
+    for (index, line) in std::io::BufRead::lines(std::io::BufReader::new(file)).enumerate() {
+        if index >= 80 {
+            reached_eof = false;
+            break;
+        }
+        let line = match line {
+            Ok(line) => line,
+            Err(_) => return PiUserPromptScan::Unknown,
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if value.get("type").and_then(Value::as_str) != Some("message") {
+            continue;
+        }
+        let role = value
+            .pointer("/message/role")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if role != "user" {
+            continue;
+        }
+        let content = value.pointer("/message/content");
+        if content_has_media_part(content) {
+            return PiUserPromptScan::HasUser;
+        }
+        let text = extract_text_blocks(content);
+        if !text.trim().is_empty() {
+            return PiUserPromptScan::HasUser;
+        }
+    }
+    if reached_eof {
+        PiUserPromptScan::ScannedEmpty
+    } else {
+        PiUserPromptScan::Unknown
+    }
 }
 
 pub fn resolve_pi_sessions_root(home_override: Option<&str>) -> PathBuf {

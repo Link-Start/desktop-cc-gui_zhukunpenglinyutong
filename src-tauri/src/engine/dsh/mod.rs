@@ -203,6 +203,7 @@ pub async fn send_user_turn(
     images: Option<&[String]>,
     resume_id: Option<&str>,
     continue_session: bool,
+    agent_preset: Option<&str>,
 ) -> Result<DshSendOutcome, String> {
     if let Some(handle) = app.as_ref() {
         events::set_app_handle(handle.clone()).await;
@@ -212,16 +213,17 @@ pub async fn send_user_turn(
     let dsh_workspace_id = session::workspace_id_from_create(&workspace)?;
 
     let resume_id = resume_id.map(str::trim).filter(|value| !value.is_empty());
+    let agent_preset = agent_preset.map(str::trim).filter(|value| !value.is_empty());
     let native_session_id = if continue_session {
         match resume_id {
             Some(value) if session::is_pending_thread(value) => {
-                session::create_session(&client, &dsh_workspace_id, None).await?
+                session::create_session(&client, &dsh_workspace_id, None, agent_preset).await?
             }
             Some(value) => session::session_id_from_thread(value),
-            None => session::create_session(&client, &dsh_workspace_id, None).await?,
+            None => session::create_session(&client, &dsh_workspace_id, None, agent_preset).await?,
         }
     } else {
-        session::create_session(&client, &dsh_workspace_id, None).await?
+        session::create_session(&client, &dsh_workspace_id, None, agent_preset).await?
     };
 
     let thread_id = session::thread_id_for_session(&native_session_id);
@@ -265,6 +267,11 @@ pub async fn send_user_turn(
                 "DSH model must be a provider/model catalog id, got `{model}`"
             ));
         };
+        if session::is_reserved_mossx_dsh_provider(&provider) {
+            return Err(format!(
+                "DSH model provider `{provider}` is reserved by mossx and has no DSH adapter"
+            ));
+        }
         session::select_model(&client, &native_session_id, &provider, &model_id, effort).await?;
         Some((provider, model_id))
     } else {
@@ -455,15 +462,40 @@ pub async fn respond_to_control(
                 .await?;
         }
         DshControlKind::Question { rpc_id, session_id } => {
-            client
-                .respond(
-                    &rpc_id,
-                    json!({
-                        "sessionId": session_id,
-                        "answer": { "answers": map_question_answers(result) },
-                    }),
-                )
-                .await?;
+            let questions = events::pending_questions(&rpc_id).await;
+            let outcome = if is_dsh_question_cancel(result) {
+                client
+                    .respond_error(
+                        &rpc_id,
+                        "cancelled",
+                        "the user cancelled ask_user_question",
+                    )
+                    .await
+            } else {
+                client
+                    .respond(
+                        &rpc_id,
+                        json!({
+                            "sessionId": session_id,
+                            "answer": {
+                                "answers": map_question_answers(result, questions.as_ref()),
+                            },
+                        }),
+                    )
+                    .await
+            };
+            match outcome {
+                Ok(_) => events::forget_pending_questions(&rpc_id).await,
+                Err(error) => {
+                    // Host already dropped the waiter. Keep the template on
+                    // bad-response / transport errors so a retry can still
+                    // emit answers in the original question order.
+                    if error.contains("not-pending") {
+                        events::forget_pending_questions(&rpc_id).await;
+                    }
+                    return Err(error);
+                }
+            }
         }
     }
     Ok(())
@@ -477,22 +509,100 @@ pub async fn fork_session(
     session::fork(&client, session_id).await
 }
 
-fn map_question_answers(result: &Value) -> Vec<Value> {
-    let Some(answers) = result.get("answers").and_then(Value::as_object) else {
-        return Vec::new();
-    };
-    answers
-        .iter()
-        .map(|(id, value)| {
-            let selected = value
-                .get("answers")
+fn is_dsh_question_cancel(result: &Value) -> bool {
+    if result.get("decision").and_then(Value::as_str) == Some("cancel") {
+        return true;
+    }
+    let skipped = result
+        .get("skippedQuestionIds")
+        .and_then(Value::as_array)
+        .is_some_and(|ids| !ids.is_empty());
+    if !skipped {
+        return false;
+    }
+    // DSH answers one ask() as a whole batch. A full skip / dismiss / timeout
+    // without a recommended option must cancel the waiter instead of posting an
+    // empty selected[] list that Host rejects as a short batch.
+    result
+        .get("answers")
+        .and_then(Value::as_object)
+        .is_none_or(|answers| {
+            answers.values().all(|value| {
+                value
+                    .get("answers")
+                    .and_then(Value::as_array)
+                    .is_none_or(|items| {
+                        items.iter().all(|item| {
+                            item.as_str()
+                                .is_none_or(|text| text.trim().is_empty())
+                        })
+                    })
+            })
+        })
+}
+
+fn question_ids_from_template(questions: Option<&Value>) -> Vec<String> {
+    questions
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    item.get("id")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .map(str::to_string)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn map_question_answers(result: &Value, questions: Option<&Value>) -> Vec<Value> {
+    let answers = result.get("answers").and_then(Value::as_object);
+    let mut ids = question_ids_from_template(questions);
+    if ids.is_empty() {
+        if let Some(answers) = answers {
+            ids = answers.keys().cloned().collect();
+        }
+    }
+    ids.into_iter()
+        .map(|id| {
+            let raw = answers.and_then(|map| map.get(&id));
+            let selected_raw = raw
+                .and_then(|value| value.get("answers"))
                 .and_then(Value::as_array)
                 .cloned()
                 .unwrap_or_default();
-            json!({
+            let mut selected = Vec::new();
+            let mut custom = None;
+            for item in selected_raw {
+                let Some(text) = item
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string)
+                else {
+                    continue;
+                };
+                if let Some(note) = text.strip_prefix("user_note:") {
+                    let note = note.trim();
+                    if !note.is_empty() {
+                        custom = Some(note.to_string());
+                    }
+                    continue;
+                }
+                selected.push(json!(text));
+            }
+            let mut mapped = json!({
                 "id": id,
                 "selected": selected,
-            })
+            });
+            if let Some(custom) = custom {
+                mapped["custom"] = json!(custom);
+            }
+            mapped
         })
         .collect()
 }
@@ -580,7 +690,7 @@ pub fn flatten_llm_models_with_describe(
     models
 }
 
-fn dsh_home_dir() -> Option<PathBuf> {
+pub(crate) fn dsh_home_dir() -> Option<PathBuf> {
     std::env::var_os("DSH_HOME")
         .map(PathBuf::from)
         .or_else(|| dirs::home_dir().map(|home| home.join(".dsh")))
@@ -730,14 +840,53 @@ mod tests {
 
     #[test]
     fn maps_accept_decision_to_allowed_once_payload() {
-        let answers = map_question_answers(&json!({
-            "answers": {
-                "q1": { "answers": ["yes"] }
-            }
-        }));
+        let answers = map_question_answers(
+            &json!({
+                "answers": {
+                    "q1": { "answers": ["yes"] }
+                }
+            }),
+            None,
+        );
         assert_eq!(answers.len(), 1);
         assert_eq!(answers[0]["id"], "q1");
         assert_eq!(answers[0]["selected"][0], "yes");
+    }
+
+    #[test]
+    fn maps_question_answers_in_template_order_and_keeps_notes() {
+        let answers = map_question_answers(
+            &json!({
+                "answers": {
+                    "q-b": { "answers": ["B", "user_note: extra"] },
+                    "q-a": { "answers": ["A"] }
+                }
+            }),
+            Some(&json!([
+                { "id": "q-a", "question": "first" },
+                { "id": "q-b", "question": "second" }
+            ])),
+        );
+        assert_eq!(answers.len(), 2);
+        assert_eq!(answers[0]["id"], "q-a");
+        assert_eq!(answers[0]["selected"][0], "A");
+        assert_eq!(answers[1]["id"], "q-b");
+        assert_eq!(answers[1]["selected"][0], "B");
+        assert_eq!(answers[1]["custom"], "extra");
+    }
+
+    #[test]
+    fn full_skip_cancels_dsh_question() {
+        assert!(is_dsh_question_cancel(&json!({
+            "answers": {},
+            "skippedQuestionIds": ["q-a", "q-b"]
+        })));
+        assert!(!is_dsh_question_cancel(&json!({
+            "answers": {
+                "q-a": { "answers": ["A"] }
+            },
+            "skippedQuestionIds": ["q-b"]
+        })));
     }
 
     #[test]

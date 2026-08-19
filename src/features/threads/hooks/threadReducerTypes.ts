@@ -83,6 +83,7 @@ export type ThreadAction =
       threadId: string;
       engine?: "codex" | "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
       name?: string | null;
+      dshAgentPreset?: string | null;
       parentThreadId?: string | null;
       folderId?: string | null;
       autoSession?: AutoSessionMetadata | null;
@@ -168,6 +169,12 @@ export type ThreadAction =
       workspaceId: string;
       threadId: string;
       engine: "codex" | "claude" | "codex" | "gemini" | "grok" | "kimi" | "opencode" | "pi" | "dsh";
+    }
+  | {
+      type: "setThreadDshAgentPreset";
+      workspaceId: string;
+      threadId: string;
+      dshAgentPreset: string | null;
     }
   | {
       type: "setThreadTimestamp";
@@ -256,7 +263,12 @@ export type ThreadAction =
   | { type: "appendReasoningContent"; threadId: string; itemId: string; delta: string }
   | { type: "dropReasoningItems"; threadId: string }
   | { type: "appendToolOutput"; threadId: string; itemId: string; delta: string }
-  | { type: "setThreads"; workspaceId: string; threads: ThreadSummary[] }
+  | {
+      type: "setThreads";
+      workspaceId: string;
+      threads: ThreadSummary[];
+      unionMembership?: boolean;
+    }
   | {
       type: "setThreadListLoading";
       workspaceId: string;
@@ -294,6 +306,23 @@ export type ThreadAction =
     }
   | { type: "setThreadTokenUsage"; threadId: string; tokenUsage: ThreadTokenUsage }
   | { type: "setThreadSessionStats"; threadId: string; sessionStats: ThreadTokenUsage["sessionStats"] }
+  | { type: "setThreadDshTodos"; threadId: string; todos: ThreadTokenUsage["dshTodos"] }
+  | {
+      type: "patchThreadDshContextUsage";
+      threadId: string;
+      patch: Partial<
+        Pick<
+          ThreadTokenUsage,
+          | "contextUsedTokens"
+          | "modelContextWindow"
+          | "contextUsedPercent"
+          | "contextRemainingPercent"
+          | "contextCategoryUsages"
+          | "contextUsageSource"
+          | "contextUsageFreshness"
+        >
+      >;
+    }
   | {
       type: "setRateLimits";
       workspaceId: string;

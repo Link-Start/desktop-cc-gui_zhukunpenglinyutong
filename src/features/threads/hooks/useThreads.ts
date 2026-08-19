@@ -56,7 +56,14 @@ import { useThreadUserInput } from "./useThreadUserInput";
 import { useThreadCompletionEmail } from "./useThreadCompletionEmail";
 import { useMailDrivenSessionContinuation } from "./useMailDrivenSessionContinuation";
 import { useThreadRealtimeHistoryReconcile } from "./useThreadRealtimeHistoryReconcile";
-import { resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState } from "../utils/claudeThreadContinuity";
+import {
+  resolveClaudeContinuationThreadId as resolveClaudeContinuationThreadIdFromState,
+  shouldShowHistoryLoadingForSelectionThread,
+} from "../utils/claudeThreadContinuity";
+import {
+  buildNativeHistoryPrepareProgress,
+  buildSharedHistoryPrepareProgress,
+} from "../utils/historyLoadingProgress";
 import {
   THREAD_SWITCH_LOADED_REFRESH_MS,
   decideThreadSelectResume,
@@ -73,7 +80,9 @@ export {
   resolvePendingThreadIdForTurn,
 } from "../utils/threadPendingResolution";
 import {
+  isGhostClientSessionIndexDeleteError,
   mapDeleteErrorCode,
+  sessionIndexIdsForThreadTombstone,
   shouldSettleDeleteAsSuccess,
   type ThreadDeleteErrorCode,
 } from "../utils/threadDelete";
@@ -82,6 +91,7 @@ import {
   makeCustomNameKey,
   saveCustomName,
 } from "../utils/threadStorage";
+import { publishWorkspaceLastThreadMap } from "../utils/workspaceLastThreadMap";
 import {
   isClientStoreReady,
   subscribeClientStoreHydrated,
@@ -101,6 +111,7 @@ import {
   projectMemoryCompleteTurn,
   deleteWorkspaceSessions,
   noteWebServiceReconnected,
+  tombstoneSessionIndexRows,
 } from "../../../services/tauri";
 import { buildAssistantOutputDigest } from "../../project-memory/utils/outputDigest";
 import {
@@ -616,7 +627,10 @@ export function useThreads({
   // chat-stream-render-isolation-2026-06 task 4: collapse the five
   // per-slice ref-sync effects into a single effect so dispatching
   // state only schedules one React commit's worth of ref work.
+  // Publish last-thread peek after commit. Render-phase publish can leak a
+  // discarded concurrent render into the module snapshot.
   useEffect(() => {
+    publishWorkspaceLastThreadMap(state.activeThreadIdByWorkspace);
     activeThreadIdByWorkspaceRef.current = state.activeThreadIdByWorkspace;
     threadStatusByIdRef.current = state.threadStatusById;
     itemsByThreadRef.current = state.itemsByThread;
@@ -753,6 +767,15 @@ export function useThreads({
       const threads = threadsByWorkspaceRef.current[workspaceId] ?? [];
       const thread = threads.find((t) => t.id === threadId);
       return thread?.providerProfileId?.trim() || null;
+    },
+    [],
+  );
+
+  const getThreadDshAgentPreset = useCallback(
+    (workspaceId: string, threadId: string): string | null => {
+      const threads = threadsByWorkspaceRef.current[workspaceId] ?? [];
+      const thread = threads.find((t) => t.id === threadId);
+      return thread?.dshAgentPreset?.trim() || null;
     },
     [],
   );
@@ -1021,11 +1044,13 @@ export function useThreads({
     deleteThreadForWorkspace,
     renameThreadTitleMapping,
     setThreadHistoryLoading,
+    setThreadHistoryLoadingProgress,
     historyLoadingByThreadId,
     historyLoadingProgressByThreadId,
   } = useThreadActions({
     dispatch,
     itemsByThread: state.itemsByThread,
+    historyWindowByThread: state.historyWindowByThread,
     tokenUsageByThread: state.tokenUsageByThread,
     userInputRequests: state.userInputRequests,
     threadsByWorkspace: state.threadsByWorkspace,
@@ -2078,6 +2103,7 @@ export function useThreads({
     getThreadEngine,
     getThreadKind,
     getThreadProviderProfileId,
+    getThreadDshAgentPreset,
     markProcessing: markProcessingWithImmediateOwner,
     markReviewing,
     setActiveTurnId: setActiveTurnIdWithCompletionEmail,
@@ -2218,9 +2244,27 @@ export function useThreads({
         lastEmptySurfaceResumeAtMs:
           emptySurfaceResumeAtByThreadRef.current[canonicalThreadId] ?? 0,
       });
-      // Select must not raise a history-loading curtain. Unloaded history
-      // resumes after the 24ms delay; blank Claude uses in-place recovery.
-      clearHistoryLoadingForThread(canonicalThreadId);
+      // Unloaded Native / Shared history still needs a select-frame curtain so
+      // the canvas does not flash emptyThread while resume is in flight.
+      // Native / DSH write prepare progress immediately; Shared keeps its own
+      // restore copy. Known never-started / failed / already-loaded stay off.
+      const shouldShowHistoryLoading =
+        resumeDecision.action === "resume" &&
+        !isLoaded &&
+        shouldShowHistoryLoadingForSelectionThread(canonicalThreadId);
+      if (shouldShowHistoryLoading) {
+        setThreadHistoryLoading(canonicalThreadId, true);
+        historyLoadingThreadByWorkspaceRef.current[targetId] =
+          canonicalThreadId;
+        setThreadHistoryLoadingProgress(
+          canonicalThreadId,
+          canonicalThreadId.startsWith("shared:")
+            ? buildSharedHistoryPrepareProgress()
+            : buildNativeHistoryPrepareProgress(),
+        );
+      } else {
+        clearHistoryLoadingForThread(canonicalThreadId);
+      }
       if (resumeDecision.action === "skip") {
         return;
       }
@@ -2278,6 +2322,7 @@ export function useThreads({
         );
         if (!loadedAtCallback) {
           loadedThreadLastRefreshAtRef.current[canonicalThreadId] = Date.now();
+          let resumeLoadingThreadId = canonicalThreadId;
           void resumeThreadForWorkspace(
             targetId,
             canonicalThreadId,
@@ -2286,9 +2331,39 @@ export function useThreads({
             {
               preferLocalCodexHistory: true,
             },
-          ).then((recoveredThreadId) => {
-            applyRecoveredCanonical(recoveredThreadId);
-          });
+          )
+            .then((recoveredThreadId) => {
+              if (!isCurrentHistorySelection()) {
+                return;
+              }
+              const recoveredCanonicalThreadId = recoveredThreadId
+                ? resolveCanonicalThreadId(recoveredThreadId)
+                : null;
+              if (
+                shouldShowHistoryLoading &&
+                recoveredCanonicalThreadId &&
+                recoveredCanonicalThreadId !== canonicalThreadId
+              ) {
+                clearHistoryLoadingForThread(canonicalThreadId);
+                setThreadHistoryLoading(recoveredCanonicalThreadId, true);
+                historyLoadingThreadByWorkspaceRef.current[targetId] =
+                  recoveredCanonicalThreadId;
+                resumeLoadingThreadId = recoveredCanonicalThreadId;
+              }
+              applyRecoveredCanonical(recoveredThreadId);
+            })
+            .finally(() => {
+              if (!isCurrentHistorySelection()) {
+                return;
+              }
+              const currentLoadingThreadId =
+                historyLoadingThreadByWorkspaceRef.current[targetId] ?? null;
+              if (currentLoadingThreadId === resumeLoadingThreadId) {
+                clearHistoryLoadingForThread(resumeLoadingThreadId);
+                return;
+              }
+              setThreadHistoryLoading(canonicalThreadId, false);
+            });
           return;
         }
         clearHistoryLoadingForThread(canonicalThreadId);
@@ -2327,6 +2402,7 @@ export function useThreads({
       resolveCanonicalThreadId,
       resumeThreadForWorkspace,
       setThreadHistoryLoading,
+      setThreadHistoryLoadingProgress,
     ],
   );
 
@@ -2560,6 +2636,11 @@ export function useThreads({
         const message = error instanceof Error ? error.message : String(error);
         const code = mapDeleteErrorCode(message);
         if (shouldSettleDeleteAsSuccess(message)) {
+          if (isGhostClientSessionIndexDeleteError(message)) {
+            await tombstoneSessionIndexRows(
+              sessionIndexIdsForThreadTombstone(threadId),
+            ).catch(() => 0);
+          }
           return settleThreadDeletionLocally({
             success: true,
             code: null,
@@ -2616,11 +2697,22 @@ export function useThreads({
             workspaceId,
             batchedThreadIds,
           );
-          response.results.forEach((result) => {
+          for (const result of response.results) {
             const message =
               (result.error ?? "").trim() || "Failed to delete session";
             const code = mapDeleteErrorCode(message);
-            if (result.ok || shouldSettleDeleteAsSuccess(message)) {
+            if (
+              result.ok ||
+              shouldSettleDeleteAsSuccess(message, result.code)
+            ) {
+              if (
+                !result.ok &&
+                isGhostClientSessionIndexDeleteError(message, result.code)
+              ) {
+                await tombstoneSessionIndexRows(
+                  sessionIndexIdsForThreadTombstone(result.sessionId),
+                ).catch(() => 0);
+              }
               loadedThreadsRef.current[result.sessionId] = false;
               unpinThread(workspaceId, result.sessionId);
               dispatch({
@@ -2639,7 +2731,7 @@ export function useThreads({
                 code: null,
                 message: null,
               });
-              return;
+              continue;
             }
             batchedResultByThreadId.set(result.sessionId, {
               threadId: result.sessionId,
@@ -2647,7 +2739,7 @@ export function useThreads({
               code,
               message,
             });
-          });
+          }
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);

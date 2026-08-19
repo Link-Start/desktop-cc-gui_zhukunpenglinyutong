@@ -56,6 +56,24 @@ describe("messages context stack layout", () => {
     expect(actionsRule).toMatch(/box-shadow:\s*0 0 10px 6px/);
   });
 
+  it("lets the dsh-goal fold span the conversation column like other inject summaries", () => {
+    const injectStackRule = getCssRuleBlock(
+      messagesPart1Css,
+      [
+        ".message-context-stack.is-user.has-memory-inject,",
+        ".message-context-stack.is-user.has-browser-excerpt,",
+        ".message-context-stack.is-user.has-dsh-goal,",
+        ".message-context-stack.is-user:has(> .memory-inject-summary),",
+        ".message-context-stack.is-user:has(> .browser-context-summary-card),",
+        ".message-context-stack.is-user:has(> .dsh-goal-context-summary-card)",
+      ].join("\n"),
+    );
+
+    expect(injectStackRule).toContain("width: 100%;");
+    expect(injectStackRule).toContain("justify-items: stretch;");
+    expect(injectStackRule).toContain("margin-left: 0;");
+  });
+
   it("bounds appended user context cards inside the shared user column", () => {
     const contextCardRule = getCssRuleBlock(
       messagesPart1Css,

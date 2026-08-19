@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ConversationItem } from "../../../types";
+import { DEFAULT_HISTORY_WINDOW_SIZE } from "../../messages/orchestration/presentation/messagesHistoryWindow";
+import { CLAUDE_UI_HISTORY_WINDOW } from "../loaders/claudeHistoryLoader";
 import {
   dispatchThreadItemsProgressively,
+  OLDER_HISTORY_REVEAL_PAGE_SIZE,
   THREAD_ITEMS_FIRST_PAINT_COUNT,
+  THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED,
   THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE,
 } from "./dispatchThreadItemsProgressively";
 
@@ -101,5 +105,93 @@ describe("dispatchThreadItemsProgressively", () => {
       shouldContinue: () => false,
     });
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("retreats the first-paint cut to the turn start instead of splitting a turn", async () => {
+    const prefix = makeItems(250);
+    const turnItems: ConversationItem[] = Array.from({ length: 20 }, (_, index) => ({
+      id: `turn-item-${index}`,
+      kind: "message" as const,
+      role: "assistant" as const,
+      text: `turn-${index}`,
+      turnId: "turn-cut",
+    }));
+    const tail = Array.from({ length: 290 }, (_, index) => ({
+      id: `tail-${index}`,
+      kind: "message" as const,
+      role: "assistant" as const,
+      text: `tail-${index}`,
+    }));
+    const items = [...prefix, ...turnItems, ...tail];
+    const dispatch = vi.fn();
+
+    const result = await dispatchThreadItemsProgressively(
+      dispatch,
+      "claude:turn-cut",
+      items,
+      { batchSize: THREAD_ITEMS_FIRST_PAINT_COUNT },
+    );
+
+    const first = dispatch.mock.calls[0]?.[0] as { items: ConversationItem[] };
+    expect(first.items[0]?.id).toBe("turn-item-0");
+    expect(first.items.length).toBeGreaterThan(THREAD_ITEMS_FIRST_PAINT_COUNT);
+    expect(result.remainingOlderCount).toBe(250);
+    expect(result.displayedCount).toBe(items.length - 250);
+    expect(first.items.length).toBeLessThanOrEqual(
+      THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED,
+    );
+  });
+
+  it("caps first-paint when a mega-turn would otherwise expand to the full transcript", async () => {
+    const items: ConversationItem[] = Array.from({ length: 2000 }, (_, index) => ({
+      id: `mega-${index}`,
+      kind: "message" as const,
+      role: "assistant" as const,
+      text: `mega-${index}`,
+      turnId: "one-giant-turn",
+    }));
+    const dispatch = vi.fn();
+    const result = await dispatchThreadItemsProgressively(
+      dispatch,
+      "claude:mega",
+      items,
+    );
+    const first = dispatch.mock.calls[0]?.[0] as { items: ConversationItem[] };
+    expect(first.items).toHaveLength(THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED);
+    expect(first.items[0]?.id).toBe(
+      items[items.length - THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED]?.id,
+    );
+    expect(result).toEqual({
+      displayedCount: THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED,
+      remainingOlderCount: items.length - THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED,
+    });
+  });
+
+  it("writes a medium transcript in one shot without pending older history", async () => {
+    const items = makeItems(250);
+    const dispatch = vi.fn();
+    const result = await dispatchThreadItemsProgressively(
+      dispatch,
+      "claude:medium",
+      items,
+    );
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setThreadItems",
+      threadId: "claude:medium",
+      items,
+    });
+    expect(result).toEqual({
+      displayedCount: 250,
+      remainingOlderCount: 0,
+    });
+  });
+
+  it("keeps first-paint / reveal / progressive constants decoupled", () => {
+    expect(THREAD_ITEMS_FIRST_PAINT_COUNT).toBe(300);
+    expect(THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED).toBe(400);
+    expect(THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE).toBe(800);
+    expect(DEFAULT_HISTORY_WINDOW_SIZE).toBe(800);
+    expect(OLDER_HISTORY_REVEAL_PAGE_SIZE).toBe(500);
+    expect(CLAUDE_UI_HISTORY_WINDOW).toBe(80);
   });
 });

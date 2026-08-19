@@ -334,6 +334,8 @@ const git = {
     historyPushDialogPushTags: "推送标签",
     historyPushDialogRunHooks: "运行 Git 挂钩",
     historyPushDialogForceWithLease: "Force with lease",
+    historyPushDialogRecentLabel: "推送历史",
+    historyPushDialogRecentGerrit: "Gerrit",
     historyCreatePr: "PR",
     historyCreatePrDialogTitle: "创建 Pull Request",
     historyCreatePrDialogSubtitle:

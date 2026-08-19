@@ -351,6 +351,8 @@ const git = {
     historyPushDialogPushTags: "Push tags",
     historyPushDialogRunHooks: "Run Git hooks",
     historyPushDialogForceWithLease: "Force with lease",
+    historyPushDialogRecentLabel: "Recent pushes",
+    historyPushDialogRecentGerrit: "Gerrit",
     historyCreatePr: "PR",
     historyCreatePrDialogTitle: "Create Pull Request",
     historyCreatePrDialogSubtitle:

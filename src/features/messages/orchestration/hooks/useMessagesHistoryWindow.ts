@@ -17,21 +17,25 @@ import {
 } from "../presentation/messagesViewModel";
 
 type UseMessagesHistoryWindowInput = {
-  firstItemId: string | null;
+  /**
+   * Conversation identity (workspace + thread). Must stay stable across
+   * older-history prepends — those change `items[0].id` but are the same session.
+   */
+  scopeKey: string | null;
 };
 
-export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWindowInput) {
+export function useMessagesHistoryWindow({ scopeKey }: UseMessagesHistoryWindowInput) {
   const [showAllHistoryItems, setShowAllHistoryItems] = useState(false);
   const [historyExpansionMode, setHistoryExpansionMode] =
     useState<MessagesHistoryExpansionMode>(null);
   const [pendingJumpMessageId, setPendingJumpMessageId] = useState<string | null>(null);
-  // 会话内分页：chip 每点一次按页多展开 revealedHistoryItemCount 条（不跳屏）。
+  // 会话内展开预算：磁盘页 / 内存余量都按 prependedCount 累加，默认一页 500。
   const [revealedHistoryItemCount, setRevealedHistoryItemCount] = useState(0);
   const pendingHistoryExpansionModeRef = useRef<MessagesHistoryExpansionMode>(null);
-  const firstItemIdRef = useRef<string | null>(firstItemId);
+  const scopeKeyRef = useRef<string | null>(scopeKey);
 
   useEffect(() => {
-    if (firstItemId !== firstItemIdRef.current) {
+    if (scopeKey !== scopeKeyRef.current) {
       // pre-dispatch：默认态不得换新引用 / 虚写（#185 防御）
       setShowAllHistoryItems((previous) => (previous ? false : previous));
       setHistoryExpansionMode((previous) =>
@@ -43,8 +47,8 @@ export function useMessagesHistoryWindow({ firstItemId }: UseMessagesHistoryWind
       setRevealedHistoryItemCount((previous) => (previous === 0 ? previous : 0));
       pendingHistoryExpansionModeRef.current = null;
     }
-    firstItemIdRef.current = firstItemId;
-  }, [firstItemId]);
+    scopeKeyRef.current = scopeKey;
+  }, [scopeKey]);
 
   const revealAllHistoryItems = useCallback((mode: "manual" | "jump") => {
     pendingHistoryExpansionModeRef.current = mode;

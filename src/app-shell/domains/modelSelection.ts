@@ -37,7 +37,7 @@ export const CLAUDE_REASONING_OPTIONS = ["low", "medium", "high", "xhigh", "max"
 /** Grok CLI composer allowlist — keep aligned with `GROK_REASONING_EFFORTS` in grok.rs. */
 export const GROK_REASONING_OPTIONS = ["low", "medium", "high"];
 
-function findModelById(models: ModelOption[], id: string | null) {
+export function findModelById(models: ModelOption[], id: string | null) {
   if (!id) {
     return null;
   }

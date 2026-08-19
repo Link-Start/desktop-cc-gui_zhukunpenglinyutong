@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 function resolveIsolatedPort() {
   const rawPort = process.env.MOSS_DEV_PORT ?? "";
@@ -12,7 +15,8 @@ function resolveIsolatedPort() {
 }
 
 const isolatedPort = resolveIsolatedPort();
-const tauriBin = process.platform === "win32" ? "tauri.cmd" : "tauri";
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const tauriCli = createRequire(import.meta.url).resolve("@tauri-apps/cli/tauri.js");
 const isolatedConfig = JSON.stringify({
   build: {
     devUrl: `http://localhost:${isolatedPort}`,
@@ -20,9 +24,17 @@ const isolatedConfig = JSON.stringify({
 });
 
 const child = spawn(
-  tauriBin,
-  ["dev", "--config", "src-tauri/tauri.dev.conf.json", "--config", isolatedConfig],
+  process.execPath,
+  [
+    tauriCli,
+    "dev",
+    "--config",
+    "src-tauri/tauri.dev.conf.json",
+    "--config",
+    isolatedConfig,
+  ],
   {
+    cwd: repoRoot,
     env: {
       ...process.env,
       MOSS_DEV_PORT: isolatedPort,

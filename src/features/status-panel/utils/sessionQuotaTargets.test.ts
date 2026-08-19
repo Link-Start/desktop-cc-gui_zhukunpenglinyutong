@@ -86,6 +86,34 @@ describe("collectSessionQuotaTargets", () => {
     expect(targets[0]?.key).toBe(buildSessionQuotaTargetKey("pi", null));
   });
 
+  it("extracts dsh vendor from selected model instead of the host catalog sentinel", () => {
+    const targets = collectSessionQuotaTargets([], {
+      engine: "dsh",
+      providerProfileId: "__dsh_host_catalog__",
+      providerLabel: "DSH",
+      model: "deepseek-official/deepseek-v4-flash",
+    });
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.engine).toBe("dsh");
+    expect(targets[0]?.providerProfileId).toBe("deepseek-official");
+    expect(targets[0]?.key).toBe(
+      buildSessionQuotaTargetKey("dsh", "deepseek-official"),
+    );
+    expect(formatSessionQuotaTargetTitle(targets[0]!)).toBe("DSH");
+  });
+
+  it("extracts pi vendor from selected model instead of the local sentinel", () => {
+    const targets = collectSessionQuotaTargets([], {
+      engine: "pi",
+      providerProfileId: "__local_pi__",
+      providerLabel: "PI CLI",
+      model: "deepseek/deepseek-chat",
+    });
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.providerProfileId).toBe("deepseek");
+    expect(targets[0]?.key).toBe(buildSessionQuotaTargetKey("pi", "deepseek"));
+  });
+
   it("does not duplicate fallback when already present in items", () => {
     const items: ConversationItem[] = [
       assistant("a1", {

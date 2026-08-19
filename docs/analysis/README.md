@@ -18,6 +18,8 @@ status: active
 - [Native vs Shared CLI explained](./native-vs-shared-cli-explained.md) — Active product/engineering guide。
 - [Shared create / open local catalog stale mapping](./shared-create-local-catalog-stale-mapping-2026-08-08.md) — Active fix reference；Shared 创建权威 catalog + 打开历史文案/图标 mapping 同源。
 - [Workspace switch session catalog performance regression](./workspace-switch-session-catalog-performance-regression-2026-08-08.md) — Active incident analysis；校准 v0.7.16/v0.8.0 commits、exhaustive projection 主根因、首轮修复证伪与性能治理顺序。
+- [左侧会话列表拉取：0.8.9 对照](./sidebar-session-list-fetch-0.8.9-vs-current-2026-08-18.md) — Historical 主线对照；N0 投影不蒸发 + N1–N6。合同：[`complete-native-sidebar-session-index`](../../openspec/changes/complete-native-sidebar-session-index/proposal.md)。Shared 维持现状不进本轮。
+- [左侧 Session 六条回归（2026-08-19）](./sidebar-session-list-regression-bundle-2026-08-19.md) — Active 定位；标签 / 绑回 / 草稿 / Shared sqlite / 列表跳动。合同：`fix-sidebar-session-list-regressions`。计划：[`../plans/2026-08-19-sidebar-session-list-regression-bundle.md`](../plans/2026-08-19-sidebar-session-list-regression-bundle.md)。
 - [React #185 / ErrorBoundary Crash playbook](./react-185-maximum-update-depth-playbook.md) — Active troubleshooting runbook；主线 `#185` + 并列家族 `RangeError` 栈溢出（AP-08）；最新 case `C-20260811-01`（0.8.6 Markdown table row count / #1066；前案 C-20260805-01 等）。
 - [Windows cold-start click freeze（版本记录 + 权限选择 + first-click）](./windows-cold-start-click-freeze-release-notes-and-composer-2026-08-14.md) — Active incident analysis；2026-08-14 P0。执行禁令见 `dev-guidelines/guides/windows-cold-start-click-freeze-pitfall.md`。
 - [PR #1092 性能复盘](../perf/pr-1092-performance-retrospective.md) — 流式 / AppShell / 长历史 / 冷启动的主因、解法与防再犯；冷启只是其中一条战线。

@@ -21,6 +21,7 @@ import {
   type CodexProviderProfileSelection,
   type CodexProviderProfileOption,
 } from "../../threads/constants/codexProviderProfiles";
+import { isManagedEngineProviderProfileId } from "../../threads/hooks/sessionLifecycleController";
 import { UpdateToast } from "../../update/components/UpdateToast";
 import { ErrorToasts } from "../../notifications/components/ErrorToasts";
 import { GlobalRuntimeNoticeDock } from "../../notifications/components/GlobalRuntimeNoticeDock";
@@ -1777,8 +1778,15 @@ export function useLayoutNodes(input: LayoutNodesOptions): LayoutNodesResult {
           onSelectEngine={options.onSelectEngine}
           models={options.models}
           providerModelCatalogs={options.providerModelCatalogs}
-          providerProfileId={activeThreadSummary?.providerProfileId ?? null}
+          providerProfileId={
+            isManagedEngineProviderProfileId(
+              activeThreadSummary?.providerProfileId,
+            )
+              ? activeThreadSummary?.providerProfileId
+              : null
+          }
           providerProfileName={activeThreadSummary?.providerProfileName ?? null}
+          dshAgentPreset={activeThreadSummary?.dshAgentPreset ?? null}
           selectedModelId={options.selectedModelId}
           onSelectModel={options.onSelectModel}
           reasoningOptions={options.reasoningOptions}

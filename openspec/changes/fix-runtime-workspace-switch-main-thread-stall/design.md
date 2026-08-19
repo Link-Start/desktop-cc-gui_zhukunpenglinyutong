@@ -87,6 +87,27 @@ v5 修复 CJK path bucket collision 与 transcript cwd 越界归属，是 correc
 
 `9e3c1bdd8` 保证 `workspacesById` 到达后 first-paint 一定执行，修复真实的 Sidebar 永久“加载中…”问题。不能用恢复竞态跳过工作来换取表面性能；应让被稳定执行的路径本身有界。
 
+### D5 — Sidebar click 不得擦 last thread，也不得在点击帧 hydrate
+
+S0–S5 修的是 list stale 与 projection IPC。复测后真正还在炸的路径是侧栏 `handleSelectWorkspace`：
+
+```text
+click workspace B
+  setActiveWorkspaceId(B)
+  ensureWorkspaceThreadListLoaded(B)  // already-hydrated => kind=full-catalog, click frame
+  setActiveThreadId(null, B)          // wipes last thread; canvas empty until user re-clicks
+```
+
+`activeThreadId` 由 `activeThreadIdByWorkspace[activeWorkspaceId]` 派生。只要点击不写 `null`，A→B→A 会自动回到上次会话；若 item cache 被 LRU 挤掉，需要再 `setActiveThreadId(last)` 才能走既有 resume / curtain。
+
+点击帧的 `ensureWorkspaceThreadListLoaded` 对已 hydrate workspace 会走 full-catalog，绕过 hydration hook 的 100ms/300ms quiet gate，这才是「点项目卡 5–10s」的残留主因。列表仍由 `activeWorkspaceId` 变化后的 quiet-gated first-paint 负责。
+
+Cycle 是兄弟路径：旧实现用第一行或 `null` 覆盖 last thread。新策略 last > first-listed > keep-map，永不写 `null`。
+
+Last-thread peek 走 `useThreads` 发布的模块快照，不往 `sessionIdentityContext` 加 bag key（hard freeze 14）。快照 MUST 在 committed `useEffect` 里发布并浅拷贝；禁止在 render 期写入，避免 discarded concurrent render 污染 peek。
+
+S6 只改了 `handleSelectWorkspace`。复盘后发现侧栏项目行并不走它：`WorkspaceCard` 只要拿到 `onOpenWorkspaceHome` 就进 `handleOpenWorkspaceHome`，后者 `setActiveThreadId(null)`。所以 A→B→A 的真实热路径仍在擦 last thread。S7 把非 active 行改回 `onSelectWorkspace`；只有已经 active 的行才保留显式 home。
+
 ## Test plan
 
 1. **Unit**: mid-flight `isStale` flips true after titles → `listThreads` / `listWorkspaceSessions` / gemini not called (or not beyond injection point); no `setThreads`.
@@ -94,6 +115,7 @@ v5 修复 CJK path bucket collision 与 transcript cwd 越界归属，是 correc
 3. **Hook regression**: render/switch AppShell search-radar section does not call projection summary and passes local owner ids into hydration.
 4. **Regression**: existing timeout-fallback / hydration cancel tests stay green.
 5. **Manual**: cross-project shared switch (user).
+6. **Unit**: sidebar click / cycle restore last thread and never write `null`; click handler source has no `ensureWorkspaceThreadListLoaded`.
 
 ## Relation to cold-start change
 

@@ -12,7 +12,10 @@ import {
   listWorkspaceSessionFolders,
   renameWorkspaceSessionFolder,
 } from "../../../services/tauri";
-import { writeClientStoreValue } from "../../../services/clientStorage";
+import {
+  resetClientStorageForTests,
+  writeClientStoreValue,
+} from "../../../services/clientStorage";
 import { SIDEBAR_SETTINGS_PINNED_ACTIONS_KEY } from "../hooks/useSidebarSettingsPinnedActions";
 import { pushErrorToast } from "../../../services/toasts";
 
@@ -25,6 +28,7 @@ afterEach(() => {
 
 beforeEach(() => {
   resetSidebarTestMocks();
+  resetClientStorageForTests();
 });
 
 function openWorkspaceActionsMenu(workspaceCard: HTMLElement) {
@@ -1734,7 +1738,7 @@ describe("Sidebar", () => {
     expect(screen.queryByText("Ungrouped")).toBeNull();
   });
 
-  it("opens workspace home on single row click without toggling collapse", () => {
+  it("selects an inactive workspace on single row click without opening home", () => {
     const workspace = {
       id: "ws-1",
       name: "codemoss",
@@ -1770,6 +1774,46 @@ describe("Sidebar", () => {
     const workspaceLabel = screen.getByText("codemoss");
 
     fireEvent.click(workspaceLabel);
+    expect(onSelectWorkspace).toHaveBeenCalledWith("ws-1");
+    expect(onOpenWorkspaceHome).not.toHaveBeenCalled();
+    expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();
+  });
+
+  it("opens workspace home only when the already-active workspace row is clicked", () => {
+    const workspace = {
+      id: "ws-1",
+      name: "codemoss",
+      path: "/tmp/codemoss",
+      connected: true,
+      kind: "main" as const,
+      settings: {
+        sidebarCollapsed: false,
+        worktreeSetupScript: null,
+      },
+    };
+    const onSelectWorkspace = vi.fn();
+    const onOpenWorkspaceHome = vi.fn();
+    const onToggleWorkspaceCollapse = vi.fn();
+
+    render(
+      <Sidebar
+        {...baseProps}
+        workspaces={[workspace]}
+        activeWorkspaceId="ws-1"
+        groupedWorkspaces={[
+          {
+            id: null,
+            name: "Ungrouped",
+            workspaces: [workspace],
+          },
+        ]}
+        onSelectWorkspace={onSelectWorkspace}
+        onOpenWorkspaceHome={onOpenWorkspaceHome}
+        onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("codemoss"));
     expect(onOpenWorkspaceHome).toHaveBeenCalledWith("ws-1");
     expect(onSelectWorkspace).not.toHaveBeenCalled();
     expect(onToggleWorkspaceCollapse).not.toHaveBeenCalled();

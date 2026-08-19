@@ -129,3 +129,160 @@ export function normalizeHistoryLoadingProgress(
     percent: clampPercent(progress.percent),
   };
 }
+
+export function sameHistoryLoadingProgress(
+  left: HistoryLoadingProgress | undefined,
+  right: HistoryLoadingProgress,
+): boolean {
+  if (!left) {
+    return false;
+  }
+  return (
+    left.phase === right.phase &&
+    left.percent === right.percent &&
+    left.titleKey === right.titleKey &&
+    left.detailKey === right.detailKey &&
+    sameHistoryLoadingDetailParams(left.detailParams, right.detailParams)
+  );
+}
+
+function sameHistoryLoadingDetailParams(
+  left?: Record<string, string | number>,
+  right?: Record<string, string | number>,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return !left && !right;
+  }
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  for (const key of keys) {
+    if (left[key] !== right[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function isSharedHistoryLoadingProgress(
+  progress: HistoryLoadingProgress | null | undefined,
+): boolean {
+  return progress?.titleKey === "restoringSharedHistory";
+}
+
+export function buildNativeHistoryPrepareProgress(): HistoryLoadingProgress {
+  return {
+    phase: "prepare",
+    percent: 8,
+    titleKey: "restoringHistory",
+    detailKey: "restoringHistoryPrepare",
+  };
+}
+
+export function buildNativeHistorySessionWaitingProgress(): HistoryLoadingProgress {
+  return {
+    phase: "session",
+    percent: 12,
+    titleKey: "restoringHistory",
+    detailKey: "restoringHistorySession",
+  };
+}
+
+export function buildNativeHistoryParseProgress(
+  itemCount?: number,
+): HistoryLoadingProgress {
+  return {
+    phase: "projection",
+    percent: 72,
+    titleKey: "restoringHistory",
+    detailKey: "restoringHistoryParse",
+    detailParams: {
+      count: typeof itemCount === "number" ? itemCount : 0,
+    },
+  };
+}
+
+export function buildNativeHistoryHydrateProgress(
+  step: "start" | "done",
+  itemCount?: number,
+): HistoryLoadingProgress {
+  return {
+    phase: "merge",
+    percent: step === "start" ? 86 : 96,
+    titleKey: "restoringHistory",
+    detailKey: "restoringHistoryHydrate",
+    detailParams: {
+      count: typeof itemCount === "number" ? itemCount : 0,
+    },
+  };
+}
+
+export function buildNativeHistoryFinalizeProgress(): HistoryLoadingProgress {
+  return {
+    phase: "finalize",
+    percent: 100,
+    titleKey: "restoringHistory",
+    detailKey: "restoringHistoryFinalize",
+  };
+}
+
+export const DSH_HISTORY_LOAD_MAX_PAGES = 40;
+
+export type DshHistoryLoadProgressEvent = {
+  sessionId: string;
+  pageIndex: number;
+  maxPages: number;
+  pageEventCount: number;
+  totalEventCount: number;
+  hasMore: boolean;
+};
+
+export function mapDshHistoryLoadProgressEvent(
+  event: DshHistoryLoadProgressEvent,
+): HistoryLoadingProgress {
+  const maxPages = Math.max(1, event.maxPages || DSH_HISTORY_LOAD_MAX_PAGES);
+  const pageIndex = Math.max(0, event.pageIndex);
+  const percent =
+    pageIndex <= 0
+      ? 12
+      : clampPercent(12 + Math.floor((Math.min(pageIndex, maxPages) / maxPages) * 50));
+  if (pageIndex <= 0) {
+    return buildNativeHistorySessionWaitingProgress();
+  }
+  return {
+    phase: "session",
+    percent,
+    titleKey: "restoringHistory",
+    detailKey: "restoringHistorySessionPage",
+    detailParams: {
+      page: pageIndex,
+      maxPages,
+      pageEvents: Math.max(0, event.pageEventCount),
+      totalEvents: Math.max(0, event.totalEventCount),
+    },
+  };
+}
+
+export function matchesDshHistoryLoadSession(
+  eventSessionId: string,
+  threadId: string,
+  hostSessionId: string,
+): boolean {
+  return (
+    eventSessionId === hostSessionId ||
+    eventSessionId === threadId ||
+    eventSessionId === `dsh:${hostSessionId}`
+  );
+}
+
+export async function yieldHistoryLoadingPaint(): Promise<void> {
+  if (typeof requestAnimationFrame !== "function") {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve());
+    });
+  });
+}

@@ -20,6 +20,12 @@ import {
   isMossxProgramControlTitle,
 } from "../../../utils/contextProtocol";
 import { remapThreadParentsToSharedOwners } from "../../shared-session/runtime/sharedSessionSummaries";
+import { sharedHideIdentityIntersects } from "../../shared-session/runtime/sharedHideIdentity";
+import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
+import {
+  shouldHidePlaceholderNativeDraftFromSidebar,
+  stripEmptyClaudeIndexFallbackSummaries,
+} from "./sessionIndexThreadSummaries";
 
 const CLAUDE_HISTORY_MESSAGE_ID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -61,6 +67,7 @@ const THREAD_RECOVERY_TIME_WINDOW_MS = 24 * 60 * 60 * 1000;
 export type GeminiSessionSummary = {
   sessionId: string;
   firstMessage: string;
+  createdAt?: number;
   updatedAt: number;
   fileSizeBytes?: number;
 };
@@ -68,7 +75,9 @@ export type GeminiSessionSummary = {
 // Kimi session summaries share the Gemini summary shape (id/message/updatedAt/size).
 export type KimiSessionSummary = GeminiSessionSummary;
 
-export type DshSessionSummary = GeminiSessionSummary;
+export type DshSessionSummary = GeminiSessionSummary & {
+  agentPreset?: string | null;
+};
 
 // Grok：在 Gemini 形状上扩展 parent / sessionKind（子代理树）
 export type GrokSessionSummary = GeminiSessionSummary & {
@@ -81,6 +90,7 @@ export type CodexCatalogSessionSummary = {
   workspaceId?: string | null;
   title: string;
   nativeTitle?: string | null;
+  createdAt?: number;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -1153,10 +1163,12 @@ function normalizeGeminiSessionSummary(
     return null;
   }
   const fileSizeBytes = extractThreadSizeBytes(record);
+  const createdAt = asNumber(record.createdAt ?? record.created_at);
   return {
     sessionId,
     firstMessage: asString(record.firstMessage ?? record.first_message).trim(),
     updatedAt: asNumber(record.updatedAt ?? record.updated_at),
+    ...(createdAt > 0 ? { createdAt } : {}),
     ...(fileSizeBytes !== undefined ? { fileSizeBytes } : {}),
   };
 }
@@ -1190,19 +1202,40 @@ export function normalizePiSessionSummaries(
   return normalizeGeminiSessionSummaries(value);
 }
 
+function normalizeDshSessionSummary(value: unknown): DshSessionSummary | null {
+  const base = normalizeGeminiSessionSummary(value);
+  if (!base) {
+    return null;
+  }
+  if (!value || typeof value !== "object") {
+    return base;
+  }
+  const record = value as Record<string, unknown>;
+  const agentPreset = asString(record.agentPreset ?? record.agent_preset).trim();
+  return agentPreset ? { ...base, agentPreset } : base;
+}
+
 export function normalizeDshSessionSummaries(
   value: unknown,
 ): DshSessionSummary[] {
-  if (Array.isArray(value)) {
-    return normalizeGeminiSessionSummaries(value);
-  }
-  if (!value || typeof value !== "object") {
+  const raw = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? ((value as Record<string, unknown>).sessions ??
+        (value as Record<string, unknown>).items ??
+        (value as Record<string, unknown>).data)
+      : [];
+  if (!Array.isArray(raw)) {
     return [];
   }
-  const record = value as Record<string, unknown>;
-  return normalizeGeminiSessionSummaries(
-    record.sessions ?? record.items ?? record.data,
-  );
+  const summaries: DshSessionSummary[] = [];
+  raw.forEach((entry) => {
+    const summary = normalizeDshSessionSummary(entry);
+    if (summary) {
+      summaries.push(summary);
+    }
+  });
+  return summaries;
 }
 
 function normalizeGrokSessionSummary(value: unknown): GrokSessionSummary | null {
@@ -1351,20 +1384,12 @@ export function isSharedControlPlaneSpawnTitle(
   return isSharedCollabWorkerSpawnTitle(normalized);
 }
 
-/** hide set 命中：id 本体 + 去 engine 前缀后的 raw uuid */
+/** hide set 命中：id 本体 + 已知 engine 前缀 + Codex rollout stem / canonical uuid */
 export function threadIdInHiddenSharedBindingSet(
   threadId: string,
   hiddenSharedBindingIds: ReadonlySet<string>,
 ): boolean {
-  const id = threadId.trim();
-  if (!id) return false;
-  if (hiddenSharedBindingIds.has(id)) return true;
-  const colon = id.indexOf(":");
-  if (colon > 0) {
-    const bare = id.slice(colon + 1).trim();
-    if (bare && hiddenSharedBindingIds.has(bare)) return true;
-  }
-  return false;
+  return sharedHideIdentityIntersects(threadId, hiddenSharedBindingIds);
 }
 
 /**
@@ -1412,6 +1437,7 @@ function mergeNativeCliSessionSummaries(params: {
     GeminiSessionSummary & {
       parentSessionId?: string | null;
       sessionKind?: string | null;
+      agentPreset?: string | null;
     }
   >;
   idPrefix: "gemini" | "grok" | "kimi" | "pi" | "dsh";
@@ -1434,9 +1460,11 @@ function mergeNativeCliSessionSummaries(params: {
     hiddenSharedBindingIds,
   } = params;
   // sessions 全被 hide 过滤为空时，仍要清 baseline 泄漏；禁止 early-return 原 base。
-  const baseSummaries = stripHiddenSharedBindingSummaries(
-    params.baseSummaries,
-    hiddenSharedBindingIds ?? new Set(),
+  const baseSummaries = stripEmptyClaudeIndexFallbackSummaries(
+    stripHiddenSharedBindingSummaries(
+      params.baseSummaries,
+      hiddenSharedBindingIds ?? new Set(),
+    ),
   );
   if (sessions.length === 0) {
     return baseSummaries;
@@ -1466,9 +1494,23 @@ function mergeNativeCliSessionSummaries(params: {
     const updatedAt = Number.isFinite(session.updatedAt)
       ? Math.max(0, session.updatedAt)
       : 0;
+    const createdAt = resolveMergedThreadCreatedAt(prev, {
+      createdAt: session.createdAt,
+      updatedAt,
+    });
     const mappedTitle = mappedTitles[id];
     const customTitle = getCustomName(workspaceId, id);
     const title = previewThreadName(session.firstMessage, fallbackTitle);
+    if (
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: engineSource,
+        threadId: id,
+        displayName: title,
+        hasCustomName: Boolean(customTitle || mappedTitle),
+      })
+    ) {
+      return;
+    }
     // 双闸：clip 后 name 仍 control-plane / SUMMARY / MOSSX 则不入侧栏
     if (isSharedControlPlaneSpawnTitle(title)) {
       return;
@@ -1496,9 +1538,13 @@ function mergeNativeCliSessionSummaries(params: {
         customTitle,
       }),
       updatedAt,
+      ...(createdAt !== undefined ? { createdAt } : {}),
       sizeBytes: session.fileSizeBytes,
       engineSource,
       ...(parentThreadId ? { parentThreadId } : {}),
+      ...(typeof session.agentPreset === "string" && session.agentPreset.trim()
+        ? { dshAgentPreset: session.agentPreset.trim() }
+        : {}),
     };
     if (
       !prev ||
@@ -1517,17 +1563,25 @@ function mergeNativeCliSessionSummaries(params: {
         ...merged,
         parentThreadId:
           next.parentThreadId ?? merged.parentThreadId ?? prev?.parentThreadId ?? null,
+        dshAgentPreset:
+          next.dshAgentPreset ?? merged.dshAgentPreset ?? prev?.dshAgentPreset,
       });
-    } else if (parentThreadId && !prev.parentThreadId) {
-      // 本地 live 线程 updatedAt 更新时，仍要把 list 扫到的 parent 补回去
+    } else if (
+      (parentThreadId && !prev.parentThreadId) ||
+      (next.dshAgentPreset && !prev.dshAgentPreset)
+    ) {
+      // 本地 live 线程 updatedAt 更新时，仍要把 list 扫到的 parent / preset 补回去
       mergedById.set(id, {
         ...prev,
-        parentThreadId,
+        ...(parentThreadId ? { parentThreadId } : {}),
+        ...(next.dshAgentPreset ? { dshAgentPreset: next.dshAgentPreset } : {}),
       });
     }
   });
-  return Array.from(mergedById.values()).sort(
-    (a, b) => b.updatedAt - a.updatedAt,
+  return stripEmptyClaudeIndexFallbackSummaries(
+    Array.from(mergedById.values()).sort(
+      (a, b) => b.updatedAt - a.updatedAt,
+    ),
   );
 }
 
@@ -1689,9 +1743,11 @@ export function mergeCodexCatalogSessionSummaries(
   hiddenSharedBindingIds: ReadonlySet<string> = new Set(),
 ): ThreadSummary[] {
   // 先清 baseline 泄漏
-  const safeBase = stripHiddenSharedBindingSummaries(
-    baseSummaries,
-    hiddenSharedBindingIds,
+  const safeBase = stripEmptyClaudeIndexFallbackSummaries(
+    stripHiddenSharedBindingSummaries(
+      baseSummaries,
+      hiddenSharedBindingIds,
+    ),
   );
   if (codexSessions.length === 0) {
     return safeBase;
@@ -1746,6 +1802,10 @@ export function mergeCodexCatalogSessionSummaries(
     const updatedAt = Number.isFinite(session.updatedAt)
       ? Math.max(0, session.updatedAt)
       : 0;
+    const createdAt = resolveMergedThreadCreatedAt(prev, {
+      createdAt: session.createdAt,
+      updatedAt,
+    });
     const parentThreadId =
       engineSource === "claude" && session.parentSessionId
         ? session.parentSessionId.startsWith("claude:")
@@ -1760,6 +1820,21 @@ export function mergeCodexCatalogSessionSummaries(
         ? undefined
         : getCustomName(workspaceId, session.sessionId);
     const customTitle = ownerCustomTitle || selectedWorkspaceCustomTitle;
+    // Index / first-paint already drop empty native Session fallbacks.
+    // Live catalog still emits them from session_meta-only files; skip so
+    // hydration cannot resurrect the same pups.
+    if (
+      !nativeTitle &&
+      !customTitle &&
+      !mappedTitle &&
+      shouldHidePlaceholderNativeDraftFromSidebar({
+        engine: engineSource,
+        threadId: session.sessionId,
+        displayName: title,
+      })
+    ) {
+      return;
+    }
     const engineFallbackTitle =
       engineSource === "claude"
         ? "Claude Session"
@@ -1804,6 +1879,7 @@ export function mergeCodexCatalogSessionSummaries(
         engineSource,
       }),
       updatedAt,
+      ...(createdAt !== undefined ? { createdAt } : {}),
       archivedAt:
         typeof session.archivedAt === "number" &&
         Number.isFinite(session.archivedAt) &&
@@ -1845,8 +1921,10 @@ export function mergeCodexCatalogSessionSummaries(
       );
     }
   });
-  return Array.from(mergedById.values()).sort(
-    (a, b) => b.updatedAt - a.updatedAt,
+  return stripEmptyClaudeIndexFallbackSummaries(
+    Array.from(mergedById.values()).sort(
+      (a, b) => b.updatedAt - a.updatedAt,
+    ),
   );
 }
 
@@ -1864,6 +1942,10 @@ const PENDING_PREFIXES_BY_ENGINE: Partial<Record<EngineSource, string>> = {
   codex: "codex-pending-",
   opencode: "opencode-pending-",
   dsh: "dsh-pending-",
+  gemini: "gemini-pending-",
+  grok: "grok-pending-",
+  kimi: "kimi-pending-",
+  pi: "pi-pending-",
 };
 
 function isPendingEngineThreadId(
@@ -1874,7 +1956,8 @@ function isPendingEngineThreadId(
   if (!prefix) {
     return false;
   }
-  return threadId.trim().toLowerCase().startsWith(prefix);
+  const id = threadId.trim().toLowerCase();
+  return id.startsWith(prefix) || id.startsWith(`${engine}:${prefix}`);
 }
 
 /**

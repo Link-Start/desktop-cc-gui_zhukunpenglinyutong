@@ -26,7 +26,7 @@ describe("EngineIcon", () => {
     expect(markup).not.toContain("<img");
   });
 
-  it.each(["kimi", "grok"] as const)(
+  it.each(["kimi", "grok", "pi"] as const)(
     "renders the %s icon as a theme-aware monochrome svg glyph",
     (engine) => {
       const markup = renderToStaticMarkup(<EngineIcon engine={engine} size={16} />);
@@ -36,6 +36,14 @@ describe("EngineIcon", () => {
       expect(markup).not.toContain("<img");
     },
   );
+
+  it("keeps the official Pi block mark as evenodd currentColor paths", () => {
+    const markup = renderToStaticMarkup(<EngineIcon engine="pi" size={16} />);
+
+    expect(markup).toContain("M1 1h16.5v11H12v5.5H6.5V23H1V1zm5.5 5.5V12H12V6.5H6.5z");
+    expect(markup).toContain("M17.5 12H23v11h-5.5V12z");
+    expect(markup).toContain('fill-rule="evenodd"');
+  });
 
   it("renders DeepSeek Harness with the official whale icon", () => {
     const markup = renderToStaticMarkup(<EngineIcon engine="dsh" size={16} />);

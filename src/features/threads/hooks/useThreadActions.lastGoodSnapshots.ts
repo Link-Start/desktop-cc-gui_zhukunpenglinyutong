@@ -4,6 +4,11 @@ import type { ThreadSummary } from "../../../types";
 import type { WorkspaceSessionCatalogSourceStatus } from "../../../services/tauri";
 import { hasHealthyThreadSummaries } from "./useThreadActions.helpers";
 import { inferThreadEngineSource } from "./useThreadActions.helpers";
+import {
+  isLocalPendingDraftThreadId,
+  stripEmptyClaudeIndexFallbackSummaries,
+} from "./sessionIndexThreadSummaries";
+import { compareThreadSummariesByCreatedAtDesc } from "../utils/threadSummarySort";
 import { loadSidebarSnapshot } from "../utils/sidebarSnapshot";
 
 export type ThreadEngineSource = NonNullable<ThreadSummary["engineSource"]>;
@@ -127,6 +132,109 @@ export function flattenLastGoodEngineSnapshots(
   return Array.from(mergedById.values()).sort(
     (left, right) => right.updatedAt - left.updatedAt,
   );
+}
+
+function sessionContinuityKey(summary: ThreadSummary): string {
+  const id = String(summary.id ?? "").trim();
+  const engine = (
+    summary.engineSource ??
+    inferThreadEngineSource(id, summary) ??
+    (id.includes(":") ? id.slice(0, id.indexOf(":")) : "codex")
+  )
+    .trim()
+    .toLowerCase();
+  const bare = id.includes(":") ? id.slice(id.indexOf(":") + 1).trim() : id;
+  return `${engine}:${bare}`;
+}
+
+function isSharedContinuitySummary(summary: ThreadSummary): boolean {
+  const id = String(summary.id ?? "").trim();
+  return summary.threadKind === "shared" || id.startsWith("shared:");
+}
+
+/**
+ * D3 last-good floor: keep every Index row; add last-good rows that Index
+ * is missing or that are newer than the same `(engine, session_id)`.
+ * Newer Index wins on the same key. Shared / pending drafts stay out.
+ */
+export function unionIndexWithNewerLastGood(
+  indexSummaries: readonly ThreadSummary[],
+  lastGoodSummaries: readonly ThreadSummary[],
+): ThreadSummary[] {
+  const mergedByKey = new Map<string, ThreadSummary>();
+  for (const summary of indexSummaries) {
+    if (!summary.id) {
+      continue;
+    }
+    mergedByKey.set(sessionContinuityKey(summary), summary);
+  }
+  for (const candidate of lastGoodSummaries) {
+    if (!candidate.id || isSharedContinuitySummary(candidate)) {
+      continue;
+    }
+    const engine = candidate.engineSource ?? inferThreadEngineSource(candidate.id, candidate);
+    if (isLocalPendingDraftThreadId(engine, candidate.id)) {
+      continue;
+    }
+    const key = sessionContinuityKey(candidate);
+    const existing = mergedByKey.get(key);
+    if (!existing) {
+      mergedByKey.set(key, candidate);
+      continue;
+    }
+    if (candidate.updatedAt > existing.updatedAt) {
+      mergedByKey.set(key, candidate);
+    }
+  }
+  return Array.from(mergedByKey.values()).sort(
+    compareThreadSummariesByCreatedAtDesc,
+  );
+}
+
+export type LastGoodFloorProjection = {
+  visibleSummaries: ThreadSummary[];
+  /** null = do not promote this paint into last-good authority */
+  rememberCandidates: ThreadSummary[] | null;
+};
+
+/**
+ * Sidebar last-good policy: floor not ceiling.
+ * Empty Index without authoritative-empty proof may paint last-good
+ * but must not rewrite the remembered snapshot.
+ */
+export function resolveLastGoodFloorProjection(input: {
+  indexSummaries: readonly ThreadSummary[];
+  lastGoodSummaries: readonly ThreadSummary[];
+  hasAuthoritativeEmptyCatalog: boolean;
+  excludedThreadIds?: ReadonlySet<string>;
+}): LastGoodFloorProjection {
+  const excluded = input.excludedThreadIds ?? new Set<string>();
+  const indexSummaries = input.indexSummaries.filter(
+    (summary) => summary.id && !excluded.has(summary.id),
+  );
+  const lastGoodSummaries = input.lastGoodSummaries.filter(
+    (summary) => summary.id && !excluded.has(summary.id),
+  );
+  if (input.hasAuthoritativeEmptyCatalog) {
+    const visibleSummaries = stripEmptyClaudeIndexFallbackSummaries(indexSummaries);
+    return {
+      visibleSummaries,
+      rememberCandidates: visibleSummaries,
+    };
+  }
+  if (indexSummaries.length === 0) {
+    return {
+      visibleSummaries: stripEmptyClaudeIndexFallbackSummaries(lastGoodSummaries),
+      rememberCandidates: null,
+    };
+  }
+  const visibleSummaries = stripEmptyClaudeIndexFallbackSummaries(
+    unionIndexWithNewerLastGood(indexSummaries, lastGoodSummaries),
+  );
+  return {
+    visibleSummaries,
+    rememberCandidates: visibleSummaries,
+  };
 }
 
 function resolvePartialSourceEngine(

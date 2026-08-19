@@ -17,6 +17,7 @@ import {
   mergeGeminiSessionSummaries,
   mergeGrokSessionSummaries,
   mergeKimiSessionSummaries,
+  normalizeGeminiSessionSummaries,
   mergeDshSessionSummaries,
   mergeThreadSummaryPreservingStableIdentity,
   resolveThreadSourceMeta,
@@ -27,6 +28,7 @@ import {
   selectReplacementThreadByMessageHistory,
   selectReplacementThreadByMessageHistoryDecision,
   stripHiddenSharedBindingSummaries,
+  threadIdInHiddenSharedBindingSet,
   threadIdMatchesHiddenAutomaticSessionSet,
 } from "./useThreadActions.helpers";
 
@@ -679,7 +681,7 @@ describe("useThreadActions.helpers", () => {
         {
           sessionId: "pi:session-1",
           workspaceId: "workspace-1",
-          title: "PI session",
+          title: "Review the PI runtime",
           updatedAt: 120,
           engine: "pi",
         },
@@ -693,7 +695,7 @@ describe("useThreadActions.helpers", () => {
       expect.objectContaining({
         id: "pi:session-1",
         engineSource: "pi",
-        name: "PI session",
+        name: "Review the PI runtime",
       }),
     );
   });
@@ -819,18 +821,32 @@ describe("useThreadActions.helpers", () => {
   });
 
   it("rejects pending placeholders in engine-aware continuity filters", () => {
-    const pendingByEngine = ["claude", "codex", "opencode"] as const;
+    const pendingByEngine = [
+      "claude",
+      "codex",
+      "opencode",
+      "dsh",
+      "gemini",
+      "grok",
+      "kimi",
+      "pi",
+    ] as const;
 
     for (const engine of pendingByEngine) {
-      const summary: ThreadSummary = {
+      const bare: ThreadSummary = {
         id: `${engine}-pending-123`,
         name: "Pending",
         updatedAt: 100,
         engineSource: engine,
         threadKind: "native",
       };
+      const prefixed: ThreadSummary = {
+        ...bare,
+        id: `${engine}:${engine}-pending-1787016153035-0bittx`,
+      };
 
-      expect(isRetainableEngineContinuitySummary(engine, summary)).toBe(false);
+      expect(isRetainableEngineContinuitySummary(engine, bare)).toBe(false);
+      expect(isRetainableEngineContinuitySummary(engine, prefixed)).toBe(false);
     }
   });
 
@@ -1124,6 +1140,99 @@ describe("useThreadActions.helpers", () => {
     ]);
   });
 
+  it("mergeCodexCatalogSessionSummaries drops empty Claude/Codex Session pups and pending drafts, keeps nicknames", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "empty-uuid",
+          name: "Codex Session",
+          updatedAt: 5,
+          engineSource: "codex",
+        },
+      ],
+      [
+        {
+          sessionId: "empty-uuid",
+          title: "Codex Session",
+          updatedAt: 20,
+          engine: "codex",
+        },
+        {
+          sessionId: "claude:empty-2",
+          title: "Claude Session",
+          updatedAt: 19,
+          engine: "claude",
+        },
+        {
+          sessionId: "codex-pending-1786994371985-fv4mt5",
+          title: "Codex Session",
+          updatedAt: 18,
+          engine: "codex",
+        },
+        {
+          sessionId: "nick-1",
+          title: "Aristotle",
+          nativeTitle: "Aristotle",
+          updatedAt: 17,
+          engine: "codex",
+        },
+        {
+          sessionId: "user-1",
+          title: "分析左侧栏消失问题",
+          updatedAt: 16,
+          engine: "codex",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id).sort()).toEqual(["nick-1", "user-1"]);
+  });
+
+  it("mergeCodexCatalogSessionSummaries drops empty DSH Session pups and pending drafts, keeps real titles", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "dsh:empty-old",
+          name: "dsh session",
+          updatedAt: 5,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "dsh:empty-old",
+          title: "dsh session",
+          updatedAt: 20,
+          engine: "dsh",
+        },
+        {
+          sessionId: "dsh:empty-2",
+          title: "DeepSeek Harness Session",
+          updatedAt: 19,
+          engine: "dsh",
+        },
+        {
+          sessionId: "dsh:dsh-pending-1787016153035-0bittx",
+          title: "dsh session",
+          updatedAt: 18,
+          engine: "dsh",
+        },
+        {
+          sessionId: "dsh:real-1",
+          title: "帮我看一下这段代码",
+          updatedAt: 16,
+          engine: "dsh",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id).sort()).toEqual(["dsh:real-1"]);
+  });
+
   it("mergeCodexCatalogSessionSummaries drops collab MOSSX worker before Agent N rename", () => {
     const multiLine =
       `MOSSX_CONTEXT_PACKAGE:sha256:${"a".repeat(64)}:` +
@@ -1192,6 +1301,80 @@ describe("useThreadActions.helpers", () => {
     );
     // Agent 12 用户会话保留；hide 命中的 worker 即使显示 Agent 81 也剔除
     expect(merged.map((r) => r.id)).toEqual(["codex:visible-user"]);
+  });
+
+  it("strips Windows Codex rollout-stem owner rows when hide set only has the uuid", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const hidden = expandHiddenSharedBindingIds([`codex:${uuid}`]);
+    expect([...hidden].some((key) => key.startsWith("rollout-"))).toBe(false);
+
+    const input: ThreadSummary[] = [
+      {
+        id: "shared:s-codex",
+        name: "Shared Codex",
+        updatedAt: 3,
+        threadKind: "shared",
+        engineSource: "codex",
+      },
+      {
+        id: rolloutStem,
+        name: "luna 模型思考强…",
+        updatedAt: 2,
+        engineSource: "codex",
+      },
+      {
+        id: `codex:${rolloutStem}`,
+        name: "Base directory f…",
+        updatedAt: 2,
+        engineSource: "codex",
+      },
+      {
+        id: "codex:visible-user",
+        name: "User Codex",
+        updatedAt: 1,
+        engineSource: "codex",
+      },
+    ];
+    expect(stripHiddenSharedBindingSummaries(input, hidden).map((row) => row.id)).toEqual([
+      "shared:s-codex",
+      "codex:visible-user",
+    ]);
+
+    expect(threadIdInHiddenSharedBindingSet(rolloutStem, hidden)).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet(`codex:${rolloutStem}`, hidden),
+    ).toBe(true);
+
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: rolloutStem,
+          name: "Leaked owner stem",
+          updatedAt: 4,
+          engineSource: "codex",
+        },
+      ],
+      [
+        {
+          sessionId: `codex:${rolloutStem}`,
+          title: "Leaked live stem",
+          updatedAt: 20,
+          engine: "codex",
+        },
+        {
+          sessionId: "codex:visible-user",
+          title: "User Codex",
+          updatedAt: 15,
+          engine: "codex",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+      hidden,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["codex:visible-user"]);
   });
 
   it("mergeGrok clears leaked baseline even when sessions filter empties", () => {
@@ -1287,6 +1470,40 @@ describe("useThreadActions.helpers", () => {
     expect(merged.map((row) => row.id)).toEqual(["kimi:ok"]);
   });
 
+  it("mergeDsh hides placeholder empty drafts but keeps real first messages", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:old-empty",
+          name: "dsh session",
+          updatedAt: 1,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "empty-a",
+          firstMessage: "",
+          updatedAt: 40,
+        },
+        {
+          sessionId: "empty-b",
+          firstMessage: "dsh session",
+          updatedAt: 30,
+        },
+        {
+          sessionId: "real-a",
+          firstMessage: "帮我看一下这段代码",
+          updatedAt: 20,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.map((row) => row.id)).toEqual(["dsh:real-a"]);
+  });
+
   it("mergeDsh prefixes native session ids and keeps workspace membership", () => {
     const merged = mergeDshSessionSummaries(
       [
@@ -1313,6 +1530,55 @@ describe("useThreadActions.helpers", () => {
       id: "dsh:sess-a",
       engineSource: "dsh",
       name: "hello from dsh",
+    });
+  });
+
+  it("carries DSH agentPreset onto ThreadSummary", () => {
+    const merged = mergeDshSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "sess-preset",
+          firstMessage: "hello from dsh",
+          updatedAt: 30,
+          agentPreset: "minimal",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-preset",
+      dshAgentPreset: "minimal",
+    });
+  });
+
+  it("keeps a later DSH list preset when the live row is newer", () => {
+    const merged = mergeDshSessionSummaries(
+      [
+        {
+          id: "dsh:sess-preset",
+          name: "hello from dsh",
+          updatedAt: 80,
+          engineSource: "dsh",
+        },
+      ],
+      [
+        {
+          sessionId: "sess-preset",
+          firstMessage: "hello from dsh",
+          updatedAt: 30,
+          agentPreset: "code",
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged[0]).toMatchObject({
+      id: "dsh:sess-preset",
+      dshAgentPreset: "code",
     });
   });
 
@@ -1369,4 +1635,166 @@ describe("useThreadActions.helpers", () => {
     expect(merged.map((row) => row.id)).toEqual(["dsh:ok"]);
   });
 
+  it("parses native createdAt and freezes it across later updatedAt refreshes", () => {
+    expect(
+      normalizeGeminiSessionSummaries([
+        {
+          sessionId: "s1",
+          firstMessage: "hello",
+          created_at: 20,
+          updated_at: 90,
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        sessionId: "s1",
+        createdAt: 20,
+        updatedAt: 90,
+      }),
+    ]);
+
+    const firstSeen = mergeGeminiSessionSummaries(
+      [],
+      [
+        {
+          sessionId: "s1",
+          firstMessage: "hello",
+          createdAt: 20,
+          updatedAt: 90,
+        },
+        {
+          sessionId: "s2",
+          firstMessage: "later",
+          updatedAt: 70,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(firstSeen.find((row) => row.id === "gemini:s1")?.createdAt).toBe(20);
+    expect(firstSeen.find((row) => row.id === "gemini:s2")?.createdAt).toBe(70);
+
+    const refreshed = mergeGeminiSessionSummaries(
+      [
+        {
+          id: "gemini:s1",
+          name: "hello",
+          createdAt: 20,
+          updatedAt: 90,
+          engineSource: "gemini",
+        },
+      ],
+      [
+        {
+          sessionId: "s1",
+          firstMessage: "hello",
+          updatedAt: 900,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(refreshed.find((row) => row.id === "gemini:s1")?.createdAt).toBe(20);
+    expect(refreshed.find((row) => row.id === "gemini:s1")?.updatedAt).toBe(900);
+  });
+
+  it("keeps catalog createdAt when a later catalog refresh only updates activity", () => {
+    const merged = mergeCodexCatalogSessionSummaries(
+      [
+        {
+          id: "codex-1",
+          name: "Old",
+          createdAt: 40,
+          updatedAt: 50,
+          engineSource: "codex",
+        },
+      ],
+      [
+        {
+          sessionId: "codex-1",
+          title: "Old",
+          updatedAt: 900,
+        },
+      ],
+      "ws-1",
+      {},
+      () => undefined,
+    );
+    expect(merged.find((row) => row.id === "codex-1")?.createdAt).toBe(40);
+    expect(merged.find((row) => row.id === "codex-1")?.updatedAt).toBe(900);
+  });
+
+});
+
+describe("thread-list ingest hide prefilter", () => {
+  it("drops Codex rollout stems against a uuid-only hide set", () => {
+    const uuid = "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e";
+    const rolloutStem = `rollout-2026-04-10T10-00-00-${uuid}`;
+    const hidden = expandHiddenSharedBindingIds([uuid]);
+    expect([...hidden].some((key) => key.startsWith("rollout-"))).toBe(false);
+
+    expect(threadIdInHiddenSharedBindingSet(rolloutStem, hidden)).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet(`codex:${rolloutStem}`, hidden),
+    ).toBe(true);
+    expect(threadIdInHiddenSharedBindingSet(uuid, hidden)).toBe(true);
+    expect(threadIdInHiddenSharedBindingSet(`codex:${uuid}`, hidden)).toBe(
+      true,
+    );
+    expect(
+      threadIdInHiddenSharedBindingSet("codex:visible-user", hidden),
+    ).toBe(false);
+  });
+
+  it("keeps filesystem path ids that do not intersect hide identity", () => {
+    const hidden = expandHiddenSharedBindingIds([
+      "b7e2c1a0-4d3f-4a21-9c8e-1f2a3b4c5d6e",
+    ]);
+
+    expect(
+      threadIdInHiddenSharedBindingSet("S:\\AIWorker\\proj", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("\\\\?\\C:\\Users\\app", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("\\\\server\\share\\sess", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("/Users/chen/code/proj", hidden),
+    ).toBe(false);
+    expect(
+      threadIdInHiddenSharedBindingSet("/home/chen/code/proj", hidden),
+    ).toBe(false);
+  });
+
+  it("uses the sidebar-prefixed engine id as the ingest candidate", () => {
+    const hidden = expandHiddenSharedBindingIds([
+      "gemini:sess-gemini",
+      "dsh:sess-dsh",
+      "claude:sess-claude",
+      "opencode:sess-opencode",
+    ]);
+
+    expect(
+      threadIdInHiddenSharedBindingSet("gemini:sess-gemini", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("dsh:sess-dsh", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("claude:sess-claude", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("opencode:sess-opencode", hidden),
+    ).toBe(true);
+    expect(
+      threadIdInHiddenSharedBindingSet("gemini:visible", hidden),
+    ).toBe(false);
+    expect(threadIdInHiddenSharedBindingSet("sess-gemini", hidden)).toBe(
+      false,
+    );
+  });
 });

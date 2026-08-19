@@ -298,6 +298,8 @@ mod tests {
             physical_path: None,
             parent_session_id: None,
             size_bytes: None,
+            provider_profile_id: None,
+            provider_profile_name: None,
         }
     }
 
@@ -341,12 +343,26 @@ mod tests {
     }
 
     #[test]
+    fn protocol_hidden_ids_keep_claude_file_uuid_when_title_is_mossx() {
+        let rows = vec![
+            sample_row(
+                "1807f883-011c-46bd-94d5-ff483ffb1a4a",
+                "MOSSX_CONTEXT_PACKAGE:sha256:dead…",
+                None,
+            ),
+            sample_row("visible-native", "继续", None),
+        ];
+        let hidden = protocol_hidden_ids_from_index_rows(&rows);
+        assert!(hidden
+            .iter()
+            .any(|id| id == "1807f883-011c-46bd-94d5-ff483ffb1a4a"));
+        assert!(!hidden.iter().any(|id| id == "visible-native"));
+    }
+
+    #[test]
     fn missing_shared_workspace_is_available_with_empty_hide() {
-        let projection = load_shared_native_visibility_projection(
-            "ws-does-not-exist-for-visibility",
-            None,
-            &[],
-        );
+        let projection =
+            load_shared_native_visibility_projection("ws-does-not-exist-for-visibility", None, &[]);
         assert!(projection.available);
         assert_eq!(projection.freshness, "verified");
         assert!(projection.hidden_native_ids.is_empty());
@@ -363,7 +379,10 @@ mod tests {
         );
         assert!(!projection.available);
         assert_eq!(projection.freshness, "unavailable");
-        assert!(projection.hidden_native_ids.iter().any(|id| id == "native-v0"));
+        assert!(projection
+            .hidden_native_ids
+            .iter()
+            .any(|id| id == "native-v0"));
     }
 
     #[test]
@@ -377,8 +396,15 @@ mod tests {
         );
         assert!(!projection.available);
         assert_eq!(projection.freshness, "unavailable");
-        assert!(projection.reason.as_deref().unwrap_or("").contains("v2-readonly"));
-        assert!(projection.hidden_native_ids.iter().any(|id| id == "native-v0"));
+        assert!(projection
+            .reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("v2-readonly"));
+        assert!(projection
+            .hidden_native_ids
+            .iter()
+            .any(|id| id == "native-v0"));
     }
 
     #[test]
@@ -392,7 +418,10 @@ mod tests {
         );
         assert!(projection.available);
         assert_eq!(projection.freshness, "verified");
-        assert!(projection.hidden_native_ids.iter().any(|id| id == "native-v0"));
+        assert!(projection
+            .hidden_native_ids
+            .iter()
+            .any(|id| id == "native-v0"));
     }
 
     #[test]

@@ -114,6 +114,36 @@ describe("useThreadMessaging", () => {
     },
   );
 
+  it("blocks Grok sends when a pasted data URL exceeds the 2MB cap", async () => {
+    // 3MiB decoded so size and limit stay distinguishable after formatByteSize.
+    const oversized =
+      "data:image/png;base64," + "A".repeat(Math.ceil((3 * 1024 * 1024) / 3) * 4);
+    const { result, pushThreadErrorMessage } = makeThreadMessagingHook("grok", {
+      activeThreadId: "grok:session-1",
+      threadEngineById: {
+        "grok:session-1": "grok",
+      },
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "grok:session-1",
+        "look at this screenshot",
+        [oversized],
+      );
+    });
+
+    expect(pushThreadErrorMessage).toHaveBeenCalledTimes(1);
+    const errorMessage = String(pushThreadErrorMessage.mock.calls[0]?.[2] ?? "");
+    expect(errorMessage).toContain("Grok CLI");
+    expect(errorMessage).toContain("2 MB");
+    expect(errorMessage).toContain("3 MB");
+    expect(errorMessage).not.toContain("data:image");
+    expect(errorMessage).not.toContain("AAAAAAAA");
+    expect(engineSendMessage).not.toHaveBeenCalled();
+  });
+
   it("does not block codex sends with non-empty images at client boundary", async () => {
     const { result, pushThreadErrorMessage } = makeThreadMessagingHook("codex", {
       activeThreadId: "thread-codex-1",
@@ -559,6 +589,110 @@ describe("useThreadMessaging", () => {
         type: "setThreadEngine",
         threadId: "shared:thread-provider-store",
         engine: "codex",
+      }),
+    );
+  });
+
+  it("does not assemble Shared send from leftover Composer resolver or global model", async () => {
+    selectNextTarget("ws-1", "shared:thread-override-ignored", {
+      engine: "claude",
+      providerProfileId: "k3",
+      modelCatalogEntryId: "kimi-k3",
+      providerProfileNameSnapshot: "k3",
+      providerProfileSource: "managed",
+      model: "kimi-k3",
+      reasoning: null,
+    });
+    const { result } = makeThreadMessagingHook("claude", {
+      activeThreadId: "shared:thread-override-ignored",
+      model: "foreign-global-model",
+      resolveComposerSelection: () => ({
+        id: "stale-overlay-model",
+        model: "stale-overlay-model",
+        source: "custom",
+        providerProfileId: "leftover-override",
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "shared:thread-override-ignored",
+        "ignore leftover override",
+      );
+    });
+
+    expect(sendSharedSessionTurnRouted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        engine: "claude",
+        model: "kimi-k3",
+        target: expect.objectContaining({
+          engine: "claude",
+          providerProfileId: "k3",
+          model: "kimi-k3",
+        }),
+      }),
+    );
+  });
+
+  it("uses the committed Native resolver instead of a foreign global selectedModelId", async () => {
+    const { result } = makeThreadMessagingHook("claude", {
+      model: "foreign-global-model",
+      resolveComposerSelection: () => ({
+        id: "clicked-runtime",
+        model: "clicked-runtime",
+        source: "custom",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello committed runtime",
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "claude",
+        model: "clicked-runtime",
+      }),
+    );
+  });
+
+  it("does not fall back to hook model when Native resolver model is empty but id is committed", async () => {
+    const { result } = makeThreadMessagingHook("claude", {
+      model: "foreign-global-model",
+      resolveComposerSelection: () => ({
+        id: "clicked-runtime",
+        model: null,
+        source: "custom",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      }),
+    });
+
+    await act(async () => {
+      await result.current.sendUserMessageToThread(
+        workspace,
+        "thread-1",
+        "hello resolver id",
+      );
+    });
+
+    expect(engineSendMessage).toHaveBeenCalledWith(
+      "ws-1",
+      expect.objectContaining({
+        engine: "claude",
+        model: "clicked-runtime",
       }),
     );
   });

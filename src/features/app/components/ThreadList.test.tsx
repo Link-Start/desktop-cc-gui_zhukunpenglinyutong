@@ -437,22 +437,23 @@ describe("ThreadList", () => {
     expect(onSelectThread).not.toHaveBeenCalled();
   });
 
-  it("shows the more button and toggles expanded", () => {
-    const onToggleExpanded = vi.fn();
+  it("shows the more button and pages incrementally", () => {
+    const onLoadOlderThreads = vi.fn();
     render(
       <ThreadList
         {...baseProps}
         totalThreadRoots={DEFAULT_VISIBLE_THREAD_ROOT_COUNT + 1}
-        onToggleExpanded={onToggleExpanded}
+        onLoadOlderThreads={onLoadOlderThreads}
       />,
     );
 
     const moreButton = screen.getByRole("button", { name: "More..." });
     fireEvent.click(moreButton);
-    expect(onToggleExpanded).toHaveBeenCalledWith("ws-1");
+    expect(onLoadOlderThreads).toHaveBeenCalledWith("ws-1");
+    expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
   });
 
-  it("loads older threads when a cursor is available", () => {
+  it("uses more to fetch the next page when a cursor is available", () => {
     const onLoadOlderThreads = vi.fn();
     render(
       <ThreadList
@@ -462,22 +463,26 @@ describe("ThreadList", () => {
       />,
     );
 
-    const loadButton = screen.getByRole("button", { name: "Load older..." });
-    fireEvent.click(loadButton);
+    const moreButton = screen.getByRole("button", { name: "More..." });
+    fireEvent.click(moreButton);
     expect(onLoadOlderThreads).toHaveBeenCalledWith("ws-1");
+    expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
   });
 
-  it("keeps load older hidden in collapsed mode when more roots remain behind the threshold", () => {
+  it("shows collapse after paging without a separate load-older link", () => {
     render(
       <ThreadList
         {...baseProps}
-        totalThreadRoots={DEFAULT_VISIBLE_THREAD_ROOT_COUNT + 1}
+        totalThreadRoots={DEFAULT_VISIBLE_THREAD_ROOT_COUNT * 2}
+        visibleThreadRootCount={DEFAULT_VISIBLE_THREAD_ROOT_COUNT * 2}
+        isExpanded
         nextCursor="cursor"
       />,
     );
 
     expect(screen.queryByRole("button", { name: "Load older..." })).toBeNull();
     expect(screen.getByRole("button", { name: "More..." })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show less" })).toBeTruthy();
   });
 
   it("renders nested rows with indentation and disables pinning", () => {

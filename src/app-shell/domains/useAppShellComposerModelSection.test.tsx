@@ -353,6 +353,51 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
     expect(setSelectedModelId).not.toHaveBeenCalled();
   });
 
+  it("keeps a DSH runtime pick on DSH when another CLI catalog uses the same id", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const dshModels = [
+      makeModel("ggggg/grok-4.6", { model: "grok-4.6", isDefault: true }),
+      makeModel("acme/claude-sonnet-4-6", { model: "claude-sonnet-4-6" }),
+    ];
+    const { result } = renderSection({
+      activeEngine: "dsh",
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+      engineModelsAsOptions: dshModels,
+      engineModelCatalogsAsOptions: {
+        grok: [makeModel("grok-4.6", { isDefault: true })],
+        claude: claudeModels,
+        kimi: kimiModels,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("grok-4.6");
+    });
+
+    expect(result.current.engineSelectedModelIdByType.dsh).toBe("ggggg/grok-4.6");
+    expect(result.current.engineSelectedModelIdByType.grok).toBeUndefined();
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("dsh", {
+      modelId: "ggggg/grok-4.6",
+    });
+
+    act(() => {
+      result.current.handleSelectModel("claude-sonnet-4-6");
+    });
+
+    expect(result.current.engineSelectedModelIdByType.dsh).toBe(
+      "acme/claude-sonnet-4-6",
+    );
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("dsh", {
+      modelId: "acme/claude-sonnet-4-6",
+    });
+    expect(handleSelectComposerSelection).toHaveBeenLastCalledWith({
+      modelId: "acme/claude-sonnet-4-6",
+      effort: null,
+    });
+  });
+
   it("keeps same-engine selection behavior unchanged", () => {
     const persistComposerEnginePref = vi.fn();
     const handleSelectComposerSelection = vi.fn();
@@ -483,6 +528,320 @@ describe("useAppShellComposerModelSection handleSelectModel", () => {
       id: "gpt-5.3-codex-spark",
       model: "gpt-5.3-codex-spark",
       effort: null,
+    });
+  });
+
+  it("writes resolver on the same tick as handleSelectModel", () => {
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "claude-opus-4-8",
+        model: "claude-opus-4-8",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result } = renderSection({
+      activeEngine: "claude",
+      activeThreadId: "claude-thread-send",
+      composerSelectionResolverRef,
+      selectedComposerSelection: {
+        modelId: "claude-opus-4-8",
+        effort: null,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("claude-sonnet-4-6");
+      expect(composerSelectionResolverRef.current).toMatchObject({
+        id: "claude-sonnet-4-6",
+        model: "claude-sonnet-4-6",
+      });
+    });
+  });
+
+  it("keeps a user-clicked residual-shaped runtime instead of same-tick catalog repair", () => {
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "claude-opus-4-8",
+        model: "claude-opus-4-8",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result, rerender } = renderHook(
+      ({ selectedComposerSelection }) =>
+        useAppShellComposerModelSection({
+          accessMode: "auto",
+          activeEngine: "claude",
+          activeThreadId: "claude-thread-freeform",
+          activeWorkspaceId: "workspace-1",
+          appSettings: {},
+          appSettingsLoading: false,
+          applySelectedCollaborationMode: vi.fn(),
+          collaborationModes: [],
+          composerInputRef: { current: null },
+          composerSelectionResolverRef,
+          engineModelCatalogsAsOptions: { kimi: kimiModels },
+          engineModelsAsOptions: claudeModels,
+          globalSelectionReady: true,
+          handleSelectComposerSelection: vi.fn(),
+          handleSetAccessMode: vi.fn(),
+          models: [],
+          modelsReady: true,
+          persistComposerEnginePref: vi.fn(),
+          persistComposerSelectionForThread: vi.fn(),
+          queueSaveSettings: vi.fn(),
+          selectedCollaborationMode: null,
+          selectedCollaborationModeId: null,
+          selectedComposerSelection,
+          selectedEffort: null,
+          selectedModelId: null,
+          setAppSettings: vi.fn(),
+          setSelectedEffort: vi.fn(),
+          setSelectedModelId: vi.fn(),
+        }),
+      {
+        initialProps: {
+          selectedComposerSelection: {
+            modelId: "claude-opus-4-8",
+            effort: null,
+          },
+        },
+      },
+    );
+
+    act(() => {
+      result.current.handleSelectModel("k3");
+      expect(composerSelectionResolverRef.current).toMatchObject({
+        id: "k3",
+        model: "k3",
+      });
+    });
+
+    rerender({
+      selectedComposerSelection: {
+        modelId: "k3",
+        effort: null,
+      },
+    });
+
+    expect(composerSelectionResolverRef.current).toMatchObject({
+      id: "k3",
+      model: "k3",
+    });
+    expect(result.current.resolvedModel).not.toBe("k3");
+  });
+
+  it("does not write a foreign ccgui catalog onto a DSH thread ledger", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const persistComposerSelectionForThread = vi.fn();
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "ggggg/grok-4.6",
+        model: "grok-4.6",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const dshModels = [
+      makeModel("ggggg/grok-4.6", { model: "grok-4.6", isDefault: true }),
+    ];
+    const { result } = renderSection({
+      activeEngine: "dsh",
+      activeThreadId: "dsh:session-1",
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+      persistComposerSelectionForThread,
+      composerSelectionResolverRef,
+      engineModelsAsOptions: dshModels,
+      engineModelCatalogsAsOptions: {
+        grok: [makeModel("ccgui/grok-4.5", { isDefault: true })],
+        claude: claudeModels,
+        kimi: kimiModels,
+      },
+      selectedComposerSelection: {
+        modelId: "ggggg/grok-4.6",
+        effort: null,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("ccgui/grok-4.5");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("grok", {
+      modelId: "ccgui/grok-4.5",
+    });
+    expect(result.current.engineSelectedModelIdByType.grok).toBe(
+      "ccgui/grok-4.5",
+    );
+    expect(result.current.engineSelectedModelIdByType.dsh).toBe(
+      "ggggg/grok-4.6",
+    );
+    expect(handleSelectComposerSelection).not.toHaveBeenCalled();
+    expect(persistComposerSelectionForThread).not.toHaveBeenCalled();
+    expect(composerSelectionResolverRef.current).toMatchObject({
+      id: "ggggg/grok-4.6",
+      model: "grok-4.6",
+    });
+  });
+
+  it("skips the DSH ledger even when activeEngine already drifted to grok", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const persistComposerSelectionForThread = vi.fn();
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "ggggg/grok-4.6",
+        model: "grok-4.6",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result } = renderSection({
+      activeEngine: "grok",
+      activeThreadId: "dsh:session-1",
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+      persistComposerSelectionForThread,
+      composerSelectionResolverRef,
+      engineModelsAsOptions: [
+        makeModel("ccgui/grok-4.5", { isDefault: true }),
+      ],
+      engineModelCatalogsAsOptions: {
+        grok: [makeModel("ccgui/grok-4.5", { isDefault: true })],
+        dsh: [makeModel("ggggg/grok-4.6", { model: "grok-4.6", isDefault: true })],
+        claude: claudeModels,
+        kimi: kimiModels,
+      },
+      selectedComposerSelection: {
+        modelId: "ggggg/grok-4.6",
+        effort: null,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("ccgui/grok-4.5");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("grok", {
+      modelId: "ccgui/grok-4.5",
+    });
+    expect(handleSelectComposerSelection).not.toHaveBeenCalled();
+    expect(persistComposerSelectionForThread).not.toHaveBeenCalled();
+    expect(result.current.engineSelectedModelIdByType.dsh).not.toBe(
+      "ccgui/grok-4.5",
+    );
+  });
+
+  it("still writes a DSH catalog pick onto a DSH thread when activeEngine drifted", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "ggggg/grok-4.6",
+        model: "grok-4.6",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result } = renderSection({
+      activeEngine: "grok",
+      activeThreadId: "dsh:session-1",
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+      composerSelectionResolverRef,
+      engineModelsAsOptions: [
+        makeModel("ccgui/grok-4.5", { isDefault: true }),
+      ],
+      engineModelCatalogsAsOptions: {
+        grok: [makeModel("ccgui/grok-4.5", { isDefault: true })],
+        dsh: [
+          makeModel("ggggg/grok-4.6", { model: "grok-4.6", isDefault: true }),
+        ],
+        claude: claudeModels,
+        kimi: kimiModels,
+      },
+      selectedComposerSelection: {
+        modelId: "ccgui/grok-4.5",
+        effort: null,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("ggggg/grok-4.6");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("dsh", {
+      modelId: "ggggg/grok-4.6",
+    });
+    expect(handleSelectComposerSelection).toHaveBeenCalledWith({
+      modelId: "ggggg/grok-4.6",
+      effort: null,
+    });
+    expect(result.current.engineSelectedModelIdByType.dsh).toBe(
+      "ggggg/grok-4.6",
+    );
+  });
+
+  it("does not write a foreign ccgui catalog onto a pending DSH thread", () => {
+    const persistComposerEnginePref = vi.fn();
+    const handleSelectComposerSelection = vi.fn();
+    const persistComposerSelectionForThread = vi.fn();
+    const composerSelectionResolverRef: { current: unknown } = {
+      current: {
+        id: "ggggg/grok-4.6",
+        model: "grok-4.6",
+        source: "test",
+        providerProfileId: null,
+        effort: null,
+        collaborationMode: null,
+      },
+    };
+    const { result } = renderSection({
+      activeEngine: "dsh",
+      activeThreadId: "dsh-pending-abc",
+      persistComposerEnginePref,
+      handleSelectComposerSelection,
+      persistComposerSelectionForThread,
+      composerSelectionResolverRef,
+      engineModelsAsOptions: [
+        makeModel("ggggg/grok-4.6", { model: "grok-4.6", isDefault: true }),
+      ],
+      engineModelCatalogsAsOptions: {
+        grok: [makeModel("ccgui/grok-4.5", { isDefault: true })],
+        claude: claudeModels,
+        kimi: kimiModels,
+      },
+      selectedComposerSelection: {
+        modelId: "ggggg/grok-4.6",
+        effort: null,
+      },
+    });
+
+    act(() => {
+      result.current.handleSelectModel("ccgui/grok-4.5");
+    });
+
+    expect(persistComposerEnginePref).toHaveBeenCalledWith("grok", {
+      modelId: "ccgui/grok-4.5",
+    });
+    expect(handleSelectComposerSelection).not.toHaveBeenCalled();
+    expect(persistComposerSelectionForThread).not.toHaveBeenCalled();
+    expect(composerSelectionResolverRef.current).toMatchObject({
+      id: "ggggg/grok-4.6",
+      model: "grok-4.6",
     });
   });
 });

@@ -129,6 +129,30 @@ export function suppressCompletedExploreItemsBetweenLatestUserTurns(
   return changed ? filteredItems : items;
 }
 
+export function suppressOrphanExploringItemsBeforeLatestUserTurn(
+  items: ConversationItem[],
+  options?: { enableCollaborationBadge?: boolean },
+) {
+  const latestUserIndex = findLatestOrdinaryUserQuestionIndex(items, options);
+  if (latestUserIndex <= 0) {
+    return items;
+  }
+  let changed = false;
+  const filteredItems = items.filter((item, index) => {
+    if (index >= latestUserIndex) {
+      return true;
+    }
+    const shouldSuppress =
+      item.kind === "explore" && item.status === "exploring";
+    if (shouldSuppress) {
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+  return changed ? filteredItems : items;
+}
+
 export function buildRenderedItemsWindow(
   timelineItems: ConversationItem[],
   collapsedHistoryItemCount: number,

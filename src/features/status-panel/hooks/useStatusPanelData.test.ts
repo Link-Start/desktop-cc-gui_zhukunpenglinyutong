@@ -149,6 +149,34 @@ describe("useStatusPanelData helpers", () => {
     ]);
   });
 
+  it("replaces the task list with the latest parseable todo_write arguments", () => {
+    const first = createTodoTool("todo-old", "old completed set");
+    const second: Extract<ConversationItem, { kind: "tool" }> = {
+      id: "todo-new",
+      kind: "tool",
+      toolType: "mcpToolCall",
+      title: "todo_write",
+      detail: JSON.stringify({
+        todos: [
+          { content: "new first", status: "completed" },
+          { content: "new second", status: "in_progress" },
+          { content: "new third", status: "pending" },
+        ],
+      }),
+      status: "completed",
+    };
+
+    const { result } = renderHook(() => useStatusPanelData([first, second]));
+
+    expect(result.current.todos.map((todo) => todo.content)).toEqual([
+      "new first",
+      "new second",
+      "new third",
+    ]);
+    expect(result.current.todoCompleted).toBe(1);
+    expect(result.current.todoTotal).toBe(3);
+  });
+
   it("attributes subagent task output to the real active engine instead of a binary fallback", () => {
     const taskTool = createTaskTool("task-tool-1", {
       task_id: "task-123",

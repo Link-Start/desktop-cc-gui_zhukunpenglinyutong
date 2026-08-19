@@ -1,4 +1,4 @@
-// 按引擎输入区偏好(model / effort / accessMode / collaborationMode)的模块级外部 store。
+// 按引擎输入区偏好(model / effort / accessMode / collaborationMode / dshAgentPreset)的模块级外部 store。
 //
 // 这些偏好曾经存在 app-shell 根组件的 useState(appSettings.lastComposerPrefsByEngine):
 // 每次点击底栏切换按钮都 setAppSettings 在根上,导致整个 app-shell(2600+ 行,含全部面板)
@@ -19,6 +19,13 @@ import {
 
 let state: ComposerEnginePrefsRecord = {};
 const listeners = new Set<() => void>();
+let persistScheduler: (() => void) | null = null;
+
+export function setComposerEnginePrefPersistScheduler(
+  scheduler: (() => void) | null,
+): void {
+  persistScheduler = scheduler;
+}
 
 function notify(): void {
   listeners.forEach((listener) => listener());
@@ -72,6 +79,7 @@ export function setComposerEnginePref(
   }
   state = next;
   notify();
+  persistScheduler?.();
   return true;
 }
 
@@ -87,4 +95,5 @@ export function useComposerEnginePrefs(): ComposerEnginePrefsRecord {
 export function __resetComposerEnginePrefsStoreForTests(): void {
   state = {};
   listeners.clear();
+  persistScheduler = null;
 }

@@ -1,5 +1,7 @@
 import type { HistoryLoader } from "../contracts/conversationCurtainContracts";
 import { normalizeHistorySnapshot } from "../contracts/conversationCurtainContracts";
+import type { HistoryLoadingProgressListener } from "../utils/historyLoadingProgress";
+import { runNativeHistoryFetchAndParse } from "../utils/runNativeHistoryOpenStages";
 import { parseGrokHistoryMessages } from "./grokHistoryParser";
 
 type GrokHistoryLoaderOptions = {
@@ -9,12 +11,14 @@ type GrokHistoryLoaderOptions = {
     workspacePath: string,
     sessionId: string,
   ) => Promise<unknown>;
+  onProgress?: HistoryLoadingProgressListener;
 };
 
 export function createGrokHistoryLoader({
   workspaceId,
   workspacePath,
   loadGrokSession,
+  onProgress,
 }: GrokHistoryLoaderOptions): HistoryLoader {
   return {
     engine: "grok",
@@ -39,10 +43,17 @@ export function createGrokHistoryLoader({
         });
       }
 
-      const result = await loadGrokSession(workspacePath, sessionId);
-      const record = result as { messages?: unknown };
-      const messagesData = record.messages ?? result;
-      const items = parseGrokHistoryMessages(messagesData);
+      const staged = await runNativeHistoryFetchAndParse({
+        report: (progress) => {
+          onProgress?.(progress);
+        },
+        shouldContinue: () => true,
+        load: () => loadGrokSession(workspacePath, sessionId),
+        extractMessages: (payload) =>
+          (payload as { messages?: unknown } | null)?.messages ?? payload,
+        parse: parseGrokHistoryMessages,
+      });
+      const items = staged?.items ?? [];
 
       return normalizeHistorySnapshot({
         engine: "grok",
@@ -59,6 +70,8 @@ export function createGrokHistoryLoader({
           isThinking: false,
           heartbeatPulse: null,
           historyRestoredAtMs: Date.now(),
+          historyHasMore: false,
+          historyNextCursor: null,
         },
       });
     },

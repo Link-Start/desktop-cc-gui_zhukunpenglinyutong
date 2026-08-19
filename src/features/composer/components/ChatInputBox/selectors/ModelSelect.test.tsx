@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,7 @@ import {
 import { STORAGE_KEYS } from "../../../types/provider";
 import type { ExecutionTarget } from "../../../../shared-session/target/types";
 import type { ProviderTargetGroup } from "../hooks/useProviderTargetCatalogOwners";
+import { notifyProviderContinuationUiRollback } from "../../../../threads/services/providerContinuationRequests";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -1226,6 +1227,8 @@ describe("ModelSelect atomic target groups", () => {
       providerProfileSource: "disk",
       reasoning: null,
     });
+    expect(onExecutionTargetChange).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menuitem", { name: /Sonnet 5/ })).toBeNull();
   });
 
   it("projects the target channel for the current engine and the local default elsewhere", async () => {
@@ -1478,6 +1481,88 @@ describe("ModelSelect atomic target groups", () => {
     // 无新 catalog 时不得把旧 local 的 claude-opus-4-8 写进新渠道 target
     await new Promise((r) => setTimeout(r, 50));
     expect(onExecutionTargetChange).not.toHaveBeenCalled();
+
+    // 失败必须回滚 override：再打开 picker，渠道芯片不得停在 k3
+    await userEvent.setup({ pointerEventsCheck: 0 }).click(
+      screen.getByRole("button", { name: /chat.currentModel:/ }),
+    );
+    openPickerSubmenu(/Claude Code/);
+    const rolledBackTrigger = document.querySelector(
+      "[data-channel-select-trigger='claude']",
+    ) as HTMLButtonElement;
+    expect(rolledBackTrigger).toBeTruthy();
+    expect(rolledBackTrigger.textContent).toContain("本地配置");
+    expect(rolledBackTrigger.getAttribute("data-provider-profile-id")).toBe(
+      "__local_settings_json__",
+    );
+  });
+
+  it("rolls back channel override when native continuation is cancelled", async () => {
+    let resolveCatalog: ((models: unknown[]) => void) | undefined;
+    const onOpenProviderProfile = vi.fn(
+      (): Promise<void> =>
+        new Promise((resolve) => {
+          resolveCatalog = () => resolve();
+        }),
+    );
+
+    render(
+      <ModelSelect
+        value="claude-opus-4-8"
+        currentProvider="claude"
+        triggerVariant="readiness"
+        onChange={vi.fn()}
+        onExecutionTargetChange={vi.fn()}
+        onOpenProviderProfile={onOpenProviderProfile}
+        executionTarget={atomicExecutionTarget}
+        targetGroups={buildAtomicGroups()}
+      />,
+    );
+
+    await userEvent.setup({ pointerEventsCheck: 0 }).click(
+      screen.getByRole("button", { name: "chat.currentModel:Opus 4.8" }),
+    );
+    openPickerSubmenu(/Claude Code/);
+    fireEvent.click(
+      document.querySelector(
+        "[data-channel-select-trigger='claude']",
+      ) as HTMLButtonElement,
+    );
+    fireEvent.click(
+      await within(await screen.findByRole("dialog")).findByRole("button", {
+        name: /^k3$/,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onOpenProviderProfile).toHaveBeenCalledWith("claude", "k3");
+    });
+
+    await userEvent.setup({ pointerEventsCheck: 0 }).click(
+      screen.getByRole("button", { name: /chat.currentModel:/ }),
+    );
+    openPickerSubmenu(/Claude Code/);
+    await waitFor(() => {
+      expect(
+        document.querySelector("[data-channel-select-trigger='claude']")
+          ?.textContent,
+      ).toContain("k3");
+    });
+
+    act(() => {
+      notifyProviderContinuationUiRollback({
+        engine: "claude",
+        providerProfileId: "k3",
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        document.querySelector("[data-channel-select-trigger='claude']")
+          ?.textContent,
+      ).toContain("本地配置");
+    });
+    resolveCatalog?.([]);
   });
 
   it("writes execution target immediately when switching another engine channel (codex→claude managed)", async () => {
@@ -2258,7 +2343,7 @@ describe("ModelSelect empty channel models and custom reasoning defaults", () =>
     );
 
     const trigger = screen.getByRole("button", {
-      name: "chat.currentModel:Grok 4.6",
+      name: "chat.currentModel:grok-4.6 / Grok 4.6",
     });
     expect(within(trigger).getByTestId("grok-icon")).toBeTruthy();
     expect(trigger.querySelector("img")).toBeNull();

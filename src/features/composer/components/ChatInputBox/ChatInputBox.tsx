@@ -190,6 +190,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
       models,
       providerModelCatalogs,
       permissionMode = 'bypassPermissions',
+      dshAgentPreset = null,
+      dshAgentPresetLocked = false,
+      onDshAgentPresetSelect,
       currentProvider = 'claude',
       currentProviderProfileId,
       executionTarget,
@@ -1877,6 +1880,9 @@ export const ChatInputBox = memo(forwardRef<ChatInputBoxHandle, ChatInputBoxProp
               selectedModel={selectedModel}
               models={models}
               permissionMode={permissionMode}
+              dshAgentPreset={dshAgentPreset}
+              dshAgentPresetLocked={dshAgentPresetLocked}
+              onDshAgentPresetSelect={onDshAgentPresetSelect}
               currentProvider={currentProvider}
               currentProviderProfileId={currentProviderProfileId}
               workspaceId={workspaceId}

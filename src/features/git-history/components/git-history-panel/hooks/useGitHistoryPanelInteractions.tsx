@@ -1,5 +1,9 @@
 import { type MouseEvent } from "react";
 import type { GitPrWorkflowDefaults } from "../../../../../types";
+import {
+  getClientStoreSync,
+  writeClientStoreValue,
+} from "../../../../../services/clientStorage";
 import { useGitHistoryPanelBranchCompareHandlers } from "./useGitHistoryPanelBranchCompareHandlers";
 import { useGitHistoryPanelBranchContextMenu } from "./useGitHistoryPanelBranchContextMenu";
 import type { GitHistoryPanelInteractionScope } from "../components/GitHistoryPanelImpl";
@@ -8,6 +12,13 @@ import {
   type CommitActionId,
 } from "../components/GitHistoryPanelImplHelpers";
 import type { CommitActionDescriptor } from "../components/GitHistoryPanelTypes";
+import {
+  getPushTargetHistoryStorageKey,
+  parsePushTargetHistory,
+  PUSH_TARGET_HISTORY_STORE,
+  rememberPushTargetHistory,
+  type GitPushTargetHistoryEntry,
+} from "../utils/pushTargetHistory";
 
 export function useGitHistoryPanelInteractions(
   scope: GitHistoryPanelInteractionScope,
@@ -134,6 +145,7 @@ export function useGitHistoryPanelInteractions(
     pushRunHooks,
     pushTags,
     pushTargetBranchTrimmed,
+    pushTargetHistory,
     pushToGerrit,
     pushTopic,
     rebaseGitBranch,
@@ -229,6 +241,7 @@ export function useGitHistoryPanelInteractions(
     setPushTargetBranchMenuOpen,
     setPushTargetBranchMenuPlacement,
     setPushTargetBranchQuery,
+    setPushTargetHistory,
     setPushToGerrit,
     setPushTopic,
     setRefreshDialogOpen,
@@ -1277,36 +1290,92 @@ export function useGitHistoryPanelInteractions(
     ],
   );
 
+  const applyPushTargetHistoryEntry = useCallback(
+    (entry: GitPushTargetHistoryEntry) => {
+      setPushRemote(entry.remote);
+      setPushTargetBranch(entry.branch);
+      setPushTargetBranchQuery("");
+      setPushTags(entry.pushTags);
+      setPushRunHooks(entry.runHooks);
+      setPushForceWithLease(entry.forceWithLease);
+      setPushToGerrit(entry.pushToGerrit);
+      setPushTopic(entry.topic);
+      setPushReviewers(entry.reviewers);
+      setPushCc(entry.cc);
+      setPushRemoteMenuOpen(false);
+      setPushTargetBranchMenuOpen(false);
+    },
+    [
+      setPushCc,
+      setPushForceWithLease,
+      setPushRemote,
+      setPushRemoteMenuOpen,
+      setPushReviewers,
+      setPushRunHooks,
+      setPushTags,
+      setPushTargetBranch,
+      setPushTargetBranchMenuOpen,
+      setPushTargetBranchQuery,
+      setPushToGerrit,
+      setPushTopic,
+    ],
+  );
+
+  const handleSelectPushHistory = useCallback(
+    (entry: GitPushTargetHistoryEntry) => {
+      if (operationLoading) {
+        return;
+      }
+      applyPushTargetHistoryEntry(entry);
+    },
+    [applyPushTargetHistoryEntry, operationLoading],
+  );
+
   const handleOpenPushDialog = useCallback(() => {
     if (operationLoading) {
       return;
     }
-    const defaultRemote = pushRemoteOptions.includes("origin")
-      ? "origin"
-      : (pushRemoteOptions[0] ?? "origin");
-    const defaultTargetOptions = resolvePushTargetBranchOptions(defaultRemote);
-    const defaultTargetBranch =
-      (currentBranch && defaultTargetOptions.includes(currentBranch)
-        ? currentBranch
-        : null) ??
-      defaultTargetOptions[0] ??
-      currentBranch ??
-      "";
-    setPushRemote(defaultRemote);
-    setPushTargetBranch(defaultTargetBranch);
-    setPushTargetBranchQuery("");
-    setPushTags(false);
-    setPushRunHooks(true);
-    setPushForceWithLease(false);
-    setPushToGerrit(false);
-    setPushTopic("");
-    setPushReviewers("");
-    setPushCc("");
-    setPushRemoteMenuOpen(false);
-    setPushTargetBranchMenuOpen(false);
+    const storedHistory = workspaceId
+      ? parsePushTargetHistory(
+          getClientStoreSync(
+            PUSH_TARGET_HISTORY_STORE,
+            getPushTargetHistoryStorageKey(workspaceId),
+          ),
+        )
+      : [];
+    setPushTargetHistory(storedHistory);
+    const lastHistoryEntry = storedHistory[0] ?? null;
+    if (lastHistoryEntry) {
+      applyPushTargetHistoryEntry(lastHistoryEntry);
+    } else {
+      const defaultRemote = pushRemoteOptions.includes("origin")
+        ? "origin"
+        : (pushRemoteOptions[0] ?? "origin");
+      const defaultTargetOptions = resolvePushTargetBranchOptions(defaultRemote);
+      const defaultTargetBranch =
+        (currentBranch && defaultTargetOptions.includes(currentBranch)
+          ? currentBranch
+          : null) ??
+        defaultTargetOptions[0] ??
+        currentBranch ??
+        "";
+      setPushRemote(defaultRemote);
+      setPushTargetBranch(defaultTargetBranch);
+      setPushTargetBranchQuery("");
+      setPushTags(false);
+      setPushRunHooks(true);
+      setPushForceWithLease(false);
+      setPushToGerrit(false);
+      setPushTopic("");
+      setPushReviewers("");
+      setPushCc("");
+      setPushRemoteMenuOpen(false);
+      setPushTargetBranchMenuOpen(false);
+    }
     setPushTargetBranchMenuPlacement("down");
     setPushDialogOpen(true);
   }, [
+    applyPushTargetHistoryEntry,
     currentBranch,
     operationLoading,
     pushRemoteOptions,
@@ -1323,8 +1392,10 @@ export function useGitHistoryPanelInteractions(
     setPushTargetBranchMenuOpen,
     setPushTargetBranchMenuPlacement,
     setPushTargetBranchQuery,
+    setPushTargetHistory,
     setPushToGerrit,
     setPushTopic,
+    workspaceId,
   ]);
 
   const loadPushPreview = useCallback(
@@ -1548,6 +1619,23 @@ export function useGitHistoryPanelInteractions(
     if (!workspaceId || !pushCanConfirm) {
       return;
     }
+    const nextHistory = rememberPushTargetHistory(pushTargetHistory, {
+      remote: pushRemoteTrimmed,
+      branch: pushTargetBranchTrimmed,
+      pushToGerrit,
+      topic: pushToGerrit ? pushTopic.trim() : "",
+      reviewers: pushToGerrit ? pushReviewers.trim() : "",
+      cc: pushToGerrit ? pushCc.trim() : "",
+      pushTags,
+      runHooks: pushRunHooks,
+      forceWithLease: pushForceWithLease,
+    });
+    setPushTargetHistory(nextHistory);
+    writeClientStoreValue(
+      PUSH_TARGET_HISTORY_STORE,
+      getPushTargetHistoryStorageKey(workspaceId),
+      nextHistory,
+    );
     setPushRemoteMenuOpen(false);
     setPushTargetBranchMenuOpen(false);
     setPushDialogOpen(false);
@@ -1574,12 +1662,14 @@ export function useGitHistoryPanelInteractions(
     pushRunHooks,
     pushTags,
     pushTargetBranchTrimmed,
+    pushTargetHistory,
     pushToGerrit,
     pushTopic,
     runOperation,
     setPushDialogOpen,
     setPushRemoteMenuOpen,
     setPushTargetBranchMenuOpen,
+    setPushTargetHistory,
     workspaceId,
   ]);
 
@@ -2737,6 +2827,7 @@ export function useGitHistoryPanelInteractions(
     handleConfirmRefresh,
     handleSelectPushRemote,
     handleSelectPushTargetBranch,
+    handleSelectPushHistory,
     handleOpenPushDialog,
     loadPushPreview,
     handleConfirmPush,

@@ -15,7 +15,9 @@ import {
   permissionModeToAccessMode,
 } from "./ChatInputBox/types";
 import { useComposerDraft } from "../hooks/composerDraftStore";
+import { getComposerEnginePrefForEngine } from "../hooks/composerEnginePrefsStore";
 import { buildComposerSendReadiness } from "../utils/composerSendReadiness";
+import { resolveDshComposerAgentPreset } from "./ChatInputBox/selectors/dshAgentPresets";
 import type { ComposerProps } from "./Composer";
 
 type Props = ComposerProps;
@@ -65,6 +67,8 @@ export function ComposerLight({
   onTextareaHeightChange,
   steerEnabled = false,
   onSelectEngine: _onSelectEngine,
+  dshAgentPreset: sessionDshAgentPreset = null,
+  items = [],
 }: Props) {
   const { t } = useTranslation();
   const draftText = useComposerDraft(activeThreadId);
@@ -89,13 +93,38 @@ export function ComposerLight({
       if (!content && images.length === 0) {
         return;
       }
+      const dshSendOptions =
+        selectedEngine === "dsh"
+          ? {
+              dshAgentPreset: resolveDshComposerAgentPreset({
+                threadId: activeThreadId,
+                sessionHeader: sessionDshAgentPreset,
+                draftOrPref:
+                  getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+                hasUserMessages: items.some(
+                  (item) => item.kind === "message" && item.role === "user",
+                ),
+              }).value,
+            }
+          : undefined;
       if (isProcessing && !steerEnabled) {
-        void onQueue(content, images, undefined);
+        void onQueue(content, images, dshSendOptions);
         return;
       }
-      void onSend(content, images, undefined);
+      void onSend(content, images, dshSendOptions);
     },
-    [attachedImages, isProcessing, onQueue, onSend, text, steerEnabled],
+    [
+      activeThreadId,
+      attachedImages,
+      isProcessing,
+      items,
+      onQueue,
+      onSend,
+      selectedEngine,
+      sessionDshAgentPreset,
+      text,
+      steerEnabled,
+    ],
   );
 
   const handleModeSelect = useCallback(

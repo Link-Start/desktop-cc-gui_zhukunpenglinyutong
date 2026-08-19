@@ -1,10 +1,15 @@
 import type { ConversationItem } from "../../../types";
+import { resolveHistoryWindowCutIndex } from "../../../utils/historyWindowCut";
 
-/** IO / older-history page size when revealing the pending first-paint tail. */
+/** Legacy alias for the DOM history window. Not the chip reveal page size. */
 export const THREAD_ITEMS_PROGRESSIVE_BATCH_SIZE = 800;
 /** First-paint tail. Opening a session only hydrates the newest 300 items;
  *  older rows stay in memory until the chip is clicked. */
 export const THREAD_ITEMS_FIRST_PAINT_COUNT = 300;
+/** Hard cap after first-paint turn retreat. Mega-turns cannot expand past this. */
+export const THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED = 400;
+/** Memory chip page size. The adjacent All link drains the remainder. */
+export const OLDER_HISTORY_REVEAL_PAGE_SIZE = 500;
 
 export type ThreadItemsDispatch = (action: {
   type: "setThreadItems" | "prependThreadItems";
@@ -71,14 +76,21 @@ export async function dispatchThreadItemsProgressively(
     return { displayedCount: items.length, remainingOlderCount: 0 };
   }
 
-  const displayedCount = batchSize;
+  const cut = resolveHistoryWindowCutIndex({
+    items,
+    windowSize: batchSize,
+    revealedItemCount: 0,
+    activeTurnId: null,
+    maxDisplayed: THREAD_ITEMS_FIRST_PAINT_MAX_DISPLAYED,
+  });
+  const displayedItems = items.slice(cut);
   dispatch({
     type: "setThreadItems",
     threadId,
-    items: items.slice(-displayedCount),
+    items: displayedItems,
   });
   return {
-    displayedCount,
-    remainingOlderCount: items.length - displayedCount,
+    displayedCount: displayedItems.length,
+    remainingOlderCount: cut,
   };
 }

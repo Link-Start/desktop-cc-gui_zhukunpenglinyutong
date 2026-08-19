@@ -78,6 +78,7 @@ export type EngineSendMessageParams = {
   accessMode: string | null;
   agent?: string | null;
   variant?: string | null;
+  dshAgentPreset?: string | null;
 };
 
 /**

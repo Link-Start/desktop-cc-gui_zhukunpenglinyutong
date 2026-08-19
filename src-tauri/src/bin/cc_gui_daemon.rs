@@ -142,6 +142,26 @@ mod session_index {
             Ok(0)
         }
     }
+
+    // session_management overlay types; daemon has no SQLite index.
+    pub(crate) mod store {
+        #[derive(Debug, Clone, Default)]
+        pub struct SessionIndexRow {
+            pub engine: String,
+            pub session_id: String,
+            pub title: String,
+            pub native_title: Option<String>,
+            pub updated_at: i64,
+            pub created_at: Option<i64>,
+            pub cwd: Option<String>,
+            pub workspace_path: Option<String>,
+            pub physical_path: Option<String>,
+            pub parent_session_id: Option<String>,
+            pub size_bytes: Option<u64>,
+            pub provider_profile_id: Option<String>,
+            pub provider_profile_name: Option<String>,
+        }
+    }
 }
 // session_management now catalogs/deletes shared sessions via crate::shared_sessions.
 // The desktop app gets the full module from lib.rs; the daemon only needs the pure
@@ -165,6 +185,7 @@ mod shared_sessions {
         pub(crate) id: String,
         pub(crate) thread_id: String,
         pub(crate) title: String,
+        pub(crate) created_at: u64,
         pub(crate) updated_at: u64,
         pub(crate) selected_engine: EngineType,
         pub(crate) thread_kind: String,
@@ -184,6 +205,8 @@ mod shared_sessions {
     struct SharedSessionMetaLite {
         id: String,
         title: String,
+        #[serde(default)]
+        created_at: u64,
         updated_at: u64,
         selected_engine: EngineType,
         #[serde(default)]
@@ -279,6 +302,11 @@ mod shared_sessions {
                 id: meta.id.clone(),
                 thread_id: shared_thread_id(&meta.id),
                 title: meta.title.clone(),
+                created_at: if meta.created_at > 0 {
+                    meta.created_at
+                } else {
+                    meta.updated_at
+                },
                 updated_at: meta.updated_at,
                 selected_engine: meta.selected_engine,
                 thread_kind: "shared".to_string(),
@@ -1978,6 +2006,7 @@ async fn handle_rpc_request(
                     params.get("autoSession").cloned().unwrap_or(Value::Null),
                 )
                 .map_err(|err| err.to_string())?;
+            let dsh_agent_preset = parse_optional_string(&params, "dshAgentPreset");
             state
                 .engine_send_message(
                     workspace_id,
@@ -1997,6 +2026,7 @@ async fn handle_rpc_request(
                     provider_profile_id,
                     custom_spec_root,
                     auto_session,
+                    dsh_agent_preset,
                 )
                 .await
         }
@@ -2022,6 +2052,7 @@ async fn handle_rpc_request(
                     params.get("autoSession").cloned().unwrap_or(Value::Null),
                 )
                 .map_err(|err| err.to_string())?;
+            let dsh_agent_preset = parse_optional_string(&params, "dshAgentPreset");
             state
                 .engine_send_message_sync(
                     workspace_id,
@@ -2039,6 +2070,7 @@ async fn handle_rpc_request(
                     variant,
                     custom_spec_root,
                     auto_session,
+                    dsh_agent_preset,
                 )
                 .await
         }

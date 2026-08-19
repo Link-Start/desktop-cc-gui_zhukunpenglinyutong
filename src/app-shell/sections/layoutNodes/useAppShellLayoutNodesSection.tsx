@@ -48,6 +48,7 @@ import {
 } from "../quickSwitcherNavigationState";
 import { getEngineModels } from "../../../services/tauri/appServer";
 import { archiveWorkspaceSessions } from "../../../services/tauri/sessionManagement";
+import { markExplicitComposerEngineSwitch } from "../../../features/composer/hooks/explicitComposerEngineSwitch";
 import {
   clearDetachedExternalChangeMonitor,
   configureDetachedExternalChangeMonitor,
@@ -55,6 +56,11 @@ import {
 import { shouldEnableMainFileExternalChangeMonitoring } from "../fileExternalMonitoring";
 import { shouldPreserveEditorOnThreadSelect } from "../threadEditorPreservation";
 import { commitThreadSelection } from "../threadSelect/commitThreadSelection";
+import {
+  applyWorkspaceNavigationThreadPlan,
+  planWorkspaceNavigationThread,
+} from "../../../features/workspaces/utils/planWorkspaceNavigationThread";
+import { peekWorkspaceLastThreadId } from "../../../features/threads/utils/workspaceLastThreadMap";
 import { EMPTY_STRING_ARRAY, formatWorkspaceAliasError } from "./helpers";
 import {
   mergeAppShellDomainBag,
@@ -320,7 +326,6 @@ export function useAppShellLayoutNodesSection(
     fileTreeSourceVersion,
     files,
     forkThreadForWorkspace,
-    forkSessionFromMessageForWorkspace,
     getPinTimestamp,
     gitDiffListView,
     gitDiffViewStyle,
@@ -546,7 +551,6 @@ export function useAppShellLayoutNodesSection(
     setActiveEngine,
     setActiveTab,
     setActiveThreadId,
-    setActiveWorkspaceId,
     setAppMode,
     setCenterMode,
     setComposerInsert,
@@ -771,6 +775,7 @@ export function useAppShellLayoutNodesSection(
       if (thread?.threadKind === "shared") {
         return;
       }
+      markExplicitComposerEngineSwitch(engine);
       await setActiveEngine(engine);
       if (!activeWorkspaceId || !activeThreadId) {
         return;
@@ -1218,12 +1223,14 @@ export function useAppShellLayoutNodesSection(
     setHomeOpen(false);
     setWorkspaceHomeWorkspaceId(null);
     setCenterMode("chat");
-    setActiveWorkspaceId(workspaceId);
-    if (isCompact) {
-      setActiveTab("codex");
-    }
-    ensureWorkspaceThreadListLoaded(workspaceId);
-    setActiveThreadId(null, workspaceId);
+    selectWorkspace(workspaceId);
+    applyWorkspaceNavigationThreadPlan(
+      planWorkspaceNavigationThread({
+        lastThreadId: peekWorkspaceLastThreadId(workspaceId),
+      }),
+      workspaceId,
+      setActiveThreadId,
+    );
   });
   const handleConnectWorkspace = useEventCallback(
     async (workspace: WorkspaceInfo) => {
@@ -1756,18 +1763,18 @@ export function useAppShellLayoutNodesSection(
     toggleCompletionEmailIntent(activeThreadId);
   });
   const handleForkFromMessage = useEventCallback(
-    async (messageId: string, options?: CodexProviderProfileSelection) => {
+    async (_messageId: string, options?: CodexProviderProfileSelection) => {
       if (!activeWorkspace || !activeThreadId) {
         return;
       }
-      const forkedThreadId = await forkSessionFromMessageForWorkspace(
+      // 幕布尾部 Fork 与 Composer `/fork` 走同一条 native thread/fork 链路。
+      // 不要再走 message-anchored forkSessionFromMessage：Claude 会先造
+      // 一个没有 `--fork-session` 的空 child，resume 失败后弹出恢复卡。
+      const forkedThreadId = await forkThreadForWorkspace(
         activeWorkspace.id,
         activeThreadId,
-        messageId,
         {
           activate: true,
-          mode: "messages-only",
-          operation: "fork",
           providerProfileId: options?.providerProfileId ?? null,
           providerProfile: options?.providerProfile ?? null,
         },

@@ -76,6 +76,11 @@ const chat = {
     "claudeContextCategoryTitle": "カテゴリの詳細",
     "claudeContextMcpToolsTitle": "MCP ツール",
     "claudeContextUnavailable": "CLI テレメトリを待っています",
+    "dshContextTooltipTitle": "コンテキスト使用量",
+    "dshContextUnavailable": "占有率の待機中",
+    "dshContextSystem": "システムプロンプト",
+    "dshContextTools": "ツール",
+    "dshContextMessages": "会話メッセージ",
     "claudeContextFreshness": {
       "live": "Claude CLI のライブコンテキスト使用量",
       "restored": "履歴から復元されたコンテキスト使用量",

@@ -261,8 +261,8 @@
 
 #### Scenario: sidebar falls back to default root visibility count
 - **WHEN** workspace settings 不包含 `visibleThreadRootCount`
-- **THEN** sidebar 折叠态 MUST 使用默认值 `20`
-- **AND** 默认值语义 MUST 与显式保存 `20` 一致
+- **THEN** sidebar 折叠态 MUST 使用默认值 `12`
+- **AND** 默认值语义 MUST 与显式保存 `12` 一致
 
 #### Scenario: invalid workspace visibility count is clamped
 - **WHEN** workspace settings 中的 `visibleThreadRootCount` 不是有效正整数，或超出支持范围
@@ -280,11 +280,18 @@
 - **THEN** sidebar MUST 优先展示 `More...` 来展开当前已加载结果
 - **AND** MUST NOT 在该状态下直接展示 `Load older...`
 
-#### Scenario: expanded state preserves existing pagination semantics
-- **WHEN** 用户已经展开当前 workspace 的 root 会话列表
-- **THEN** sidebar MUST 展示当前已加载的全部 root 会话
-- **AND** 若存在 `nextCursor`，系统 MAY 继续展示 `Load older...`
-- **AND** 该行为 MUST NOT 因可见阈值配置而改变原有分页语义
+#### Scenario: more pages incrementally instead of dumping all roots
+- **WHEN** 用户点 `More...`
+- **THEN** sidebar MUST 把可见上限提高到 `page * pageSize`（默认 12 / 24 / 36 / 48…）
+- **AND** MUST NOT 把内存里已加载的全部 root 一次性展开
+- **AND** 仅当当前页已拉 root 耗尽时才继续拉取下一页
+- **AND** MUST NOT 再展示独立的 `Load older...`
+
+#### Scenario: expanded state keeps a single more/collapse control
+- **WHEN** 用户已经把当前 workspace 的可见上限提高到第 2 页或更高
+- **THEN** sidebar MUST 展示「收起」以回到首页阈值
+- **AND** 若仍有更多 root 或 `nextCursor`，系统 MUST 继续展示 `More...`
+- **AND** MUST NOT 再展示独立的 `Load older...`
 
 ### Requirement: Main Topbar Composition MUST Reserve Stable Session Tab Zone
 

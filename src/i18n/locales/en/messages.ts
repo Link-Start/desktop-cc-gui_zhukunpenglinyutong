@@ -57,6 +57,13 @@ const messages = {
     emptyThread: "Start a thread and send a prompt to the agent.",
     restoringHistory: "Loading conversation window…",
     restoringHistoryHint: "Loading the local transcript and session state.",
+    restoringHistoryPrepare: "Preparing to open the session…",
+    restoringHistorySession: "Fetching session history…",
+    restoringHistorySessionPage:
+      "Fetching host history page {{page}} / {{maxPages}} ({{pageEvents}} messages on this page, {{totalEvents}} so far)",
+    restoringHistoryParse: "Parsing {{count}} messages…",
+    restoringHistoryHydrate: "Assembling the canvas ({{count}} items)…",
+    restoringHistoryFinalize: "Finishing canvas restore…",
     restoringSharedHistory: "Restoring Shared session…",
     restoringSharedHistoryPrepare: "Preparing to open the historical Shared session.",
     restoringSharedHistorySession:
@@ -74,6 +81,12 @@ const messages = {
     restoringSharedHistoryMergeDone:
       "Timeline merge complete ({{count}} items total).",
     restoringSharedHistoryFinalize: "Finishing canvas restore…",
+    restoringHistoryPhasePrepare: "Prepare",
+    restoringHistoryPhaseSession: "Snapshot",
+    restoringHistoryPhaseProjection: "Projection",
+    restoringHistoryPhaseMerge: "Merge",
+    restoringHistoryPhaseParse: "Parse",
+    restoringHistoryPhaseHydrate: "Assemble",
     generatingResponse: "Generating response...",
     responding: "Responding...",
     codexWaitingForFirstText:
@@ -95,6 +108,8 @@ const messages = {
       "Model switch detected in the same session. A new backend session has been created to avoid timeouts.",
     imageInputUnsupported:
       "{{engine}} does not support image input in this release",
+    imageInputTooLarge:
+      "{{engine}} accepts images up to {{maxSize}}. This one is about {{size}}. Compress or crop it and try again.",
     doneIn: "Done in {{duration}}",
     totalDuration: "Duration",
     durationSeconds: "took {{duration}}",
@@ -349,6 +364,8 @@ const messages = {
     backToTop: "Back to top",
     backToBottom: "Back to bottom",
     showEarlierMessages: "Show {{count}} earlier messages",
+    loadEarlierMessages: "Load earlier messages",
+    loadAllEarlierMessages: "All",
     liveControls: "Live canvas controls",
     liveAutoFollowToggle: "Focus follow",
     liveAutoFollowEnable: "Enable focus follow for latest output",

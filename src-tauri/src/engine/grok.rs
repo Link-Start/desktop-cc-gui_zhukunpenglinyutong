@@ -38,7 +38,8 @@ use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, Mutex, RwLock};
 
 use super::cli_image_input::{
-    collect_non_empty_image_paths, normalize_local_image_path, GROK_IMAGE_ONLY_FALLBACK_TEXT,
+    collect_non_empty_image_paths, describe_image_ref_for_error, normalize_local_image_path,
+    GROK_IMAGE_ONLY_FALLBACK_TEXT,
 };
 use super::events::EngineEvent;
 use super::grok_history::{
@@ -122,7 +123,7 @@ pub(crate) fn build_grok_prompt_json(
                 blocks.push(block);
                 loaded += 1;
             }
-            Err(error) => errors.push(format!("{raw}: {error}")),
+            Err(error) => errors.push(format!("{}: {error}", describe_image_ref_for_error(&raw))),
         }
     }
 
@@ -1316,6 +1317,25 @@ mod tests {
         let error =
             build_grok_prompt_json("inspect", Some(&[data_url]), Path::new(".")).unwrap_err();
         assert!(error.contains("decoded-image limit"));
+        assert!(error.contains("data URL (image/png"));
+        assert!(
+            !error.contains("AAAAAAAA"),
+            "data URL payload leaked into error: {error}"
+        );
+    }
+
+    #[test]
+    fn prompt_json_errors_omit_data_url_payload() {
+        let data_url = "data:image/png;base64,not-valid-base64-iVBORw0KGgo";
+        let error =
+            build_grok_prompt_json("inspect", Some(&[data_url.to_string()]), Path::new("."))
+                .unwrap_err();
+        assert!(error.contains("none of the attached images could be loaded"));
+        assert!(error.contains("data URL (image/png"));
+        assert!(
+            !error.contains("not-valid-base64"),
+            "data URL leaked into error: {error}"
+        );
     }
 
     #[test]

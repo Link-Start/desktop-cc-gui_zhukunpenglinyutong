@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ScrollArea } from "../../../components/ui/scroll-area";
+import { resetClientStorageForTests } from "../../../services/clientStorage";
 import type { ThreadSummary } from "../../../types";
 import { PinnedThreadList } from "./PinnedThreadList";
-import { ScrollArea } from "../../../components/ui/scroll-area";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
+        "sidebar.pinned": "Pinned",
+        "sidebar.pinnedCount": "· {{count}}",
+        "sidebar.collapsePinnedSection": "Collapse pinned",
+        "sidebar.expandPinnedSection": "Expand pinned",
+        "sidebar.collapsePinnedDay": "Collapse {{date}}",
+        "sidebar.expandPinnedDay": "Expand {{date}}",
         "threads.autoNaming": "Auto naming...",
         "threads.pin": "Pin",
         "threads.unpin": "Unpin",
@@ -32,6 +39,10 @@ vi.mock("react-i18next", () => ({
     i18n: { language: "en", changeLanguage: vi.fn() },
   }),
 }));
+
+function localStamp(year: number, month: number, day: number, hour = 12) {
+  return new Date(year, month - 1, day, hour, 0, 0).getTime();
+}
 
 const thread: ThreadSummary = {
   id: "thread-1",
@@ -64,6 +75,138 @@ const baseProps = {
 };
 
 describe("PinnedThreadList", () => {
+  beforeEach(() => {
+    resetClientStorageForTests();
+  });
+
+  it("puts yyyy-mm-dd at the outer layer and only opens the latest day", () => {
+    const latestStamp = localStamp(2026, 8, 18);
+    const olderStamp = localStamp(2026, 8, 17);
+    const { container } = render(
+      <PinnedThreadList
+        {...baseProps}
+        activeThreadId={null}
+        rows={[
+          {
+            thread: { ...thread, id: "today", name: "Today pin", updatedAt: latestStamp },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: {
+              ...otherThread,
+              id: "yesterday",
+              name: "Yesterday pin",
+              updatedAt: olderStamp,
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+      />,
+    );
+
+    expect(container.querySelector("[data-sidebar-pinned-header]")).toBeNull();
+    expect(container.querySelector(".sidebar-pinned-header-pin")).toBeNull();
+    expect(container.querySelector(".sidebar-pinned-day-chevron")).toBeNull();
+    expect(screen.queryByText("Pinned")).toBeNull();
+    expect(screen.queryByText("· 2")).toBeNull();
+
+    const latestHeader = container.querySelector(
+      '[data-sidebar-pinned-day-header="2026-08-18"]',
+    );
+    expect(latestHeader?.classList.contains("sidebar-section-header")).toBe(
+      true,
+    );
+    expect(latestHeader?.textContent).toBe("2026-08-18");
+    expect(latestHeader?.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("2026-08-17")).toBeTruthy();
+    expect(screen.getByText("Today pin")).toBeTruthy();
+    expect(screen.queryByText("Yesterday pin")).toBeNull();
+    expect(screen.queryByText("今天")).toBeNull();
+    expect(screen.queryByText("昨天")).toBeNull();
+    expect(screen.queryByText("更早")).toBeNull();
+  });
+
+  it("expands only the clicked calendar day", () => {
+    render(
+      <PinnedThreadList
+        {...baseProps}
+        activeThreadId={null}
+        rows={[
+          {
+            thread: {
+              ...thread,
+              id: "today",
+              name: "Today pin",
+              updatedAt: localStamp(2026, 8, 18),
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: {
+              ...otherThread,
+              id: "yesterday",
+              name: "Yesterday pin",
+              updatedAt: localStamp(2026, 8, 17),
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand 2026-08-17" }));
+
+    expect(screen.getByText("Today pin")).toBeTruthy();
+    expect(screen.getByText("Yesterday pin")).toBeTruthy();
+  });
+
+  it("auto-expands the active thread day without collapsing the section", async () => {
+    render(
+      <PinnedThreadList
+        {...baseProps}
+        activeThreadId="yesterday"
+        rows={[
+          {
+            thread: {
+              ...thread,
+              id: "today",
+              name: "Today pin",
+              updatedAt: localStamp(2026, 8, 18),
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+          {
+            thread: {
+              ...otherThread,
+              id: "yesterday",
+              name: "Yesterday pin",
+              updatedAt: localStamp(2026, 8, 17),
+            },
+            depth: 0,
+            workspaceId: "ws-1",
+            workspacePath: "/tmp/ws-1",
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Yesterday pin")).toBeTruthy();
+    });
+    expect(screen.getByText("Today pin")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Collapse pinned" })).toBeNull();
+  });
+
   it("hydrates pinned rows in StrictMode without mounting Radix row anchors", () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")

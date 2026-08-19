@@ -48,7 +48,7 @@ describe("useThreadActionsSessionCatalog", () => {
         scanQuality: "preview",
       },
       cursor: null,
-      limit: 5,
+      limit: 12,
     });
     expect(listWorkspaceSessionsService).toHaveBeenCalledTimes(1);
     expect(catalog?.sessions.map((session) => session.sessionId)).toEqual([
@@ -120,7 +120,7 @@ describe("useThreadActionsSessionCatalog", () => {
         scanQuality: "preview",
       },
       cursor: null,
-      limit: 5,
+      limit: 12,
     });
   });
 

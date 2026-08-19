@@ -1,5 +1,7 @@
 import type { HistoryLoader } from "../contracts/conversationCurtainContracts";
 import { normalizeHistorySnapshot } from "../contracts/conversationCurtainContracts";
+import type { HistoryLoadingProgressListener } from "../utils/historyLoadingProgress";
+import { runNativeHistoryFetchAndParse } from "../utils/runNativeHistoryOpenStages";
 import { parseKimiHistoryMessages } from "./kimiHistoryParser";
 
 type KimiHistoryLoaderOptions = {
@@ -9,12 +11,14 @@ type KimiHistoryLoaderOptions = {
     workspacePath: string,
     sessionId: string,
   ) => Promise<unknown>;
+  onProgress?: HistoryLoadingProgressListener;
 };
 
 export function createKimiHistoryLoader({
   workspaceId,
   workspacePath,
   loadKimiSession,
+  onProgress,
 }: KimiHistoryLoaderOptions): HistoryLoader {
   return {
     engine: "kimi",
@@ -39,10 +43,17 @@ export function createKimiHistoryLoader({
         });
       }
 
-      const result = await loadKimiSession(workspacePath, sessionId);
-      const record = result as { messages?: unknown };
-      const messagesData = record.messages ?? result;
-      const items = parseKimiHistoryMessages(messagesData);
+      const staged = await runNativeHistoryFetchAndParse({
+        report: (progress) => {
+          onProgress?.(progress);
+        },
+        shouldContinue: () => true,
+        load: () => loadKimiSession(workspacePath, sessionId),
+        extractMessages: (payload) =>
+          (payload as { messages?: unknown } | null)?.messages ?? payload,
+        parse: parseKimiHistoryMessages,
+      });
+      const items = staged?.items ?? [];
 
       return normalizeHistorySnapshot({
         engine: "kimi",
@@ -59,6 +70,8 @@ export function createKimiHistoryLoader({
           isThinking: false,
           heartbeatPulse: null,
           historyRestoredAtMs: Date.now(),
+          historyHasMore: false,
+          historyNextCursor: null,
         },
       });
     },

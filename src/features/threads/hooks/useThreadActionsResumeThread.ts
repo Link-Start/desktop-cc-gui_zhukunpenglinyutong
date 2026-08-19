@@ -26,7 +26,11 @@ import {
 import { parseGeminiHistoryMessages } from "../loaders/geminiHistoryParser";
 import { parseGrokHistoryMessages } from "../loaders/grokHistoryParser";
 import { parseKimiHistoryMessages } from "../loaders/kimiHistoryParser";
-import { extractDshHistoryTokenUsage } from "../loaders/dshHistoryLoader";
+import {
+  DSH_UI_HISTORY_WINDOW,
+  extractDshHistoryTodos,
+  extractDshHistoryTokenUsage,
+} from "../loaders/dshHistoryLoader";
 import { parseDshHistoryMessages } from "../loaders/dshHistoryParser";
 import { parsePiHistoryMessages } from "../loaders/piHistoryParser";
 import {
@@ -67,6 +71,7 @@ import {
   buildPartialHistoryDiagnostic,
   resolveThreadStabilityDiagnostic,
 } from "../utils/stabilityDiagnostics";
+import { isClaudeForkThreadId } from "../utils/claudeForkThread";
 import { createThreadHistoryLoaderForThread } from "./useThreadActions.historyLoaderFactory";
 import {
   RELATED_THREAD_LOAD_CONCURRENCY,
@@ -77,16 +82,37 @@ import {
 } from "./useThreadActions.threadList";
 import { type UseThreadActionsOptions } from "./useThreadActions.types";
 import type { HistoryLoadingProgress } from "../utils/historyLoadingProgress";
+import {
+  buildNativeHistoryFinalizeProgress,
+  buildNativeHistoryHydrateProgress,
+  yieldHistoryLoadingPaint,
+} from "../utils/historyLoadingProgress";
+import { runNativeHistoryOpenStages } from "../utils/runNativeHistoryOpenStages";
+import { subscribeMappedDshHistoryLoadProgress } from "../utils/subscribeMappedDshHistoryLoadProgress";
 import { dispatchThreadItemsProgressively } from "../utils/dispatchThreadItemsProgressively";
 import {
   clearPendingOlderHistory,
   getPendingOlderHistory,
-  hasPendingOlderHistory,
   rememberFullHistoryForWindow,
   replacePendingOlderHistoryItems,
-  takeNextOlderHistoryBatch,
 } from "../utils/pendingOlderHistory";
 import { setOlderHistoryRequester } from "../utils/olderHistoryRequestBridge";
+import { createOlderHistoryRequester } from "../utils/createOlderHistoryRequester";
+import { publishThreadDiskHistoryWindows } from "../utils/threadDiskHistoryWindowStore";
+import { notifyOlderHistoryBeforePrepend } from "../utils/olderHistoryScrollRestoreBridge";
+
+function buildHistorySnapshotPaintKey(snapshot: {
+  threadId?: string;
+  items: Array<{ id?: string }>;
+}): string {
+  const items = snapshot.items;
+  return [
+    snapshot.threadId ?? "",
+    String(items.length),
+    items[0]?.id ?? "",
+    items[items.length - 1]?.id ?? "",
+  ].join(":");
+}
 
 export type ResumeThreadForWorkspaceOptions = {
   preferLocalCodexHistory?: boolean;
@@ -105,6 +131,7 @@ type ResumeThreadForWorkspaceContext = UseThreadActionsOptions & {
     Record<string, ThreadSummary[]>
   >;
   setThreadHistoryRecoveryFailed: (threadId: string, failed: boolean) => void;
+  setThreadHistoryLoading?: (threadId: string, isLoading: boolean) => void;
   setThreadHistoryLoadingProgress?: (
     threadId: string,
     progress: HistoryLoadingProgress | null,
@@ -128,6 +155,7 @@ export function useThreadActionsResumeThreadForWorkspace(
     dispatch: rawDispatch,
     getCustomName,
     itemsByThread,
+    historyWindowByThread,
     tokenUsageByThread = {},
     loadedThreadsRef,
     onDebug,
@@ -147,6 +175,7 @@ export function useThreadActionsResumeThreadForWorkspace(
     latestThreadsByWorkspaceRef,
     previousThreadsByWorkspaceRef,
     setThreadHistoryRecoveryFailed: rawSetThreadHistoryRecoveryFailed,
+    setThreadHistoryLoading,
     setThreadHistoryLoadingProgress,
   } = deps;
   const resumeRequestGenerationByScopeRef = useRef<Record<string, number>>({});
@@ -156,31 +185,87 @@ export function useThreadActionsResumeThreadForWorkspace(
   itemsByThreadRef.current = itemsByThread;
   const threadStatusByIdRef = useRef(threadStatusById);
   threadStatusByIdRef.current = threadStatusById;
+  const historyWindowByThreadRef = useRef(historyWindowByThread ?? {});
+  historyWindowByThreadRef.current = historyWindowByThread ?? {};
+  const threadsByWorkspaceRef = useRef(threadsByWorkspace);
+  threadsByWorkspaceRef.current = threadsByWorkspace;
+  const activeThreadIdByWorkspaceRef = useRef(activeThreadIdByWorkspace);
+  activeThreadIdByWorkspaceRef.current = activeThreadIdByWorkspace;
+  const olderHistoryInFlightByThreadRef = useRef(
+    new Map<string, { cursor: string; epoch: number }>(),
+  );
+  const olderHistoryDiskPageEpochByThreadRef = useRef<Record<string, number>>(
+    {},
+  );
 
   useEffect(() => {
-    setOlderHistoryRequester((targetThreadId) => {
-      const batch = takeNextOlderHistoryBatch(targetThreadId);
-      if (batch.length === 0) {
-        return false;
+    publishThreadDiskHistoryWindows(historyWindowByThread);
+  }, [historyWindowByThread]);
+
+  useEffect(() => {
+    const activeThreadIds = new Set(
+      Object.values(activeThreadIdByWorkspace).filter(
+        (threadId): threadId is string => Boolean(threadId),
+      ),
+    );
+    for (const threadId of olderHistoryInFlightByThreadRef.current.keys()) {
+      if (activeThreadIds.has(threadId)) {
+        continue;
       }
-      rawDispatch({
-        type: "prependThreadItems",
-        threadId: targetThreadId,
-        items: batch,
-      });
-      const hasMore = hasPendingOlderHistory(targetThreadId);
-      rawDispatch({
-        type: "setThreadHistoryWindow",
-        threadId: targetThreadId,
-        hasMore,
-        nextCursor: hasMore ? "memory" : null,
-      });
-      return true;
+      olderHistoryDiskPageEpochByThreadRef.current[threadId] =
+        (olderHistoryDiskPageEpochByThreadRef.current[threadId] ?? 0) + 1;
+      olderHistoryInFlightByThreadRef.current.delete(threadId);
+    }
+  }, [activeThreadIdByWorkspace]);
+
+  useEffect(() => {
+    const requester = createOlderHistoryRequester({
+      dispatch: rawDispatch,
+      getHistoryWindow: (targetThreadId) =>
+        historyWindowByThreadRef.current[targetThreadId],
+      resolveWorkspace: (targetThreadId) => {
+        for (const [workspaceId, threads] of Object.entries(
+          threadsByWorkspaceRef.current,
+        )) {
+          if (!threads.some((thread) => thread.id === targetThreadId)) {
+            continue;
+          }
+          const workspacePath =
+            workspacePathsByIdRef.current[workspaceId] ??
+            resolveWorkspacePath?.(workspaceId) ??
+            "";
+          if (!workspacePath) {
+            return null;
+          }
+          return { workspaceId, workspacePath };
+        }
+        for (const [workspaceId, activeThreadId] of Object.entries(
+          activeThreadIdByWorkspaceRef.current,
+        )) {
+          if (activeThreadId !== targetThreadId) {
+            continue;
+          }
+          const workspacePath =
+            workspacePathsByIdRef.current[workspaceId] ??
+            resolveWorkspacePath?.(workspaceId) ??
+            "";
+          if (!workspacePath) {
+            return null;
+          }
+          return { workspaceId, workspacePath };
+        }
+        return null;
+      },
+      getDiskPageEpoch: (targetThreadId) =>
+        olderHistoryDiskPageEpochByThreadRef.current[targetThreadId] ?? 0,
+      inFlightByThread: olderHistoryInFlightByThreadRef.current,
+      notifyBeforePrepend: notifyOlderHistoryBeforePrepend,
     });
+    setOlderHistoryRequester(requester);
     return () => {
       setOlderHistoryRequester(null);
     };
-  }, [rawDispatch]);
+  }, [rawDispatch, resolveWorkspacePath, workspacePathsByIdRef]);
 
   const resumeThreadForWorkspace = useCallback(
     async (
@@ -273,19 +358,13 @@ export function useThreadActionsResumeThreadForWorkspace(
             items,
             result.displayedCount,
           );
-          dispatch({
-            type: "setThreadHistoryWindow",
-            threadId: targetThreadId,
-            hasMore: true,
-            nextCursor: "memory",
-          });
         } else {
           clearPendingOlderHistory(targetThreadId);
         }
         return true;
       };
       const localItems = itemsByThread[threadId] ?? [];
-      if (isPendingThreadId(threadId)) {
+      if (isPendingThreadId(threadId) || isClaudeForkThreadId(threadId)) {
         setThreadLoaded(threadId, true);
         setThreadHistoryRecoveryFailed(threadId, false);
         onDebug?.({
@@ -296,7 +375,9 @@ export function useThreadActionsResumeThreadForWorkspace(
           payload: {
             workspaceId,
             threadId,
-            reason: "optimistic-pending-thread",
+            reason: isClaudeForkThreadId(threadId)
+              ? "provisional-claude-fork"
+              : "optimistic-pending-thread",
           },
         });
         return threadId;
@@ -402,6 +483,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       }
       if (useUnifiedHistoryLoader) {
         // hydrateHistorySnapshot is assigned below; Shared soft-timeout merge calls it late.
+        let phaseAPaintedSnapshotKey: string | null = null;
         let hydrateHistorySnapshot: (
           effectiveThreadId: string,
           snapshot: Awaited<
@@ -429,6 +511,33 @@ export function useThreadActionsResumeThreadForWorkspace(
                   setThreadHistoryLoadingProgress(targetThreadId, progress);
                 }
               : undefined,
+            onSharedPhaseAReady: (phaseASnapshot) => {
+              // V0 is enough to paint. Drop the blocking curtain before
+              // projection starts or times out (D1). Empty V0 must not
+              // hydrate during Phase-A — wait for the open path to finish
+              // so we do not mark loaded before projection settles.
+              if (!isCurrentResumeRequest()) {
+                return;
+              }
+              // Stamp before the first await so load() cannot re-hydrate the
+              // same V0 on the same turn (projection skip / fast return).
+              if (phaseASnapshot.items.length > 0) {
+                phaseAPaintedSnapshotKey =
+                  buildHistorySnapshotPaintKey(phaseASnapshot);
+              }
+              void (async () => {
+                if (phaseASnapshot.items.length > 0) {
+                  await hydrateHistorySnapshot(
+                    targetThreadId,
+                    phaseASnapshot,
+                  );
+                }
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoading?.(targetThreadId, false);
+              })();
+            },
             onSharedProjectionMerged: (mergedSnapshot) => {
               // Recovery「已解锁」与 history projection 解耦：后台 merge 不得挡发送。
               // 仅在仍是本次 resume 且线程未在跑 live turn 时应用。
@@ -466,12 +575,6 @@ export function useThreadActionsResumeThreadForWorkspace(
                     type: "setThreadItems",
                     threadId: targetThreadId,
                     items: nextItems.slice(-pending.displayedCount),
-                  });
-                  dispatch({
-                    type: "setThreadHistoryWindow",
-                    threadId: targetThreadId,
-                    hasMore: true,
-                    nextCursor: "memory",
                   });
                   return;
                 }
@@ -558,6 +661,16 @@ export function useThreadActionsResumeThreadForWorkspace(
             return false;
           }
           setThreadHistoryRecoveryFailed(effectiveThreadId, false);
+          if (!effectiveThreadId.startsWith("shared:")) {
+            setThreadHistoryLoadingProgress?.(
+              effectiveThreadId,
+              buildNativeHistoryHydrateProgress("start", snapshotItems.length),
+            );
+            await yieldHistoryLoadingPaint();
+            if (!isCurrentResumeRequest()) {
+              return false;
+            }
+          }
           const applied = await applyHydratedItems(
             effectiveThreadId,
             snapshotItems,
@@ -576,14 +689,12 @@ export function useThreadActionsResumeThreadForWorkspace(
             threadId: effectiveThreadId,
             timestamp: assembledSnapshot.meta.historyRestoredAtMs,
           });
-          if (!hasPendingOlderHistory(effectiveThreadId)) {
-            dispatch({
-              type: "setThreadHistoryWindow",
-              threadId: effectiveThreadId,
-              hasMore: assembledSnapshot.meta.historyHasMore === true,
-              nextCursor: assembledSnapshot.meta.historyNextCursor ?? null,
-            });
-          }
+          dispatch({
+            type: "setThreadHistoryWindow",
+            threadId: effectiveThreadId,
+            hasMore: assembledSnapshot.meta.historyHasMore === true,
+            nextCursor: assembledSnapshot.meta.historyNextCursor ?? null,
+          });
           if (snapshot.tokenUsage) {
             dispatch({
               type: "setThreadTokenUsage",
@@ -659,6 +770,12 @@ export function useThreadActionsResumeThreadForWorkspace(
             dispatch({ type: "addUserInputRequest", request });
           });
           setThreadLoaded(effectiveThreadId, true);
+          if (!effectiveThreadId.startsWith("shared:")) {
+            setThreadHistoryLoadingProgress?.(
+              effectiveThreadId,
+              buildNativeHistoryFinalizeProgress(),
+            );
+          }
           return true;
         };
         // end hydrateHistorySnapshot assignment
@@ -674,7 +791,9 @@ export function useThreadActionsResumeThreadForWorkspace(
           if (!isCurrentResumeRequest()) {
             return firstSnapshot;
           }
-          if (hydrateHistory(firstSnapshot).items.length > 0) {
+          // Raw items already mean this snapshot is not an empty-loader miss.
+          // Do not classify the full transcript just to decide whether to retry.
+          if (firstSnapshot.items.length > 0) {
             return firstSnapshot;
           }
           if (targetThreadId.startsWith("shared:")) {
@@ -1061,6 +1180,12 @@ export function useThreadActionsResumeThreadForWorkspace(
           if (!isCurrentResumeRequest()) {
             return threadId;
           }
+          if (
+            phaseAPaintedSnapshotKey &&
+            buildHistorySnapshotPaintKey(snapshot) === phaseAPaintedSnapshotKey
+          ) {
+            return threadId;
+          }
           await hydrateHistorySnapshot(threadId, snapshot);
           if (!isCurrentResumeRequest()) {
             return threadId;
@@ -1288,14 +1413,12 @@ export function useThreadActionsResumeThreadForWorkspace(
               threadId,
               timestamp: Date.now(),
             });
-            if (!hasPendingOlderHistory(threadId)) {
-              dispatch({
-                type: "setThreadHistoryWindow",
-                threadId,
-                hasMore: claudeRecord.hasMore === true,
-                nextCursor: claudeRecord.nextCursor ?? null,
-              });
-            }
+            dispatch({
+              type: "setThreadHistoryWindow",
+              threadId,
+              hasMore: claudeRecord.hasMore === true,
+              nextCursor: claudeRecord.nextCursor ?? null,
+            });
 
             // Dispatch usage data if available
             const restoredTokenUsage = extractClaudeHistoryTokenUsage(result);
@@ -1440,15 +1563,27 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("grok:".length);
           try {
-            const result = await loadGrokSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parseGrokHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+            await runNativeHistoryOpenStages({
+              report: (progress) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoadingProgress?.(threadId, progress);
+              },
+              shouldContinue: isCurrentResumeRequest,
+              load: () =>
+                loadGrokSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parseGrokHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1472,15 +1607,27 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("kimi:".length);
           try {
-            const result = await loadKimiSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parseKimiHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+            await runNativeHistoryOpenStages({
+              report: (progress) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoadingProgress?.(threadId, progress);
+              },
+              shouldContinue: isCurrentResumeRequest,
+              load: () =>
+                loadKimiSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parseKimiHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1503,25 +1650,66 @@ export function useThreadActionsResumeThreadForWorkspace(
         });
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("dsh:".length);
-          try {
-            const result = await loadDshSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parseDshHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+          const reportDshProgress = (progress: HistoryLoadingProgress) => {
+            if (!isCurrentResumeRequest()) {
+              return;
             }
-            const restoredTokenUsage = extractDshHistoryTokenUsage(result);
+            setThreadHistoryLoadingProgress?.(threadId, progress);
+          };
+          const stopPageProgress = subscribeMappedDshHistoryLoadProgress({
+            threadId,
+            hostSessionId: realSessionId,
+            onProgress: reportDshProgress,
+          });
+          try {
+            const staged = await runNativeHistoryOpenStages({
+              report: reportDshProgress,
+              shouldContinue: isCurrentResumeRequest,
+              load: () =>
+                loadDshSessionService(workspacePath, realSessionId, {
+                  limit: DSH_UI_HISTORY_WINDOW,
+                }),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parseDshHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
+            }
+            const restoredTokenUsage = extractDshHistoryTokenUsage(
+              staged?.result ?? null,
+            );
             if (restoredTokenUsage) {
               dispatch({
                 type: "setThreadTokenUsage",
                 threadId,
                 tokenUsage: restoredTokenUsage,
               });
+            } else {
+              const restoredTodos = extractDshHistoryTodos(staged?.result ?? null);
+              if (restoredTodos !== undefined) {
+                dispatch({
+                  type: "setThreadDshTodos",
+                  threadId,
+                  todos: restoredTodos,
+                });
+              }
             }
+            const dshWindow = staged?.result as
+              | { hasMore?: boolean; nextCursor?: string | null }
+              | null
+              | undefined;
+            dispatch({
+              type: "setThreadHistoryWindow",
+              threadId,
+              hasMore: dshWindow?.hasMore === true,
+              nextCursor: dshWindow?.nextCursor ?? null,
+            });
             dispatch({
               type: "setThreadHistoryRestoredAt",
               threadId,
@@ -1529,6 +1717,8 @@ export function useThreadActionsResumeThreadForWorkspace(
             });
           } catch {
             // Failed to load DSH session history — not fatal
+          } finally {
+            stopPageProgress();
           }
         }
         loadedThreadsRef.current[threadId] = true;
@@ -1544,15 +1734,26 @@ export function useThreadActionsResumeThreadForWorkspace(
         if (workspacePath && !loadedThreadsRef.current[threadId]) {
           const realSessionId = threadId.slice("pi:".length);
           try {
-            const result = await loadPiSessionService(
-              workspacePath,
-              realSessionId,
-            );
-            const messagesData =
-              (result as { messages?: unknown }).messages ?? result;
-            const items = parsePiHistoryMessages(messagesData);
-            if (items.length > 0) {
-              await applyHydratedItems(threadId, items);
+            await runNativeHistoryOpenStages({
+              report: (progress) => {
+                if (!isCurrentResumeRequest()) {
+                  return;
+                }
+                setThreadHistoryLoadingProgress?.(threadId, progress);
+              },
+              shouldContinue: isCurrentResumeRequest,
+              load: () => loadPiSessionService(workspacePath, realSessionId),
+              extractMessages: (payload) =>
+                (payload as { messages?: unknown }).messages ?? payload,
+              parse: parsePiHistoryMessages,
+              hydrate: async (items) => {
+                if (items.length > 0) {
+                  await applyHydratedItems(threadId, items);
+                }
+              },
+            });
+            if (!isCurrentResumeRequest()) {
+              return threadId;
             }
             dispatch({
               type: "setThreadHistoryRestoredAt",
@@ -1763,6 +1964,7 @@ export function useThreadActionsResumeThreadForWorkspace(
       useUnifiedHistoryLoader,
       workspacePathsByIdRef,
       rawSetThreadHistoryRecoveryFailed,
+      setThreadHistoryLoading,
       setThreadHistoryLoadingProgress,
     ],
   );

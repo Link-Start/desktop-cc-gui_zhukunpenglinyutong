@@ -73,6 +73,10 @@ fn catalog_entry(provider_id: &str) -> Option<&'static PiAuthProviderDef> {
         .find(|item| item.id == provider_id)
 }
 
+pub(crate) fn pi_catalog_env_var(provider_id: &str) -> Option<&'static str> {
+    catalog_entry(provider_id).and_then(|item| item.env_var)
+}
+
 /// Resolve `<agent>/auth.json`, mirroring `pi_history::resolve_pi_sessions_root`:
 /// engine-config home override → `PI_CODING_AGENT_DIR` → `~/.pi/agent`.
 pub fn resolve_pi_auth_file(home_override: Option<&str>) -> PathBuf {

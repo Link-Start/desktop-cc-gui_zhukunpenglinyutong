@@ -4,8 +4,11 @@ import {
   createSessionLifecycleThreadStarter,
   extractProviderBindingFromStartedThread,
   extractThreadId,
+  isManagedEngineProviderProfileId,
+  localProviderBindingForEngine,
   providerBindingFromSelectedProfile,
   resolveClaudeForkThreadName,
+  resolveSendProviderProfileId,
 } from "./sessionLifecycleController";
 
 vi.mock("../../../services/globalRuntimeNotices", () => ({
@@ -67,14 +70,60 @@ describe("sessionLifecycleController", () => {
     "__local_config_toml__",
     "__local_opencode_json__",
     "__local_pi__",
-  ])("normalizes local profile %s to no managed binding", (profileId) => {
+    "__dsh_host_catalog__",
+  ])("keeps local profile %s for sidebar labels", (profileId) => {
     expect(
       providerBindingFromSelectedProfile({
         id: profileId,
         name: "Local config",
         source: "disk",
       }),
-    ).toEqual({});
+    ).toMatchObject({
+      providerProfileId: profileId,
+      providerProfileName: "Local config",
+      providerProfileSource: "disk",
+    });
+  });
+
+  it("defaults PI / DSH / Grok new sessions to a local label binding", () => {
+    expect(localProviderBindingForEngine("pi")).toMatchObject({
+      providerProfileId: "__local_pi__",
+    });
+    expect(localProviderBindingForEngine("dsh")).toMatchObject({
+      providerProfileId: "__dsh_host_catalog__",
+    });
+    expect(localProviderBindingForEngine("grok")).toMatchObject({
+      providerProfileId: "__local_config_toml__",
+    });
+    expect(isManagedEngineProviderProfileId("__local_pi__")).toBe(false);
+    expect(isManagedEngineProviderProfileId("grok-managed")).toBe(true);
+  });
+
+  it("send uses the thread managed binding instead of a leftover composer picker", () => {
+    expect(
+      resolveSendProviderProfileId({
+        threadProviderProfileId: "provider-b",
+        composerProviderProfileId: "provider-a",
+      }),
+    ).toBe("provider-b");
+    expect(
+      resolveSendProviderProfileId({
+        threadProviderProfileId: "__local_pi__",
+        composerProviderProfileId: "provider-a",
+      }),
+    ).toBeNull();
+    expect(
+      resolveSendProviderProfileId({
+        threadProviderProfileId: null,
+        composerProviderProfileId: "provider-a",
+      }),
+    ).toBe("provider-a");
+    expect(
+      resolveSendProviderProfileId({
+        threadProviderProfileId: null,
+        composerProviderProfileId: "__disk__",
+      }),
+    ).toBeNull();
   });
 
   it("prefixes Claude fork names without duplicating the prefix", () => {

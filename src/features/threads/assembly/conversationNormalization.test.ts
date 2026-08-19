@@ -19,6 +19,34 @@ describe("conversationNormalization", () => {
     ).toBe("hello codex");
   });
 
+  it("treats nested known wrappers as the same user intent as a plain optimistic bubble", () => {
+    const optimistic = "继续分析发布清单";
+    const incoming = [
+      '<project-memory-pack source="memory-scout" count="1">',
+      "Cleaned Context:",
+      "- [M1] 项目使用 Spring Boot。",
+      "</project-memory-pack>",
+      "",
+      "[User Input] 继续分析发布清单",
+      "",
+      "<note-card-context>",
+      '<note-card title="发布清单" archived="false">',
+      "先构建，再发布",
+      "</note-card>",
+      "</note-card-context>",
+    ].join("\n");
+
+    expect(normalizeComparableUserText(incoming)).toBe(
+      normalizeComparableUserText(optimistic),
+    );
+    expect(
+      isEquivalentUserObservation(
+        { text: optimistic, images: [] },
+        { text: incoming, images: [] },
+      ),
+    ).toBe(true);
+  });
+
   it("returns visible user text without injected wrappers", () => {
     const normalized = normalizeUserVisibleText(
       "Execution policy (default mode): code\nUser request: ship it",

@@ -3,6 +3,7 @@ import {
   getComposerEnginePrefsSnapshot,
   seedComposerEnginePrefs,
   setComposerEnginePref,
+  setComposerEnginePrefPersistScheduler,
 } from "../../features/composer/hooks/composerEnginePrefsStore";
 import { seedCliEngineVisibility } from "../../features/composer/hooks/cliEngineVisibilityStore";
 import { updateAppSettings } from "../../services/tauri/settings";
@@ -49,14 +50,18 @@ export function useAppShellComposerPrefsPersistence({
     [flushPersistEnginePrefs],
   );
 
+  useEffect(() => {
+    setComposerEnginePrefPersistScheduler(schedulePersistEnginePrefs);
+    return () => setComposerEnginePrefPersistScheduler(null);
+  }, [schedulePersistEnginePrefs]);
+
   const persistComposerEnginePref = useCallback(
     (engine: EngineType, patch: Partial<ComposerEnginePrefs>) => {
       if (!setComposerEnginePref(engine, patch)) {
         return;
       }
-      schedulePersistEnginePrefs();
     },
-    [schedulePersistEnginePrefs],
+    [],
   );
   const activeEngineRef = useRef<EngineType>("claude");
   const persistClaudeCollaborationMode = useCallback(

@@ -241,6 +241,8 @@ export type ThreadSummary = {
   id: string;
   name: string;
   updatedAt: number;
+  /** 会话创建时间。侧栏稳定排序用它；updatedAt 只表示最近活动。 */
+  createdAt?: number;
   archivedAt?: number;
   threadKind?: "native" | "shared";
   sizeBytes?: number;
@@ -286,6 +288,8 @@ export type ThreadSummary = {
   lineageParentSessionId?: string;
   lineageKind?: "provider-continuation" | string;
   lineageDepth?: number;
+  /** DSH session header passthrough; locked after first user turn. */
+  dshAgentPreset?: string | null;
 };
 
 export type ReviewTarget =
@@ -306,6 +310,8 @@ export type ComposerEnginePrefs = {
   effort: string | null;
   accessMode: AccessMode | null;
   collaborationModeId: string | null;
+  /** Last shipped DSH Agent Preset used for a blank session. */
+  dshAgentPreset: string | null;
 };
 
 /**
@@ -546,6 +552,8 @@ export type MessageSendOptions = {
   sharedExecutionTarget?: SharedQueuedExecutionTarget;
   /** Shared Session one-shot Multi-Agent request；target 仍由 sharedExecutionTarget 冻结。 */
   squadRequest?: true;
+  /** DSH create-time Agent Preset; ignored by other engines. */
+  dshAgentPreset?: string | null;
 };
 
 export type SelectedAgentOption = {

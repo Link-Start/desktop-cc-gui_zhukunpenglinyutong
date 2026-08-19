@@ -23,6 +23,8 @@ export type SessionIndexRow = {
   physicalPath?: string | null;
   parentSessionId?: string | null;
   sizeBytes?: number | null;
+  providerProfileId?: string | null;
+  providerProfileName?: string | null;
 };
 
 export type SharedNativeVisibilityProjection = {
@@ -64,7 +66,8 @@ export async function listSessionIndexForWorkspace(
 ): Promise<SessionIndexListPage> {
   return invoke<SessionIndexListPage>("list_session_index_for_workspace", {
     workspaceId,
-    limit: options?.limit ?? 20,
+    // Keep in sync with DEFAULT_VISIBLE_THREAD_ROOT_COUNT / DEFAULT_SIDEBAR_INDEX_LIMIT.
+    limit: options?.limit ?? 12,
     syncIfNeeded: options?.syncIfNeeded ?? true,
     forceSync: options?.forceSync ?? false,
     beforeUpdatedAt: options?.beforeUpdatedAt ?? null,
@@ -95,12 +98,81 @@ export async function invalidateSessionIndexForWorkspace(
   });
 }
 
+const LOCAL_PENDING_DRAFT_SESSION_ID =
+  /^([a-z][a-z0-9]*)-pending-(\d{10,16})-([a-z0-9]{4,12})$/i;
+
+const rememberedWorkspacePathById = new Map<string, string>();
+
+export function rememberSessionIndexWorkspacePath(
+  workspaceId: string,
+  workspacePath: string,
+): void {
+  const id = workspaceId.trim();
+  const path = workspacePath.trim();
+  if (!id || !path) {
+    return;
+  }
+  rememberedWorkspacePathById.set(id, path);
+}
+
+function inferEngineFromThreadId(threadId: string): string {
+  const raw = threadId.trim().toLowerCase();
+  if (raw.startsWith("claude:") || raw.startsWith("claude-pending-")) return "claude";
+  if (raw.startsWith("gemini:") || raw.startsWith("gemini-pending-")) return "gemini";
+  if (raw.startsWith("grok:") || raw.startsWith("grok-pending-")) return "grok";
+  if (raw.startsWith("kimi:") || raw.startsWith("kimi-pending-")) return "kimi";
+  if (raw.startsWith("opencode:") || raw.startsWith("opencode-pending-")) return "opencode";
+  if (raw.startsWith("pi:") || raw.startsWith("pi-pending-")) return "pi";
+  if (raw.startsWith("dsh:") || raw.startsWith("dsh-pending-")) return "dsh";
+  return "codex";
+}
+
+export function writeRemappedClientSessionIndex(input: {
+  workspaceId: string;
+  threadId: string;
+  engine?: string | null;
+  providerProfileId?: string | null;
+  providerProfileName?: string | null;
+}): void {
+  const workspacePath =
+    rememberedWorkspacePathById.get(input.workspaceId.trim()) ?? "";
+  writeClientCreatedSessionIndex({
+    engine: input.engine?.trim() || inferEngineFromThreadId(input.threadId),
+    sessionId: input.threadId,
+    workspacePath,
+    providerProfileId: input.providerProfileId,
+    providerProfileName: input.providerProfileName,
+  });
+}
+
+function bareSessionId(threadId: string): string {
+  const raw = threadId.trim();
+  return raw.includes(":") ? raw.slice(raw.indexOf(":") + 1).trim() : raw;
+}
+
+export function isLocalPendingDraftSessionId(sessionId: string): boolean {
+  return LOCAL_PENDING_DRAFT_SESSION_ID.test(sessionId.trim());
+}
+
+/** Pending client drafts must not become visible Index rows. */
+export function scheduleTombstoneLocalPendingDraftIndexRow(
+  threadId: string,
+): void {
+  const sessionId = bareSessionId(threadId);
+  if (!isLocalPendingDraftSessionId(sessionId)) {
+    return;
+  }
+  void tombstoneSessionIndexRows([sessionId]).catch(() => 0);
+}
+
 /** Hide Index rows so sidebar hydrate cannot resurrect a deleted session. */
 export function writeClientCreatedSessionIndex(input: {
   engine: string;
   sessionId: string;
   workspacePath: string;
   title?: string;
+  providerProfileId?: string | null;
+  providerProfileName?: string | null;
 }): void {
   const engine = input.engine.trim().toLowerCase();
   const rawId = input.sessionId.trim();
@@ -108,20 +180,24 @@ export function writeClientCreatedSessionIndex(input: {
   if (!engine || engine === "shared" || !rawId || !workspacePath) {
     return;
   }
-  const sessionId = rawId.includes(":")
-    ? rawId.slice(rawId.indexOf(":") + 1).trim()
-    : rawId;
-  if (!sessionId) {
+  const sessionId = bareSessionId(rawId);
+  if (!sessionId || isLocalPendingDraftSessionId(sessionId)) {
     return;
   }
+  const providerProfileId = input.providerProfileId?.trim() || "";
+  const providerProfileName = input.providerProfileName?.trim() || "";
+  const now = Date.now();
   void upsertSessionIndexRows([
     {
       engine,
       sessionId,
       title: input.title?.trim() || `${engine} session`,
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
       workspacePath,
       cwd: workspacePath,
+      ...(providerProfileId ? { providerProfileId } : {}),
+      ...(providerProfileName ? { providerProfileName } : {}),
     },
   ]).catch(() => 0);
 }

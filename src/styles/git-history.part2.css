@@ -662,6 +662,77 @@
   gap: 9px;
 }
 
+.git-history-push-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.git-history-push-recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.git-history-push-recent-item {
+  max-width: 100%;
+  min-height: 28px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border-default) 68%, transparent);
+  background: color-mix(in srgb, var(--surface-control, #f8fafc) 84%, transparent);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.git-history-push-recent-item:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 42%, transparent);
+}
+
+.git-history-push-recent-item:disabled {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.git-history-push-recent-item.is-active {
+  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 58%, transparent);
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 14%, transparent);
+  color: color-mix(in srgb, var(--accent-primary, #2563eb) 88%, var(--text-primary));
+}
+
+.git-history-push-recent-item-remote,
+.git-history-push-recent-item-branch {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-history-push-recent-item-branch {
+  max-width: 220px;
+}
+
+.git-history-push-recent-item-separator {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--text-muted) 82%, transparent);
+}
+
+.git-history-push-recent-item-badge {
+  flex: 0 0 auto;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #2563eb) 36%, transparent);
+  background: color-mix(in srgb, var(--accent-primary, #2563eb) 12%, transparent);
+  font-size: 10px;
+  line-height: 18px;
+}
+
 .git-history-push-footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

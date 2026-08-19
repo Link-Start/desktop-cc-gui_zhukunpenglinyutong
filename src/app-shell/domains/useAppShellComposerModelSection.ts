@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ModelOption } from "../../types";
 import { useCollaborationModeSelection } from "../../features/collaboration/hooks/useCollaborationModeSelection";
 import { useComposerMenuActions } from "../../features/composer/hooks/useComposerMenuActions";
@@ -6,6 +6,7 @@ import { useComposerShortcuts } from "../../features/composer/hooks/useComposerS
 import { usePersistComposerSettings } from "../../features/app/hooks/usePersistComposerSettings";
 import {
   enrichScopedCodexReasoningMetadata,
+  findModelById,
   getEffectiveModels,
   getEffectiveReasoningOptions,
   getEffectiveReasoningSupported,
@@ -16,6 +17,7 @@ import {
   upsertEngineSelectedModelId,
 } from "./modelSelection";
 import { resolveClaudeManagedRuntimeModel } from "../../features/models/claudeManagedRuntimeModel";
+import { resolveThreadEngine } from "./selectedComposerSession";
 
 export function useAppShellComposerModelSection({
   accessMode,
@@ -48,6 +50,12 @@ export function useAppShellComposerModelSection({
   setSelectedEffort,
   setSelectedModelId,
 }: any) {
+  const userCommittedComposerSelectionRef = useRef<{
+    id: string;
+    model: string;
+    threadId: string | null;
+    engine: string;
+  } | null>(null);
   const [engineSelectedModelIdByType, setEngineSelectedModelIdByType] =
     useState<Record<string, string | null>>({});
   const activeEngineSelectedModelId = engineSelectedModelIdByType[activeEngine] ?? null;
@@ -214,12 +222,13 @@ export function useAppShellComposerModelSection({
         return;
       }
       let targetEngine = activeEngine;
-      let nextSelectedModel =
-        effectiveModels.find((model) => model.id === id) ?? null;
+      // 本 catalog 先按 id 或 runtime `.model` 命中，避免 DSH `{provider}/{model}`
+      // 的 last-segment / runtime 被其它 CLI catalog id 抢走。
+      let nextSelectedModel = findModelById(effectiveModels, id);
       if (!nextSelectedModel) {
-        // Cross-engine pick from the grouped provider dropdown: the engine
-        // switch runs async, so resolve the owning engine catalog now and
-        // store the selection under the target engine.
+        // Cross-engine pick from the grouped provider dropdown: exact catalog
+        // id only. Do not match `.model` across catalogs — that is how
+        // DSH `grok-4.6` / `claude-sonnet-4-6` collides with native CLIs.
         for (const [engine, catalog] of Object.entries(providerModelCatalogs)) {
           if (engine === activeEngine) {
             continue;
@@ -254,6 +263,12 @@ export function useAppShellComposerModelSection({
         };
       }
       const isCrossEngineSelection = targetEngine !== activeEngine;
+      // Stay-on-thread: skip is about thread ownership, not drifted
+      // `activeEngine`. When the user is on a DSH thread and the pick
+      // belongs to another engine, keep the DSH ledger / send resolver.
+      const threadEngine = resolveThreadEngine(activeThreadId ?? "");
+      const skipDshThreadLedger =
+        threadEngine === "dsh" && targetEngine !== "dsh";
       const nextSelectedEffort =
         getEffectiveSelectedEffort({
           activeEngine: targetEngine,
@@ -302,6 +317,33 @@ export function useAppShellComposerModelSection({
           ...(nextSelectedEffort !== null ? { effort: nextSelectedEffort } : {}),
         });
       }
+      // Stay-on-thread: a foreign catalog pick on a DSH thread must not
+      // overwrite the DSH ledger / same-tick send resolver with ccgui/...
+      if (skipDshThreadLedger) {
+        return;
+      }
+      const committedId = nextSelectedModel.id;
+      const committedRuntime = (
+        nextSelectedModel.model ?? nextSelectedModel.id
+      ).trim();
+      userCommittedComposerSelectionRef.current = {
+        id: committedId,
+        model: committedRuntime,
+        threadId: activeThreadId,
+        engine: targetEngine,
+      };
+      const previousResolver = composerSelectionResolverRef.current;
+      composerSelectionResolverRef.current = {
+        id: committedId,
+        model: committedRuntime,
+        source: nextSelectedModel.source ?? "unknown",
+        providerProfileId:
+          targetEngine === "codex"
+            ? (nextSelectedModel.providerProfileId?.trim() || null)
+            : (previousResolver?.providerProfileId ?? null),
+        effort: nextSelectedEffort,
+        collaborationMode: previousResolver?.collaborationMode ?? null,
+      };
       handleSelectComposerSelection({
         modelId: nextSelectedModel.id,
         effort: nextSelectedEffort,
@@ -309,6 +351,8 @@ export function useAppShellComposerModelSection({
     },
     [
       activeEngine,
+      activeThreadId,
+      composerSelectionResolverRef,
       effectiveModels,
       effectiveSelectedEffort,
       handleSelectComposerSelection,
@@ -366,9 +410,14 @@ export function useAppShellComposerModelSection({
     activeEngine === "claude" && claudeRuntimeResolution?.entryId
       ? claudeRuntimeResolution.entryId
       : effectiveSelectedModelId;
+  const userCommitted = userCommittedComposerSelectionRef.current;
+  const honorUserCommit =
+    userCommitted != null &&
+    userCommitted.engine === activeEngine &&
+    userCommitted.threadId === activeThreadId;
   composerSelectionResolverRef.current = {
-    id: resolvedComposerModelId,
-    model: resolvedModel,
+    id: honorUserCommit ? userCommitted.id : resolvedComposerModelId,
+    model: honorUserCommit ? userCommitted.model : resolvedModel,
     source: resolvedModelSource,
     providerProfileId: resolvedProviderProfileId,
     effort: resolvedEffort,

@@ -8,11 +8,13 @@ import {
   normalizeVisibleThreadRootCount,
 } from "../../app/constants";
 import type { CodexCatalogSessionSummary } from "./useThreadActions.helpers";
+import { compareThreadSummariesByCreatedAtDesc } from "../utils/threadSummarySort";
 
 /**
- * First-paint / startup hydration: only pull a small page so cold start stays
- * cheap. Aligns with DEFAULT_VISIBLE_THREAD_ROOT_COUNT (5). Users load more
- * via the sidebar "Load older" control.
+ * First-paint / startup hydration: expose N = fetch N.
+ * Aligns with DEFAULT_VISIBLE_THREAD_ROOT_COUNT (12). Sidebar「更多」
+ * raises the visible cap by one page (12, 24, 36…) and only then
+ * fetches the next Index/runtime page of the same size.
  */
 export const THREAD_LIST_INITIAL_TARGET_COUNT = DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
 export const THREAD_LIST_INITIAL_PAGE_SIZE = DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
@@ -20,7 +22,7 @@ export const THREAD_LIST_INITIAL_PAGE_SIZE = DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
 export const THREAD_LIST_TARGET_COUNT = THREAD_LIST_INITIAL_TARGET_COUNT;
 /** @deprecated Prefer THREAD_LIST_INITIAL_*; kept as aliases for initial path. */
 export const THREAD_LIST_PAGE_SIZE = THREAD_LIST_INITIAL_PAGE_SIZE;
-/** "Load older" batch — larger than first paint so fewer clicks for history. */
+/** Resume / recovery scan batch — larger than sidebar page size. */
 export const THREAD_LIST_LOAD_OLDER_TARGET_COUNT = 50;
 export const THREAD_LIST_LOAD_OLDER_PAGE_SIZE = 50;
 export const THREAD_LIST_MAX_EMPTY_PAGES = 5;
@@ -57,10 +59,10 @@ export const NATIVE_SESSION_LIST_FETCH_TIMEOUT_MS =
 export const OPENCODE_FULL_CATALOG_FETCH_TIMEOUT_MS = 3_000;
 export const CODEX_SESSION_CATALOG_FETCH_TIMEOUT_MS =
   SIDEBAR_THREAD_LIST_TIMEOUT_MS;
-/** Load-older / recovery catalog page size. */
+/** Recovery / full-catalog page size. Sidebar paging uses SESSION_INDEX_PAGE_SIZE. */
 export const SESSION_CATALOG_PAGE_SIZE = 100;
 /** Session Index sidebar page — matches `list_session_index_for_workspace` default. */
-export const SESSION_INDEX_PAGE_SIZE = 20;
+export const SESSION_INDEX_PAGE_SIZE = DEFAULT_VISIBLE_THREAD_ROOT_COUNT;
 export const SESSION_INDEX_LOAD_OLDER_TIMEOUT_MS = 4_000;
 /** First catalog page on startup hydration — matches initial sidebar page. */
 export const SESSION_CATALOG_INITIAL_PAGE_SIZE =
@@ -102,6 +104,7 @@ export type ProjectCatalogSessionSummary = {
   matchedWorkspaceId?: string | null;
   title: string;
   nativeTitle?: string | null;
+  createdAt?: number;
   updatedAt: number;
   archivedAt?: number | null;
   sizeBytes?: number;
@@ -187,15 +190,15 @@ export function resolveNativeSessionListLimit(
   const visibleRootCount = normalizeVisibleThreadRootCount(
     workspace.settings.visibleThreadRootCount,
   );
-  // First-paint: never pull more than the visible root budget (default 5).
-  // Load-older uses SESSION_CATALOG_PAGE_SIZE / LOAD_OLDER_* separately.
+  // First-paint: expose N = fetch N (default 12).
+  // Sidebar「更多」fetches SESSION_INDEX_PAGE_SIZE after the in-memory page.
   return Math.min(
     THREAD_LIST_INITIAL_TARGET_COUNT,
     Math.max(MIN_NATIVE_SESSION_LIST_LIMIT, visibleRootCount),
   );
 }
 
-/** First-page target for a workspace (settings-aware, default 5). */
+/** First-page target for a workspace (settings-aware, default 12). */
 export function resolveInitialThreadListTargetCount(
   workspace: WorkspaceInfo,
 ): number {
@@ -289,13 +292,7 @@ export function countCatalogSessionsByEngine(
 export function sortThreadSummariesForDisplay(
   summaries: ThreadSummary[],
 ): ThreadSummary[] {
-  return [...summaries].sort((left, right) => {
-    const updatedAtDelta = right.updatedAt - left.updatedAt;
-    if (updatedAtDelta !== 0) {
-      return updatedAtDelta;
-    }
-    return left.id.localeCompare(right.id);
-  });
+  return [...summaries].sort(compareThreadSummariesByCreatedAtDesc);
 }
 
 function normalizeOptionalCatalogString(value: unknown): string | null {
@@ -333,6 +330,8 @@ export function normalizeProjectCatalogSession(
     nativeTitle?: unknown;
     workspaceId?: unknown;
     matchedWorkspaceId?: unknown;
+    createdAt?: unknown;
+    created_at?: unknown;
     updatedAt?: unknown;
     archivedAt?: unknown;
     sizeBytes?: unknown;
@@ -372,6 +371,16 @@ export function normalizeProjectCatalogSession(
     ),
     title: String(session.title ?? "").trim(),
     nativeTitle: normalizeOptionalCatalogString(session.nativeTitle),
+    createdAt:
+      typeof session.createdAt === "number" &&
+      Number.isFinite(session.createdAt) &&
+      session.createdAt > 0
+        ? session.createdAt
+        : typeof session.created_at === "number" &&
+            Number.isFinite(session.created_at) &&
+            session.created_at > 0
+          ? session.created_at
+          : undefined,
     updatedAt:
       typeof session.updatedAt === "number" &&
       Number.isFinite(session.updatedAt)

@@ -550,6 +550,12 @@ export interface ChatInputBoxProps {
   providerModelCatalogs?: ProviderModelCatalogs;
   /** Current permission mode */
   permissionMode?: PermissionMode;
+  /** DSH Agent Preset id (blank-session draft or locked header). */
+  dshAgentPreset?: string | null;
+  /** Whether the DSH Agent Preset is locked after first user turn. */
+  dshAgentPresetLocked?: boolean;
+  /** Change DSH Agent Preset on a blank session. */
+  onDshAgentPresetSelect?: (preset: string) => void;
   /** Current provider */
   currentProvider?: string;
   /** Active thread provider profile used to scope managed model catalogs */
@@ -788,6 +794,12 @@ export interface ButtonAreaProps {
   models?: ModelInfo[];
   /** Current mode */
   permissionMode?: PermissionMode;
+  /** DSH Agent Preset id */
+  dshAgentPreset?: string | null;
+  /** Whether the DSH Agent Preset is locked */
+  dshAgentPresetLocked?: boolean;
+  /** Change DSH Agent Preset */
+  onDshAgentPresetSelect?: (preset: string) => void;
   /** Current provider */
   currentProvider?: string;
   /** Active provider profile id (managed providers: deepseek/minimax/kimi/…) */

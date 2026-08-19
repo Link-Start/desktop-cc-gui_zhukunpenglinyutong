@@ -38,6 +38,7 @@ pub(crate) fn remote_engine_send_message_sync_request(
     variant: Option<String>,
     custom_spec_root: Option<String>,
     auto_session: Option<AutoSessionMetadata>,
+    dsh_agent_preset: Option<String>,
 ) -> (&'static str, Value) {
     let images = images.map(|paths| {
         paths
@@ -63,6 +64,7 @@ pub(crate) fn remote_engine_send_message_sync_request(
             "variant": variant,
             "customSpecRoot": custom_spec_root,
             "autoSession": auto_session,
+            "dshAgentPreset": dsh_agent_preset,
         }),
     )
 }
@@ -105,6 +107,7 @@ mod tests {
             None,
             None,
             Some("/tmp/spec-root".to_string()),
+            None,
             None,
         );
 

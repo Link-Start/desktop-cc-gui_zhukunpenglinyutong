@@ -37,6 +37,18 @@ export type NativeProviderContinuationProgressEvent = {
   percent: number;
 };
 
+export const DSH_HISTORY_LOAD_PROGRESS_EVENT =
+  "dsh-history-load-progress" as const;
+
+export type DshHistoryLoadProgressEvent = {
+  sessionId: string;
+  pageIndex: number;
+  maxPages: number;
+  pageEventCount: number;
+  totalEventCount: number;
+  hasMore: boolean;
+};
+
 export type DetachedExternalFileChangeEvent = {
   workspaceId: string;
   normalizedPath: string;
@@ -358,6 +370,9 @@ const nativeProviderContinuationProgressHub =
   createEventHub<NativeProviderContinuationProgressEvent>(
     "native-provider-continuation-progress",
   );
+const dshHistoryLoadProgressHub = createEventHub<DshHistoryLoadProgressEvent>(
+  DSH_HISTORY_LOAD_PROGRESS_EVENT,
+);
 const detachedExternalFileChangeHub =
   createEventHub<DetachedExternalFileChangeEvent>(
     "detached-external-file-change",
@@ -552,6 +567,13 @@ export function subscribeNativeProviderContinuationProgress(
   options?: SubscriptionOptions,
 ): Unsubscribe {
   return nativeProviderContinuationProgressHub.subscribe(onEvent, options);
+}
+
+export function subscribeDshHistoryLoadProgress(
+  onEvent: (event: DshHistoryLoadProgressEvent) => void,
+  options?: SubscriptionOptions,
+): Unsubscribe {
+  return dshHistoryLoadProgressHub.subscribe(onEvent, options);
 }
 
 export function subscribeRuntimeLogExited(

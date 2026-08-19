@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildWorkspaceSessionSelectionKey } from "../../settings/components/settings-view/hooks/useWorkspaceSessionCatalog";
 import {
   SESSION_CATALOG_INITIAL_PAGE_SIZE,
+  SESSION_INDEX_PAGE_SIZE,
   THREAD_LIST_INITIAL_PAGE_SIZE,
   THREAD_LIST_INITIAL_TARGET_COUNT,
   THREAD_LIST_LOAD_OLDER_PAGE_SIZE,
@@ -42,6 +43,31 @@ describe("useThreadActions.threadList", () => {
       sourceCompleteness: "complete",
       sourceStatusReason: null,
       folderId: "folder-1",
+    });
+  });
+
+  it("keeps catalog createdAt when the source provides it", () => {
+    expect(
+      normalizeProjectCatalogSession({
+        sessionId: "codex:session-created",
+        title: "Created",
+        createdAt: 40,
+        updatedAt: 90,
+      }),
+    ).toMatchObject({
+      sessionId: "codex:session-created",
+      createdAt: 40,
+      updatedAt: 90,
+    });
+    expect(
+      normalizeProjectCatalogSession({
+        sessionId: "codex:session-snake",
+        title: "Created",
+        created_at: 55,
+        updatedAt: 90,
+      }),
+    ).toMatchObject({
+      createdAt: 55,
     });
   });
 
@@ -181,10 +207,11 @@ describe("useThreadActions.threadList", () => {
     ).toBeNull();
   });
 
-  it("first-paint list target defaults to 5 and stays smaller than load-older batches", () => {
-    expect(THREAD_LIST_INITIAL_TARGET_COUNT).toBe(5);
-    expect(THREAD_LIST_INITIAL_PAGE_SIZE).toBe(5);
-    expect(SESSION_CATALOG_INITIAL_PAGE_SIZE).toBe(5);
+  it("first-paint list target defaults to expose=fetch 12 and matches sidebar page size", () => {
+    expect(THREAD_LIST_INITIAL_TARGET_COUNT).toBe(12);
+    expect(THREAD_LIST_INITIAL_PAGE_SIZE).toBe(12);
+    expect(SESSION_CATALOG_INITIAL_PAGE_SIZE).toBe(12);
+    expect(SESSION_INDEX_PAGE_SIZE).toBe(12);
     expect(THREAD_LIST_LOAD_OLDER_TARGET_COUNT).toBe(50);
     expect(THREAD_LIST_LOAD_OLDER_PAGE_SIZE).toBe(50);
 
@@ -195,6 +222,6 @@ describe("useThreadActions.threadList", () => {
       connected: true,
       settings: { sidebarCollapsed: false },
     } as WorkspaceInfo;
-    expect(resolveInitialThreadListTargetCount(workspace)).toBe(5);
+    expect(resolveInitialThreadListTargetCount(workspace)).toBe(12);
   });
 });

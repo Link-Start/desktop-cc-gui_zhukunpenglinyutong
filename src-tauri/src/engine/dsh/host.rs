@@ -104,10 +104,35 @@ impl DshHostClient {
     }
 
     pub async fn respond(&self, rpc_id: &str, value: Value) -> Result<Value, String> {
+        self.respond_result(rpc_id, json!({ "ok": true, "value": value }))
+            .await
+    }
+
+    pub async fn respond_error(
+        &self,
+        rpc_id: &str,
+        code: &str,
+        message: &str,
+    ) -> Result<Value, String> {
+        self.respond_result(
+            rpc_id,
+            json!({
+                "ok": false,
+                "error": {
+                    "code": code,
+                    "message": message,
+                    "details": {},
+                },
+            }),
+        )
+        .await
+    }
+
+    async fn respond_result(&self, rpc_id: &str, result: Value) -> Result<Value, String> {
         let body = json!({
             "type": "client-response",
             "rpcId": rpc_id,
-            "result": { "ok": true, "value": value },
+            "result": result,
         });
         let url = format!("{}/api/respond", self.origin);
         let response = self
@@ -125,7 +150,10 @@ impl DshHostClient {
         if !status.is_success() {
             return Err(format!("dsh respond HTTP {status}: {text}"));
         }
-        serde_json::from_str(&text).map_err(|error| format!("dsh respond json: {error}"))
+        let receipt: Value = serde_json::from_str(&text)
+            .map_err(|error| format!("dsh respond json: {error}"))?;
+        interpret_respond_receipt(&receipt)?;
+        Ok(receipt)
     }
 
     async fn call_with_timeout(
@@ -194,6 +222,17 @@ pub fn origin_from_host_port(host: &str, port: u16) -> String {
     format!("http://{host}:{port}")
 }
 
+fn interpret_respond_receipt(value: &Value) -> Result<(), String> {
+    if value.get("accepted").and_then(Value::as_bool) == Some(false) {
+        let reason = value
+            .get("reason")
+            .and_then(Value::as_str)
+            .unwrap_or("bad-response");
+        return Err(format!("dsh respond rejected: {reason}"));
+    }
+    Ok(())
+}
+
 pub fn mux_url_from_origin(origin: &str) -> String {
     let origin = origin.trim().trim_end_matches('/');
     if let Some(rest) = origin.strip_prefix("https://") {
@@ -258,6 +297,17 @@ mod tests {
         let body = r#"{"type":"client-request","rpcId":"rpc-1","method":"x","payload":{}}"#;
         let err = parse_server_response(body, "rpc-1", "x").unwrap_err();
         assert!(err.contains("expected server-response"));
+    }
+
+    #[test]
+    fn rejected_receipt_surfaces_reason() {
+        let err = interpret_respond_receipt(&json!({
+            "accepted": false,
+            "reason": "bad-response"
+        }))
+        .unwrap_err();
+        assert_eq!(err, "dsh respond rejected: bad-response");
+        interpret_respond_receipt(&json!({ "accepted": true })).unwrap();
     }
 
     #[test]

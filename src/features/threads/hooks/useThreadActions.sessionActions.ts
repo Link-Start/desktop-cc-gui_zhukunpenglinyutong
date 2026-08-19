@@ -3,14 +3,14 @@ import type { Dispatch, MutableRefObject } from "react";
 import type { DebugEntry, ThreadSummary } from "../../../types";
 import {
   archiveThread as archiveThreadService,
-  deleteWorkspaceSessions as deleteWorkspaceSessionsService,
-} from "../../../services/tauri";
-import {
   deleteClaudeSession as deleteClaudeSessionService,
+  deleteWorkspaceSessions as deleteWorkspaceSessionsService,
   renameThreadTitleKey as renameThreadTitleKeyService,
   setThreadTitle as setThreadTitleService,
+  tombstoneSessionIndexRows,
 } from "../../../services/tauri";
 import { asNumber, asString } from "../utils/threadNormalize";
+import { pickStableCreatedAt } from "../utils/threadSummarySort";
 import {
   deleteSharedSession as deleteSharedSessionService,
   startSharedSession as startSharedSessionService,
@@ -22,6 +22,11 @@ import {
   type ExecutionTarget,
 } from "../../shared-session/target/types";
 import type { SharedSessionSupportedEngine } from "../../shared-session/utils/sharedSessionEngines";
+
+import {
+  isGhostClientSessionIndexDeleteError,
+  sessionIndexIdsForThreadTombstone,
+} from "../utils/threadDelete";
 
 import type { ThreadAction } from "./useThreadsReducer";
 
@@ -97,10 +102,17 @@ export function createStartSharedSessionForWorkspace(params: {
       threadId,
       persistedInitialTarget,
     );
+    const now = Date.now();
+    const createdAt =
+      pickStableCreatedAt(
+        asNumber(thread?.createdAt ?? thread?.created_at),
+        now,
+      ) ?? now;
     const summary: ThreadSummary = {
       id: threadId,
       name: asString(thread?.name).trim() || "Shared Session",
-      updatedAt: asNumber(thread?.updatedAt ?? thread?.updated_at) || Date.now(),
+      createdAt,
+      updatedAt: asNumber(thread?.updatedAt ?? thread?.updated_at) || now,
       engineSource: initialEngine,
       threadKind: "shared",
       selectedEngine: initialEngine,
@@ -182,8 +194,8 @@ export function createDeleteThreadForWorkspaceAction(params: {
       return;
     }
     // 统一走后端 delete_workspace_sessions：owner workspace 解析、磁盘删除、
-    // catalog 元数据清理、session index tombstone 都在一条链路完成，
-    // 所有 native CLI（claude/codex/gemini/grok/kimi/pi/opencode）行为一致。
+    // catalog 元数据清理、session index tombstone 都在一条链路完成。
+    // 若 catalog 认不出归属（幽灵 Index 行），客户端自行 tombstone，不碰磁盘。
     const response = await deleteWorkspaceSessionsService(workspaceId, [threadId]);
     const result =
       response.results.find((item) => item.sessionId === threadId) ??
@@ -192,6 +204,13 @@ export function createDeleteThreadForWorkspaceAction(params: {
       throw new Error("Missing session delete result");
     }
     if (!result.ok) {
+      if (isGhostClientSessionIndexDeleteError(result.error, result.code)) {
+        // Catalog 认不出归属、磁盘也没删：只摘客户端 Index，避免侧栏幽灵行常驻。
+        await tombstoneSessionIndexRows(
+          sessionIndexIdsForThreadTombstone(threadId),
+        ).catch(() => 0);
+        return;
+      }
       throw new Error(result.error ?? "Failed to delete session");
     }
   };

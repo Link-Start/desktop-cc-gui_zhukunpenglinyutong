@@ -313,6 +313,7 @@ async fn dispatch_pull_request_prompt(
             auto_archive: Some(true),
             created_by: crate::session_management::AutoSessionCreatedBy::System,
         }),
+        None,
         app.clone(),
         state.clone(),
     )

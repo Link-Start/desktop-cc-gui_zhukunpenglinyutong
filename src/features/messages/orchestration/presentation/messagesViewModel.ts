@@ -25,10 +25,22 @@ export type MessageActionTargets = {
   targetByAssistantId: Map<string, string>;
   copyTextByAssistantId: Map<string, string>;
   latestFinalAssistantMessageId: string | null;
+  latestUserMessageId: string | null;
   // 最近一条用户消息之后尚无最终回复 = 有新回合正在进行中。
   hasPendingUserTurn: boolean;
   userMessageCount: number;
 };
+
+/** 只有尾部最新用户消息 id 变了才算新发送。prepend 旧历史会涨 count，不得当发送。 */
+export function isNewTailUserMessage(
+  previousLatestUserMessageId: string | null,
+  nextLatestUserMessageId: string | null,
+): boolean {
+  return (
+    nextLatestUserMessageId != null &&
+    nextLatestUserMessageId !== previousLatestUserMessageId
+  );
+}
 
 export type HistoryExpansionScrollSnapshot = {
   scrollHeight: number;
@@ -252,6 +264,7 @@ export function buildMessageActionTargets(items: ConversationItem[]): MessageAct
     targetByAssistantId,
     copyTextByAssistantId,
     latestFinalAssistantMessageId,
+    latestUserMessageId,
     hasPendingUserTurn,
     userMessageCount,
   };
@@ -291,12 +304,13 @@ export function resolveActiveMessageAnchor(
   if (!container) {
     return null;
   }
+  const containerRect = container.getBoundingClientRect();
   const viewportAnchorY =
-    container.scrollTop + Math.min(96, container.clientHeight * 0.32);
+    containerRect.top + Math.min(96, container.clientHeight * 0.32);
   let bestId: string | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const [messageId, node] of messageNodeById) {
-    const distance = Math.abs(node.offsetTop - viewportAnchorY);
+    const distance = Math.abs(node.getBoundingClientRect().top - viewportAnchorY);
     if (distance < bestDistance) {
       bestDistance = distance;
       bestId = messageId;

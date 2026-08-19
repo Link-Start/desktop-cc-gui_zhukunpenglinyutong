@@ -10,6 +10,7 @@ mod snapshot;
 mod providers;
 mod relay;
 mod credentials;
+mod host_cli;
 mod commands;
 
 pub(crate) use commands::*;
@@ -17,6 +18,11 @@ pub(crate) use commands::*;
 pub(crate) use credentials::{
     extract_codex_base_url_and_key, is_official_grok_base, kimi_cli_token_needs_refresh,
     pick_base_url_api_key, resolve_grok_base_url_and_key, resolve_quota_route, KimiCliCredentials,
+};
+#[cfg(test)]
+pub(crate) use host_cli::{
+    host_cli_vendor_id, resolve_dsh_base_url_and_key_from_home,
+    resolve_pi_base_url_and_key_from_home,
 };
 #[cfg(test)]
 pub(crate) use providers::{

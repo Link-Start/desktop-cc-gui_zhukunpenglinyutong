@@ -1,10 +1,14 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getAppSettings } from "../../../services/tauri";
+import { isWindowsPlatform } from "../../../utils/platform";
 import { FirstRunFluidBackdrop } from "../../onboarding/components/FirstRunFluidBackdrop";
-import { DEFAULT_WORKSPACE_FLUID_PRESET } from "../../onboarding/utils/fluidTones";
 import {
-  isWorkspaceFluidWallpaperSupported,
+  DEFAULT_WORKSPACE_FLUID_MOTION,
+  DEFAULT_WORKSPACE_FLUID_PRESET,
+} from "../../onboarding/utils/fluidTones";
+import {
+  WORKSPACE_FLUID_SPEED,
   resolveWorkspaceWallpaperMode,
   sanitizeWorkspaceWallpaperVeilOpacity,
 } from "../utils/workspaceWallpaper";
@@ -30,6 +34,8 @@ export function WorkspaceWallpaperHost() {
   );
   const [hydrated, setHydrated] = useState(false);
   const [customFailed, setCustomFailed] = useState(false);
+  const [fluidAttached, setFluidAttached] = useState(false);
+  const windowsFluidCompat = isWindowsPlatform();
 
   useEffect(() => {
     // useAppSettings publishes the wallpaper snapshot when it finishes loading
@@ -58,11 +64,7 @@ export function WorkspaceWallpaperHost() {
   }, []);
   const requestedMode = resolveWorkspaceWallpaperMode(wallpaper);
   const mode =
-    requestedMode === "custom" && customFailed
-      ? isWorkspaceFluidWallpaperSupported()
-        ? "fluid"
-        : "none"
-      : requestedMode;
+    requestedMode === "custom" && customFailed ? "fluid" : requestedMode;
   const customSrc =
     mode === "custom" && wallpaper.customImagePath
       ? toAssetUrl(wallpaper.customImagePath)
@@ -72,15 +74,15 @@ export function WorkspaceWallpaperHost() {
     setCustomFailed(false);
   }, [wallpaper.customImagePath, wallpaper.mode]);
 
-  // The data attribute gates the whole wallpaper CSS sheet; keep it in its own
-  // effect keyed only on `mode` so a frost-only change never tears down and
-  // re-applies the veil/backdrop-filter rules across every chrome pane.
+  const wallpaperActive =
+    mode === "custom" ||
+    (mode === "fluid" && (!windowsFluidCompat || fluidAttached));
   useEffect(() => {
     if (typeof document === "undefined") {
       return undefined;
     }
     const root = document.documentElement;
-    if (mode === "none") {
+    if (!wallpaperActive) {
       delete root.dataset.workspaceWallpaper;
       return undefined;
     }
@@ -88,7 +90,7 @@ export function WorkspaceWallpaperHost() {
     return () => {
       delete root.dataset.workspaceWallpaper;
     };
-  }, [mode]);
+  }, [mode, wallpaperActive]);
 
   useEffect(() => {
     if (typeof document === "undefined" || mode === "none") {
@@ -117,8 +119,15 @@ export function WorkspaceWallpaperHost() {
     >
       {mode === "fluid" ? (
         <FirstRunFluidBackdrop
-          profile="lite"
+          profile={windowsFluidCompat ? "lite" : "full"}
           presetId={wallpaper.fluidPreset ?? DEFAULT_WORKSPACE_FLUID_PRESET}
+          motionId={wallpaper.fluidMotion ?? DEFAULT_WORKSPACE_FLUID_MOTION}
+          speed={WORKSPACE_FLUID_SPEED}
+          forceAnimate={windowsFluidCompat}
+          deferChase={windowsFluidCompat}
+          onAttachChange={
+            windowsFluidCompat ? setFluidAttached : undefined
+          }
         />
       ) : null}
       {mode === "custom" && customSrc ? (

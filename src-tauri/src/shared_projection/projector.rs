@@ -780,7 +780,18 @@ fn resolve_canvas_tool_type_value(tool_name: &str) -> String {
     trimmed.to_string()
 }
 
+fn is_checklist_tool_name(tool_name: &str) -> bool {
+    let compact = tool_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+    compact == "todowrite" || compact.ends_with("todowrite")
+}
+
 fn is_edit_like_tool_name(tool_name: &str) -> bool {
+    if is_checklist_tool_name(tool_name) {
+        return false;
+    }
     let lower = tool_name.trim().to_ascii_lowercase();
     lower == "delete"
         || lower == "delete_file"

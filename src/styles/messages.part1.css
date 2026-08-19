@@ -1509,8 +1509,10 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 /* 用户行：气泡靠右；注入摘要在气泡下一行左对齐，宽度跟 .messages-full 内容列 */
 .message-context-stack.is-user.has-memory-inject,
 .message-context-stack.is-user.has-browser-excerpt,
+.message-context-stack.is-user.has-dsh-goal,
 .message-context-stack.is-user:has(> .memory-inject-summary),
-.message-context-stack.is-user:has(> .browser-context-summary-card) {
+.message-context-stack.is-user:has(> .browser-context-summary-card),
+.message-context-stack.is-user:has(> .dsh-goal-context-summary-card) {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -1523,8 +1525,10 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 
 .message-context-stack.is-user.has-memory-inject > .bubble,
 .message-context-stack.is-user.has-browser-excerpt > .bubble,
+.message-context-stack.is-user.has-dsh-goal > .bubble,
 .message-context-stack.is-user:has(> .memory-inject-summary) > .bubble,
-.message-context-stack.is-user:has(> .browser-context-summary-card) > .bubble {
+.message-context-stack.is-user:has(> .browser-context-summary-card) > .bubble,
+.message-context-stack.is-user:has(> .dsh-goal-context-summary-card) > .bubble {
   justify-self: end;
   max-width: min(85%, 100%);
   order: 0;
@@ -1533,7 +1537,9 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 .message-context-stack.is-user.has-memory-inject > .memory-inject-summary,
 .message-context-stack.is-user:has(> .memory-inject-summary) > .memory-inject-summary,
 .message-context-stack.is-user.has-browser-excerpt > .browser-context-summary-card,
-.message-context-stack.is-user:has(> .browser-context-summary-card) > .browser-context-summary-card {
+.message-context-stack.is-user:has(> .browser-context-summary-card) > .browser-context-summary-card,
+.message-context-stack.is-user.has-dsh-goal > .dsh-goal-context-summary-card,
+.message-context-stack.is-user:has(> .dsh-goal-context-summary-card) > .dsh-goal-context-summary-card {
   justify-self: stretch;
   width: 100%;
   max-width: 100%;
@@ -1748,7 +1754,8 @@ html[data-theme="light"] .memory-pick-empty-status-logo {
 
 /* 覆盖上方 is-user：有记忆注入 / 网页摘录时不要整体右贴，摘要与幕布列同宽左齐 */
 .message-context-stack.is-user.has-memory-inject,
-.message-context-stack.is-user.has-browser-excerpt {
+.message-context-stack.is-user.has-browser-excerpt,
+.message-context-stack.is-user.has-dsh-goal {
   width: 100%;
   max-width: 100%;
   min-width: 0;

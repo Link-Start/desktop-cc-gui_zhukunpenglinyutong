@@ -1,22 +1,12 @@
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
+import { CollapsibleReveal } from "../../../../components/common/CollapsibleReveal";
 import type { ConversationPresentationContext } from "../../../../types";
 
 type DshGoalContext = Extract<ConversationPresentationContext, { kind: "dsh-goal" }>;
 
-const COLLAPSED_BODY_PREVIEW_MAX_CHARS = 96;
-
-function buildGoalBodyPreview(body: string) {
-  const normalized = body.replace(/\r?\n+/g, " ").replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
-  return normalized.length > COLLAPSED_BODY_PREVIEW_MAX_CHARS
-    ? `${normalized.slice(0, COLLAPSED_BODY_PREVIEW_MAX_CHARS).trimEnd()}...`
-    : normalized;
-}
+const COMPLETED_STATUS_PILL = "completed";
 
 export const DshGoalContextSummaryCard = memo(function DshGoalContextSummaryCard({
   context,
@@ -27,52 +17,56 @@ export const DshGoalContextSummaryCard = memo(function DshGoalContextSummaryCard
   const [isExpanded, setIsExpanded] = useState(false);
   const title = t("messages.dshGoalContextInjection");
   const sourceLabel = context.sourceLabel.trim() || "goal";
-  const bodyPreview = buildGoalBodyPreview(context.body);
+  const collapsedLabel = `${title} · ${sourceLabel}`;
+  const body = context.body.trim();
 
   useEffect(() => {
     setIsExpanded(false);
   }, [context.body, sourceLabel]);
 
+  const ariaLabel = `${collapsedLabel}. ${
+    isExpanded
+      ? t("messages.dshGoalContextCollapse")
+      : t("messages.dshGoalContextExpand")
+  }`;
+
   return (
-    <div className="note-card-context-summary-card dsh-goal-context-summary-card">
-      <div className="note-card-context-summary-head">
-        <div className="note-card-context-summary-head-copy">
-          <span className="note-card-context-summary-title">{title}</span>
-          <span className="note-card-context-summary-count">{sourceLabel}</span>
-        </div>
-        <button
-          type="button"
-          className="note-card-context-summary-toggle"
-          onClick={() => setIsExpanded((current) => !current)}
-          aria-expanded={isExpanded}
-          aria-label={
-            isExpanded
-              ? t("messages.dshGoalContextCollapse")
-              : t("messages.dshGoalContextExpand")
-          }
-          title={
-            isExpanded
-              ? t("messages.dshGoalContextCollapse")
-              : t("messages.dshGoalContextExpand")
-          }
-        >
-          <span className="note-card-context-summary-toggle-label">
-            {isExpanded
-              ? t("messages.dshGoalContextCollapse")
-              : t("messages.dshGoalContextExpand")}
+    <div
+      className={`dsh-goal-context-summary-card message-agent-task-fold-drawer${
+        isExpanded ? " is-expanded" : " is-collapsed"
+      }`}
+      data-testid="dsh-goal-context-fold"
+    >
+      <button
+        type="button"
+        className={`messages-process-phase-toggle${
+          isExpanded ? " is-expanded" : " is-collapsed"
+        }`}
+        onClick={() => setIsExpanded((current) => !current)}
+        aria-expanded={isExpanded}
+        aria-label={ariaLabel}
+      >
+        <span className="messages-process-phase-toggle-copy">
+          <span className="message-agent-task-fold-status is-completed">
+            {COMPLETED_STATUS_PILL}
           </span>
-          <span className="note-card-context-summary-toggle-icon" aria-hidden>
-            {isExpanded ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />}
-          </span>
-        </button>
-      </div>
-      {isExpanded ? (
-        context.body.trim() ? (
-          <pre className="dsh-goal-context-summary-body">{context.body}</pre>
-        ) : null
-      ) : bodyPreview ? (
-        <p className="note-card-context-summary-preview">{bodyPreview}</p>
-      ) : null}
+          <span className="message-agent-task-fold-label">{collapsedLabel}</span>
+          <ChevronRight
+            className="messages-process-phase-toggle-chevron"
+            size={14}
+            strokeWidth={2}
+            aria-hidden
+          />
+        </span>
+        <span className="messages-process-phase-toggle-rule" aria-hidden />
+      </button>
+      <CollapsibleReveal open={isExpanded}>
+        {body ? (
+          <div className="message-agent-task-fold-detail">
+            <pre className="dsh-goal-context-summary-body">{context.body}</pre>
+          </div>
+        ) : null}
+      </CollapsibleReveal>
     </div>
   );
 });

@@ -61,12 +61,24 @@ import {
 } from "../../threads/constants/codexProviderProfiles";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { useComposerDraft } from "../hooks/composerDraftStore";
+import { markExplicitComposerEngineSwitch } from "../hooks/explicitComposerEngineSwitch";
+import { useNativeAtomicSelectionOverlay } from "../hooks/useNativeAtomicSelectionOverlay";
 import {
   ensureInteractiveInputHooks,
   getLastInteractiveInputAtMs,
   hadRecentInteractiveInput,
 } from "../../../utils/interactiveMainThread";
 import { ChatInputBoxAdapter } from "./ChatInputBox/ChatInputBoxAdapter";
+import {
+  isBlankDshComposerThread,
+  normalizeDshAgentPreset,
+  resolveDshComposerAgentPreset,
+  type DshAgentPresetId,
+} from "./ChatInputBox/selectors/dshAgentPresets";
+import {
+  getComposerEnginePrefForEngine,
+  setComposerEnginePref,
+} from "../hooks/composerEnginePrefsStore";
 import { ComposerLight } from "./ComposerLight";
 import type { ChatInputBoxHandle } from "./ChatInputBox/ChatInputBoxAdapter";
 import { isSameProviderExecutionProfile } from "./ChatInputBox/selectors/ModelSelect";
@@ -156,8 +168,11 @@ import { useStreamActivityPhase } from "../../threads/hooks/useStreamActivityPha
 import { exportRewindFiles } from "../../../services/tauri";
 import { pushErrorToast } from "../../../services/toasts";
 import {
+  acceptImagesWithinEngineLimit,
   engineSupportsImageInput,
+  findOversizedImageAttachment,
   formatEngineImageInputUnsupportedMessage,
+  formatEngineImageTooLargeMessage,
   getEngineImageInputLabel,
   sanitizeImageAttachmentPaths,
 } from "../../engine/utils/engineImageInput";
@@ -270,6 +285,8 @@ export type ComposerProps = {
   providerProfileId?: string | null;
   /** 当前会话创建时的供应商显示名（切老会话时底栏渠道芯片用，避免回落到列表首项 DeepSeek） */
   providerProfileName?: string | null;
+  /** Existing DSH session header preset; used only after first user turn. */
+  dshAgentPreset?: string | null;
   selectedModelId: string | null;
   onSelectModel: (id: string) => void;
   reasoningOptions: string[];
@@ -556,6 +573,7 @@ function ComposerImpl({
   providerModelCatalogs,
   providerProfileId,
   providerProfileName,
+  dshAgentPreset: sessionDshAgentPreset = null,
   selectedModelId,
   onSelectModel,
   reasoningOptions,
@@ -790,14 +808,9 @@ function ComposerImpl({
    * 长链，catalog 分叉时勾选/触发器不更新。用本状态对齐 Shared 的「target 即 UI」。
    * 只覆盖 model 身份；effort 仍跟 selectedEffort prop，避免抢走推理档位选择器。
    */
-  const [nativeAtomicSelection, setNativeAtomicSelection] = useState<{
-    modelCatalogEntryId: string;
-    model: string;
-  } | null>(null);
-  // 切会话 / 引擎 / 渠道时丢弃点选覆盖，避免串台
-  useEffect(() => {
-    setNativeAtomicSelection((prev) => (prev === null ? prev : null));
-  }, [activeThreadId, selectedEngine, providerProfileId]);
+  const nativeAtomicResetKey = `${activeThreadId ?? ""}::${selectedEngine ?? ""}::${providerProfileId ?? ""}`;
+  const [nativeAtomicSelection, setNativeAtomicSelection] =
+    useNativeAtomicSelectionOverlay(nativeAtomicResetKey);
   // Native 会话合成 ExecutionTarget，驱动与首页相同的 Atomic 双栏选中态（含渠道）。
   const nativeSessionTarget = useMemo((): ExecutionTarget | null => {
     if (isSharedSession || createSessionTargetPicker || !selectedEngine) {
@@ -866,6 +879,47 @@ function ComposerImpl({
     : createSessionTargetPicker
       ? effectiveCreationTarget
       : nativeSessionTarget;
+  const isDshComposerEngine =
+    (selectedAtomicTarget?.engine ?? selectedEngine) === "dsh";
+  const hasDshUserMessages = items.some(
+    (item) => item.kind === "message" && item.role === "user",
+  );
+  const [draftDshAgentPreset, setDraftDshAgentPreset] =
+    useState<DshAgentPresetId>(() =>
+      normalizeDshAgentPreset(
+        getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+      ),
+    );
+  const resolvedDshComposerPreset = resolveDshComposerAgentPreset({
+    threadId: activeThreadId,
+    sessionHeader: sessionDshAgentPreset,
+    draftOrPref: draftDshAgentPreset,
+    hasUserMessages: hasDshUserMessages,
+  });
+  const dshAgentPresetLocked =
+    isDshComposerEngine && resolvedDshComposerPreset.locked;
+  const resolvedDshAgentPreset = resolvedDshComposerPreset.value;
+  useEffect(() => {
+    if (!isBlankDshComposerThread(activeThreadId)) {
+      return;
+    }
+    setDraftDshAgentPreset(
+      normalizeDshAgentPreset(
+        getComposerEnginePrefForEngine("dsh").dshAgentPreset,
+      ),
+    );
+  }, [activeThreadId, selectedEngine]);
+  const handleDshAgentPresetSelect = useCallback(
+    (preset: string) => {
+      if (dshAgentPresetLocked) {
+        return;
+      }
+      const next = normalizeDshAgentPreset(preset);
+      setDraftDshAgentPreset(next);
+      setComposerEnginePref("dsh", { dshAgentPreset: next });
+    },
+    [dshAgentPresetLocked],
+  );
   const [agentArmed, setAgentArmed] = useState(false);
   const agentProjection = useAgentProjection(activeWorkspaceId, activeThreadId);
   const agentTargetSupported = isMultiAgentTargetSupported(
@@ -1069,15 +1123,51 @@ function ComposerImpl({
       durationMs: 3600,
     });
   }, [imageAttachEngine, t]);
+  const notifyImageTooLarge = useCallback(
+    (bytes: number, maxBytes: number) => {
+      if (!imageAttachEngine) {
+        return;
+      }
+      pushErrorToast({
+        title: t("composer.imageTooLargeTitle", {
+          defaultValue: "Image too large",
+        }),
+        message: formatEngineImageTooLargeMessage(
+          imageAttachEngine,
+          bytes,
+          maxBytes,
+          t as (key: string, options?: Record<string, unknown>) => string,
+        ),
+        durationMs: 4200,
+      });
+    },
+    [imageAttachEngine, t],
+  );
   const handleAttachImagesGuarded = useCallback(
     (paths: string[]) => {
       if (!imageInputSupported) {
         notifyImageInputUnsupported();
         return;
       }
-      onAttachImages?.(paths);
+      const { accepted, rejected } = acceptImagesWithinEngineLimit(
+        paths,
+        imageAttachEngine,
+      );
+      if (rejected) {
+        notifyImageTooLarge(rejected.bytes, rejected.maxBytes);
+      }
+      if (accepted.length === 0) {
+        return;
+      }
+      onAttachImages?.(accepted);
     },
-    [imageInputSupported, notifyImageInputUnsupported, onAttachImages],
+    [
+      imageAttachEngine,
+      imageInputSupported,
+      notifyImageInputUnsupported,
+      notifyImageTooLarge,
+      onAttachImages,
+    ],
   );
   const handlePickImagesGuarded = useCallback(() => {
     if (!imageInputSupported) {
@@ -1266,6 +1356,7 @@ function ComposerImpl({
         return;
       }
       if (target.engine !== selectedEngine) {
+        markExplicitComposerEngineSwitch(target.engine);
         onSelectEngine?.(target.engine);
       }
       if (catalogEntryId && runtimeModel) {
@@ -1301,6 +1392,7 @@ function ComposerImpl({
       // 首页 engine 选择必须同步全局 activeEngine + client store，否则重启后首页
       // 回落到默认 claude，而项目会话因 thread.engineSource 仍显示上次的 CLI。
       if (target.engine !== selectedEngine) {
+        markExplicitComposerEngineSwitch(target.engine);
         pendingPickerEngineRef.current = target.engine;
         onSelectEngine?.(target.engine);
       }
@@ -1570,7 +1662,7 @@ function ComposerImpl({
     runStatusItemsForStrip,
   ]);
   const {
-    todos: statusTodos,
+    todos: scannedStatusTodos,
     subagents: statusSubagents,
     todoTotal,
     commandTotal,
@@ -1585,6 +1677,13 @@ function ComposerImpl({
     childSubagentThreadIds: stripChildThreads.map((thread) => thread.id),
     deferSummary: shouldDeferStatusSummary,
   });
+  const statusTodos = useMemo(() => {
+    if (selectedEngine !== "dsh") {
+      return scannedStatusTodos;
+    }
+    const projected = contextUsage?.dshTodos;
+    return projected == null ? scannedStatusTodos : projected;
+  }, [contextUsage?.dshTodos, scannedStatusTodos, selectedEngine]);
   // 已编辑：ledger 合成主线∪agent-canvas（Shared/协作 fan-in），用未 deferred items 保证实时
   const sessionToolFileChanges = useMemo(() => {
     return ingestFileEditsFromConversationItems({
@@ -2459,6 +2558,27 @@ function ComposerImpl({
         onAttachImages?.(mergedImages);
         return;
       }
+      const oversizedImage =
+        mergedImages.length > 0 && imageAttachEngine
+          ? findOversizedImageAttachment(mergedImages, imageAttachEngine)
+          : null;
+      if (oversizedImage && imageAttachEngine) {
+        pushErrorToast({
+          title: t("composer.imageTooLargeTitle", {
+            defaultValue: "Image too large",
+          }),
+          message: formatEngineImageTooLargeMessage(
+            imageAttachEngine,
+            oversizedImage.bytes,
+            oversizedImage.maxBytes,
+            t as (key: string, options?: Record<string, unknown>) => string,
+          ),
+          durationMs: 4200,
+        });
+        setComposerText(submittedText ?? text);
+        onAttachImages?.(mergedImages);
+        return;
+      }
       const browserNavigationUrl =
         mergedImages.length === 0 && !hasIntentCanvasAttachments
           ? resolveBrowserNavigationUrl(trimmed)
@@ -2545,8 +2665,12 @@ function ComposerImpl({
         shouldPassMemoryReference ||
         hasBrowserContextAttachment ||
         createSessionTarget !== null ||
-        isAgentSubmission
+        isAgentSubmission ||
+        (selectedAtomicTarget?.engine ?? selectedEngine) === "dsh"
           ? {
+              ...((selectedAtomicTarget?.engine ?? selectedEngine) === "dsh"
+                ? { dshAgentPreset: resolvedDshAgentPreset }
+                : {}),
               ...(skillInvocations.length > 0 ? { skillInvocations } : {}),
               ...(shouldPassMemoryReference
                 ? {
@@ -2644,6 +2768,13 @@ function ComposerImpl({
           ) {
             message = t("multiAgent.errors.attachments");
           } else if (
+            diagnostic.startsWith("agent-request-images-too-large:")
+          ) {
+            message =
+              diagnostic
+                .slice("agent-request-images-too-large:".length)
+                .trim() || t("composer.imageTooLargeTitle");
+          } else if (
             diagnostic.startsWith("agent-request-context-unsupported:")
           ) {
             message = t("multiAgent.errors.contextUnsupportedTitle");
@@ -2724,6 +2855,7 @@ function ComposerImpl({
       agentArmed,
       isSharedSessionResolved,
       selectedAtomicTarget,
+      resolvedDshAgentPreset,
       carryOverContextChipKeys,
       carryOverManualMemoryIds,
       carryOverNoteCardIds,
@@ -2779,14 +2911,17 @@ function ComposerImpl({
   }, [insertText, onInsertHandled, setComposerText]);
 
   const claudeContextUsage = useMemo<ClaudeContextUsageViewModel | null>(() => {
-    if (!contextUsage || selectedEngine !== "claude") {
+    if (!contextUsage || (selectedEngine !== "claude" && selectedEngine !== "dsh")) {
       return null;
     }
-    const usedTokens = resolveClaudeWindowUsedTokens(contextUsage);
+    const usedTokens =
+      selectedEngine === "dsh"
+        ? finiteNonNegative(contextUsage.contextUsedTokens)
+        : resolveClaudeWindowUsedTokens(contextUsage);
     // CLI 没上报窗口总量时按模型估算兜底，让占用百分比可以计算。
     const contextWindow =
       finitePositive(contextUsage.modelContextWindow) ??
-      (usedTokens !== null
+      (selectedEngine === "claude" && usedTokens !== null
         ? estimateClaudeContextWindow(selectedModelId)
         : null);
     const totalTokens = finiteNonNegative(contextUsage.total.totalTokens);
@@ -2833,12 +2968,17 @@ function ComposerImpl({
     if (!contextUsage) {
       return null;
     }
-    if (selectedEngine === "claude") {
-      const usedTokens = resolveClaudeWindowUsedTokens(contextUsage);
+    if (selectedEngine === "claude" || selectedEngine === "dsh") {
+      const usedTokens =
+        selectedEngine === "dsh"
+          ? finiteNonNegative(contextUsage.contextUsedTokens)
+          : resolveClaudeWindowUsedTokens(contextUsage);
       const contextWindow =
         finitePositive(contextUsage.modelContextWindow) ??
-        estimateClaudeContextWindow(selectedModelId);
-      return usedTokens !== null
+        (selectedEngine === "claude"
+          ? estimateClaudeContextWindow(selectedModelId)
+          : null);
+      return usedTokens !== null && contextWindow !== null
         ? { used: usedTokens, total: contextWindow }
         : null;
     }
@@ -3554,6 +3694,9 @@ function ComposerImpl({
               isModelConfigRefreshing={isModelConfigRefreshing}
               permissionMode={selectedPermissionMode}
               onModeSelect={handleModeSelect}
+              dshAgentPreset={resolvedDshAgentPreset}
+              dshAgentPresetLocked={dshAgentPresetLocked}
+              onDshAgentPresetSelect={handleDshAgentPresetSelect}
               sendReadiness={composerSendReadiness}
               onJumpToRequest={
                 activeUserInputRequest
@@ -3642,7 +3785,8 @@ function ComposerImpl({
                             usedTokens={resolvedLegacyContextUsage?.used}
                             maxTokens={resolvedLegacyContextUsage?.total}
                             claudeContextUsage={
-                              selectedEngine === "claude"
+                              selectedEngine === "claude" ||
+                              selectedEngine === "dsh"
                                 ? resolvedClaudeContextUsage
                                 : null
                             }

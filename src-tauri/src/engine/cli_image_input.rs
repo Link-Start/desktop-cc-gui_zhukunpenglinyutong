@@ -32,6 +32,58 @@ pub(crate) fn collect_non_empty_image_paths(images: Option<&[String]>) -> Vec<St
     out
 }
 
+/// Summarize an image attachment for user-visible errors and logs.
+///
+/// Data URLs MUST NOT appear verbatim: a Retina screenshot is multi-MB
+/// base64 and would flood the turn-failed bubble (looks like a leak).
+pub(crate) fn describe_image_ref_for_error(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.get(..5).map(|s| s.eq_ignore_ascii_case("data:")) != Some(true) {
+        return trimmed.to_string();
+    }
+    let rest = trimmed.get(5..).unwrap_or("");
+    let (meta, payload) = rest.split_once(',').unwrap_or((rest, ""));
+    let mime = meta
+        .split(';')
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("image");
+    let encoded = payload.trim();
+    if encoded.is_empty() {
+        return format!("data URL ({mime})");
+    }
+    format!(
+        "data URL ({mime}, ~{})",
+        format_compact_bytes(estimate_base64_decoded_len(encoded))
+    )
+}
+
+fn estimate_base64_decoded_len(encoded: &str) -> usize {
+    let len = encoded.len();
+    let padding = if encoded.ends_with("==") {
+        2
+    } else if encoded.ends_with('=') {
+        1
+    } else {
+        0
+    };
+    (len.saturating_mul(3) / 4).saturating_sub(padding)
+}
+
+fn format_compact_bytes(bytes: usize) -> String {
+    const KIB: usize = 1024;
+    const MIB: usize = 1024 * 1024;
+    if bytes >= MIB {
+        let tenths = (bytes * 10 + MIB / 2) / MIB;
+        format!("{}.{}MB", tenths / 10, tenths % 10)
+    } else if bytes >= KIB {
+        format!("{}KB", (bytes + KIB / 2) / KIB)
+    } else {
+        format!("{bytes}B")
+    }
+}
+
 /// Normalize a user-facing image reference into a local filesystem path.
 ///
 /// Supports absolute/relative paths, `file://` URLs, and rejects empty input.
@@ -77,7 +129,9 @@ pub(crate) fn resolve_existing_image_files(
             // CLIs (OpenCode -f, Kimi ReadMediaFile) can consume it.
             match materialize_data_url_to_workspace(&raw, workspace_path) {
                 Ok(path) => resolved.push(path),
-                Err(error) => errors.push(format!("{raw}: {error}")),
+                Err(error) => {
+                    errors.push(format!("{}: {error}", describe_image_ref_for_error(&raw)))
+                }
             }
             continue;
         }
@@ -96,7 +150,7 @@ pub(crate) fn resolve_existing_image_files(
                     }
                 }
             }
-            Err(error) => errors.push(format!("{raw}: {error}")),
+            Err(error) => errors.push(format!("{}: {error}", describe_image_ref_for_error(&raw))),
         }
     }
 
@@ -380,6 +434,30 @@ fn unescape_xml_attr(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn describe_image_ref_omits_data_url_payload() {
+        let data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        let summarized = describe_image_ref_for_error(data_url);
+        assert!(summarized.starts_with("data URL (image/png, ~"));
+        assert!(!summarized.contains("iVBORw0KGgo"));
+        assert_eq!(
+            describe_image_ref_for_error("/tmp/radar.png"),
+            "/tmp/radar.png"
+        );
+    }
+
+    #[test]
+    fn resolve_errors_do_not_dump_data_url_payload() {
+        let dir = std::env::temp_dir().join(format!("cli-image-err-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let data_url = "data:image/png;base64,not-valid-base64-payload";
+        let error = resolve_existing_image_files(Some(&[data_url.to_string()]), &dir).unwrap_err();
+        assert!(error.contains("none of the attached images could be resolved"));
+        assert!(error.contains("data URL (image/png"));
+        assert!(!error.contains("not-valid-base64-payload"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn collects_and_dedupes_paths() {

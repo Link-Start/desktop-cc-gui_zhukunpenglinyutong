@@ -29,7 +29,7 @@ describe("workspace wallpaper styles", () => {
     const css = readFileSync(
       resolve(process.cwd(), "src/styles/workspace-wallpaper.css"),
       "utf8",
-    );
+    ).replace(/\r\n/g, "\n");
     expect(css).toContain(":root[data-workspace-wallpaper] .sidebar");
     expect(css).toContain(":root[data-workspace-wallpaper] .main");
     expect(css).toContain(
@@ -63,6 +63,9 @@ describe("workspace wallpaper styles", () => {
     );
     expect(css).toContain(
       "backdrop-filter: blur(var(--workspace-wallpaper-frost, 12px))",
+    );
+    expect(css).toContain(
+      ':root[data-platform="windows"] .workspace-wallpaper::after',
     );
     expect(css).toContain(".workspace-wallpaper::after");
     expect(css).toContain("backdrop-filter: none;");

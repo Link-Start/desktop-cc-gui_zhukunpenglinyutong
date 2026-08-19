@@ -59,6 +59,7 @@ export type TimelineSnapshotModel = {
   /** Assistant item ids that should render the Shared turn-target badge. */
   turnTargetBadgeVisibleItemIds: Set<string>;
   visibleCollapsedHistoryItemCount: number;
+  hasUncountedEarlierHistory?: boolean;
 };
 
 export type TimelineLiveModel = {
@@ -137,6 +138,7 @@ export type TimelineInteractionModel = {
   onRetryHistory?: () => void;
   onRewindFromMessage?: (messageId: string) => void;
   onShowAllHistoryItems: () => void;
+  onLoadAllEarlierHistory: () => void;
   onThreadRecoveryFork?: () =>
     | Promise<RuntimeReconnectRecoveryCallbackResult>
     | RuntimeReconnectRecoveryCallbackResult;

@@ -11,11 +11,13 @@ status: active
 
 ## Draft / pending confirmation
 
+- [幕布历史顶部丢失 + 消息顺序/用户气泡连堆](./2026-08-18-conversation-curtain-history-missing-and-order.md) — P0 Bug A 已落地（`fix-claude-history-disk-window-load-more`，待 T5 真机手滑）；P1 Bug B 另开 `fix-canvas-user-bubble-stack-and-merge-order`。
 - [0.8.9 → 0.9 通读盘点](./2026-08-15-port-0.8.9-capabilities-to-0.9.md) — 判定表；验收逐条见 [acceptance matrix](./2026-08-16-0.8.9-to-0.9-acceptance-matrix.md)。
 - [Shared Session recovery exit closure](./2026-08-04-shared-session-recovery-exit-closure.md) — P0：恢复出口闭环（跨平台）；**尚未** OpenSpec 化、未改代码。
 
 ## Active execution plans
 
+- [左侧 Session 六条回归一起收](./2026-08-19-sidebar-session-list-regression-bundle.md) — 标签全局开关 / 历史绑回 / 草稿隐藏 / Shared 读 `shared_sessions_v2` / 列表不蒸发。诊断：[`../analysis/sidebar-session-list-regression-bundle-2026-08-19.md`](../analysis/sidebar-session-list-regression-bundle-2026-08-19.md)。
 - [AppShell 高内聚低耦合优化](./2026-08-11-app-shell-cohesion-optimization.md) — **活文档**：P0-0 度量 → bag 瘦身 → Host 子树化 → 物理模块化；完成 Todo 后必须回写进度与 Progress Log。
 - [AppShell S4 结构手术前现状盘点](./2026-08-14-app-shell-s4-inventory.md) — PR #1092 内 S4 PR-A~F 的施工底图与完成回写；整包复盘见 [`../perf/pr-1092-performance-retrospective.md`](../perf/pr-1092-performance-retrospective.md)。
 

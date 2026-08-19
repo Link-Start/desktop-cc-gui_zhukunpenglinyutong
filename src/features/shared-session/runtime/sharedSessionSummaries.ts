@@ -4,20 +4,18 @@ import {
   isSharedSessionSupportedEngine,
   normalizeSharedSessionEngine,
 } from "../utils/sharedSessionEngines";
+import {
+  SHARED_HIDE_ENGINE_PREFIXES,
+  collectSharedHideIdentityKeys,
+  extractCodexCanonicalSessionId,
+  hasKnownSharedEnginePrefix,
+  isSharedHideFilesystemPathId,
+  sharedHideIdentityIntersects,
+} from "./sharedHideIdentity";
 
 const UNSUPPORTED_SHARED_ENGINE_PREFIXES = [
   "gemini:",
   "gemini-pending-",
-] as const;
-
-/** Shared-supported engines whose native list ids use `engine:{raw}` form. */
-const SHARED_HIDE_ENGINE_PREFIXES = [
-  "claude",
-  "codex",
-  "kimi",
-  "grok",
-  "opencode",
-  "pi",
 ] as const;
 
 type SharedSessionSummary = {
@@ -25,6 +23,7 @@ type SharedSessionSummary = {
   threadId: string;
   title: string;
   updatedAt: number;
+  createdAt?: number;
   selectedEngine: SharedSessionSupportedEngine;
   nativeThreadIds: string[];
 };
@@ -75,11 +74,14 @@ export function normalizeSharedSessionSummary(value: unknown): SharedSessionSumm
       ? selectedEngineCandidate
       : undefined,
   );
+  const updatedAt = Math.max(0, asNumber(record.updatedAt ?? record.updated_at));
+  const createdAt = Math.max(0, asNumber(record.createdAt ?? record.created_at));
   return {
     id: asString(record.id).trim() || threadId,
     threadId,
     title: asString(record.title).trim() || "Shared Session",
-    updatedAt: Math.max(0, asNumber(record.updatedAt ?? record.updated_at)),
+    updatedAt,
+    ...(createdAt > 0 ? { createdAt } : {}),
     selectedEngine: normalizedSelectedEngine,
     nativeThreadIds: Array.isArray(record.nativeThreadIds ?? record.native_thread_ids)
       ? ((record.nativeThreadIds ?? record.native_thread_ids) as unknown[])
@@ -104,9 +106,8 @@ export function normalizeSharedSessionSummaries(value: unknown): SharedSessionSu
 }
 
 /**
- * Expand Shared Hidden Binding ids so hide filters match both raw and
- * `engine:{raw}` forms (catalog uses prefixes; some bindings historically
- * stored raw session ids).
+ * Expand Shared Hidden Binding ids so hide filters match raw、`engine:{raw}`、
+ * Codex rollout stem 与 canonical uuid。路径形 id（Win 盘符 / UNC / POSIX）不补前缀。
  */
 export function expandHiddenSharedBindingIds(
   nativeThreadIds: Iterable<string>,
@@ -117,21 +118,21 @@ export function expandHiddenSharedBindingIds(
     if (!id) {
       continue;
     }
-    expanded.add(id);
+    collectSharedHideIdentityKeys(id).forEach((key) => expanded.add(key));
+    if (
+      isSharedHideFilesystemPathId(id) ||
+      hasKnownSharedEnginePrefix(id) ||
+      extractCodexCanonicalSessionId(id)
+    ) {
+      continue;
+    }
     const lower = id.toLowerCase();
     for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
-      const prefix = `${engine}:`;
-      if (lower.startsWith(prefix)) {
-        const stripped = id.slice(prefix.length).trim();
-        if (stripped) {
-          expanded.add(stripped);
-        }
-      } else if (
+      if (
         !id.includes(":") ||
         lower.startsWith(`${engine}-pending-`) ||
         lower.startsWith(`${engine}-pending-shared-`)
       ) {
-        // raw / pending placeholder → also match catalog form
         expanded.add(`${engine}:${id}`);
       }
     }
@@ -144,6 +145,7 @@ export function toSharedThreadSummary(summary: SharedSessionSummary): ThreadSumm
     id: summary.threadId,
     name: summary.title,
     updatedAt: summary.updatedAt,
+    createdAt: summary.createdAt ?? summary.updatedAt,
     engineSource: summary.selectedEngine,
     threadKind: "shared",
     selectedEngine: summary.selectedEngine,
@@ -188,22 +190,16 @@ export function lookupSharedOwnerByNativeParent(
   if (!parent || nativeToShared.size === 0) {
     return null;
   }
-  const exact = nativeToShared.get(parent);
-  if (exact) {
-    return exact;
-  }
-  const colon = parent.indexOf(":");
-  if (colon > 0) {
-    const bare = parent.slice(colon + 1).trim();
-    if (bare) {
-      const byBare = nativeToShared.get(bare);
-      if (byBare) {
-        return byBare;
-      }
+  for (const key of collectSharedHideIdentityKeys(parent)) {
+    const hit = nativeToShared.get(key);
+    if (hit) {
+      return hit;
     }
+  }
+  if (isSharedHideFilesystemPathId(parent) || hasKnownSharedEnginePrefix(parent)) {
     return null;
   }
-  // bare / pending：补 engine 前缀再查
+  // bare / pending：补 engine 前缀再查（路径与已知前缀不再二次发明）
   for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
     const byPrefixed = nativeToShared.get(`${engine}:${parent}`);
     if (byPrefixed) {
@@ -259,9 +255,12 @@ export function remapThreadParentsToSharedOwners(
 /**
  * 侧栏隐藏用：从当前 list 中 Shared 会话收集「藏崽」父 id 键
  * （shared: 自身 + nativeThreadIds 的 raw/engine: 变体）。
+ * extraHideIds：protocol hide / 已验证 hide set 的文件 UUID。
+ * owner 被 Index 标题闸丢掉后，子代理 parent 仍要能命中。
  */
 export function buildSharedSidebarHiddenParentKeys(
   threads: readonly ThreadSummary[],
+  extraHideIds?: Iterable<string>,
 ): Set<string> {
   const keys = new Set<string>();
   for (const thread of threads) {
@@ -275,6 +274,13 @@ export function buildSharedSidebarHiddenParentKeys(
       keys.add(sharedId);
     }
     expandHiddenSharedBindingIds(thread.nativeThreadIds ?? []).forEach((id) => {
+      if (id) {
+        keys.add(id);
+      }
+    });
+  }
+  if (extraHideIds) {
+    expandHiddenSharedBindingIds(extraHideIds).forEach((id) => {
       if (id) {
         keys.add(id);
       }
@@ -307,14 +313,11 @@ export function isSharedSidebarHiddenPup(
   if (parent.startsWith("shared:")) {
     return true;
   }
-  if (hiddenParentKeys.has(parent)) {
+  if (sharedHideIdentityIntersects(parent, hiddenParentKeys)) {
     return true;
   }
-  // 与 lookupSharedOwnerByNativeParent 对称的形态变体
-  const colon = parent.indexOf(":");
-  if (colon > 0) {
-    const bare = parent.slice(colon + 1).trim();
-    return Boolean(bare && hiddenParentKeys.has(bare));
+  if (isSharedHideFilesystemPathId(parent) || hasKnownSharedEnginePrefix(parent)) {
+    return false;
   }
   for (const engine of SHARED_HIDE_ENGINE_PREFIXES) {
     if (hiddenParentKeys.has(`${engine}:${parent}`)) {

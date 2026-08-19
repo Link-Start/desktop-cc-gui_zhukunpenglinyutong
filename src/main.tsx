@@ -4,8 +4,10 @@ import {
   startReactScanOverlay,
 } from "./services/reactScanController";
 import { installRendererPlatformAttribute } from "./utils/rendererPlatform";
+import { installWindowsReloadShortcutGuard } from "./utils/windowsReloadShortcutGuard";
 
 installRendererPlatformAttribute();
+installWindowsReloadShortcutGuard();
 installRendererLifecycleDiagnostics();
 // P1-2: Baidu Tongji is deferred until after shell-ready / idle (see bootstrapApp).
 // Synchronous install on cold path competed with first paint for main-thread time.

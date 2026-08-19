@@ -58,15 +58,31 @@ pub fn workspace_id_from_create(value: &Value) -> Result<String, String> {
         .ok_or_else(|| "dsh workspace.create missing workspaceId".to_string())
 }
 
-pub async fn create_session(
-    client: &DshHostClient,
+pub fn create_session_payload(
     workspace_id: &str,
     session_id: Option<&str>,
-) -> Result<String, String> {
+    agent_preset: Option<&str>,
+) -> Value {
     let mut payload = json!({ "workspaceId": workspace_id });
     if let Some(session_id) = session_id.map(str::trim).filter(|value| !value.is_empty()) {
         payload["sessionId"] = json!(session_id);
     }
+    if let Some(agent_preset) = agent_preset
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        payload["agentPreset"] = json!(agent_preset);
+    }
+    payload
+}
+
+pub async fn create_session(
+    client: &DshHostClient,
+    workspace_id: &str,
+    session_id: Option<&str>,
+    agent_preset: Option<&str>,
+) -> Result<String, String> {
+    let payload = create_session_payload(workspace_id, session_id, agent_preset);
     let value = client.call("session.create", payload).await?;
     value
         .get("sessionId")
@@ -225,7 +241,10 @@ pub fn load_prompt_images(
     for raw in &raw_paths {
         match load_one_prompt_image(raw, workspace_path) {
             Ok(image) => loaded.push(image),
-            Err(error) => errors.push(format!("{}: {error}", describe_image_ref(raw))),
+            Err(error) => errors.push(format!(
+                "{}: {error}",
+                crate::engine::cli_image_input::describe_image_ref_for_error(raw)
+            )),
         }
     }
 
@@ -238,20 +257,6 @@ pub fn load_prompt_images(
         ));
     }
     Ok(loaded)
-}
-
-fn describe_image_ref(raw: &str) -> String {
-    if is_data_url(raw) {
-        let media = raw
-            .get(5..)
-            .and_then(|rest| rest.split_once(','))
-            .map(|(meta, _)| meta.split(';').next().unwrap_or("image").trim())
-            .filter(|value| !value.is_empty())
-            .unwrap_or("image");
-        format!("data URL ({media}, {} bytes)", raw.len())
-    } else {
-        raw.to_string()
-    }
 }
 
 fn load_one_prompt_image(raw: &str, workspace_path: &Path) -> Result<DshPromptImage, String> {
@@ -424,6 +429,11 @@ pub fn split_model_selection(
     Some((provider.to_string(), model.to_string()))
 }
 
+/// mossx managed catalog prefix. The DSH host has no adapter for this provider.
+pub fn is_reserved_mossx_dsh_provider(provider: &str) -> bool {
+    provider.trim().eq_ignore_ascii_case("ccgui")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -460,6 +470,22 @@ mod tests {
     }
 
     #[test]
+    fn create_session_payload_omits_blank_preset() {
+        let payload = create_session_payload("ws-1", None, Some("  "));
+        assert_eq!(payload["workspaceId"], "ws-1");
+        assert!(payload.get("agentPreset").is_none());
+        assert!(payload.get("sessionId").is_none());
+    }
+
+    #[test]
+    fn create_session_payload_includes_preset() {
+        let payload = create_session_payload("ws-1", Some("sess-1"), Some("minimal"));
+        assert_eq!(payload["workspaceId"], "ws-1");
+        assert_eq!(payload["sessionId"], "sess-1");
+        assert_eq!(payload["agentPreset"], "minimal");
+    }
+
+    #[test]
     fn split_provider_model() {
         assert_eq!(
             split_model_selection("deepseek-official/deepseek-v4-flash", None).unwrap(),
@@ -483,6 +509,15 @@ mod tests {
             )
         );
         assert_eq!(split_model_selection("deepseek-v4-flash", None), None);
+        assert_eq!(
+            split_model_selection("ccgui/grok-4.5", None).unwrap(),
+            ("ccgui".to_string(), "grok-4.5".to_string())
+        );
+        assert!(is_reserved_mossx_dsh_provider("ccgui"));
+        assert!(is_reserved_mossx_dsh_provider("CCGUI"));
+        assert!(!is_reserved_mossx_dsh_provider("ggggg"));
+        assert!(!is_reserved_mossx_dsh_provider("deepseek-official"));
+        assert!(!is_reserved_mossx_dsh_provider("vision-http"));
     }
 
     const TINY_PNG_BASE64: &str =

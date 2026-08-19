@@ -8,9 +8,28 @@ use super::commands::{backfill_session_index_core, sync_session_index_core};
 use crate::state::AppState;
 
 pub(crate) const SESSION_INDEX_IMPORTED_EVENT: &str = "session-index-imported";
-const IMPORT_INTERVAL: Duration = Duration::from_secs(90);
-const IMPORT_INITIAL_DELAY: Duration = Duration::from_secs(45);
+pub(crate) const IMPORT_INTERVAL: Duration = Duration::from_secs(90);
+/// Startup-safe delay: long enough to miss first-click freeze, short enough
+/// that upgrade/cold-start does not sit idle for 45s before the first scan.
+pub(crate) const IMPORT_INITIAL_DELAY: Duration = Duration::from_secs(3);
 const IMPORT_LIMIT: usize = 50;
+
+pub(crate) struct ImportTickSchedule {
+    first_tick: AtomicBool,
+}
+
+impl ImportTickSchedule {
+    pub(crate) fn new() -> Self {
+        Self {
+            first_tick: AtomicBool::new(true),
+        }
+    }
+
+    /// First tick is force; later ticks stay freshness-gated.
+    pub(crate) fn take_force_sync(&self) -> bool {
+        self.first_tick.swap(false, Ordering::AcqRel)
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +64,7 @@ pub(crate) fn spawn_session_index_importer(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(IMPORT_INITIAL_DELAY).await;
         let guard = std::sync::Arc::new(ImportTickGuard::new());
+        let schedule = ImportTickSchedule::new();
         loop {
             {
                 let state = app.state::<AppState>();
@@ -55,7 +75,8 @@ pub(crate) fn spawn_session_index_importer(app: AppHandle) {
             if guard.try_begin() {
                 let tick_guard = guard.clone();
                 let app_handle = app.clone();
-                let result = run_import_tick(&app_handle).await;
+                let force_sync = schedule.take_force_sync();
+                let result = run_import_tick(&app_handle, force_sync).await;
                 tick_guard.end();
                 if let Ok(payload) = result {
                     if payload.upserted > 0 {
@@ -68,7 +89,10 @@ pub(crate) fn spawn_session_index_importer(app: AppHandle) {
     });
 }
 
-async fn run_import_tick(app: &AppHandle) -> Result<SessionIndexImportedPayload, String> {
+async fn run_import_tick(
+    app: &AppHandle,
+    force_sync: bool,
+) -> Result<SessionIndexImportedPayload, String> {
     let state = app.state::<AppState>();
     let mut targets: Vec<(String, String)> = {
         let workspaces = state.workspaces.lock().await;
@@ -90,7 +114,7 @@ async fn run_import_tick(app: &AppHandle) -> Result<SessionIndexImportedPayload,
     let mut changed_ids = Vec::new();
     for (workspace_id, _path) in targets {
         let mut workspace_upserted = 0usize;
-        match sync_session_index_core(&state, &workspace_id, IMPORT_LIMIT, false).await {
+        match sync_session_index_core(&state, &workspace_id, IMPORT_LIMIT, force_sync).await {
             Ok(report) => {
                 workspace_upserted = workspace_upserted.saturating_add(report.upserted);
             }
@@ -119,7 +143,8 @@ async fn run_import_tick(app: &AppHandle) -> Result<SessionIndexImportedPayload,
 
 #[cfg(test)]
 mod tests {
-    use super::ImportTickGuard;
+    use super::{ImportTickGuard, ImportTickSchedule, IMPORT_INITIAL_DELAY, IMPORT_INTERVAL};
+    use std::time::Duration;
 
     #[test]
     fn overlapping_tick_is_rejected() {
@@ -128,5 +153,24 @@ mod tests {
         assert!(!guard.try_begin());
         guard.end();
         assert!(guard.try_begin());
+    }
+
+    #[test]
+    fn first_tick_is_forced_later_ticks_use_freshness() {
+        let schedule = ImportTickSchedule::new();
+        assert!(schedule.take_force_sync(), "first tick must force sync");
+        assert!(
+            !schedule.take_force_sync(),
+            "second tick must stay freshness-gated"
+        );
+        assert!(!schedule.take_force_sync(), "later ticks stay force=false");
+    }
+
+    #[test]
+    fn initial_delay_is_startup_safe_seconds_not_forty_five() {
+        assert!(IMPORT_INITIAL_DELAY >= Duration::from_secs(2));
+        assert!(IMPORT_INITIAL_DELAY <= Duration::from_secs(5));
+        assert!(IMPORT_INITIAL_DELAY < IMPORT_INTERVAL);
+        assert!(IMPORT_INTERVAL >= Duration::from_secs(90));
     }
 }

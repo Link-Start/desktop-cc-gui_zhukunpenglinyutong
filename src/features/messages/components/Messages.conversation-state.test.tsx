@@ -151,6 +151,42 @@ describe("Messages conversationState routing", () => {
     expect(screen.getByText("Should render on claude")).toBeTruthy();
   });
 
+  it("renders user-input request inline for dsh engine", () => {
+    const request: RequestUserInputRequest = {
+      workspace_id: "ws-state",
+      request_id: 11,
+      params: {
+        thread_id: "thread-from-state",
+        turn_id: "turn-11",
+        item_id: "item-11",
+        questions: [
+          {
+            id: "q11",
+            header: "Confirm",
+            question: "Should render on dsh",
+            options: [{ label: "Yes", description: "Continue." }],
+          },
+        ],
+      },
+    };
+
+    render(
+      <Messages
+        items={[]}
+        threadId="thread-from-state"
+        workspaceId="ws-state"
+        isThinking={false}
+        userInputRequests={[request]}
+        onUserInputSubmit={vi.fn()}
+        activeEngine="dsh"
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(screen.getByText("Should render on dsh")).toBeTruthy();
+  });
+
   it("uses conversationState items when rendering grouped edit tools", () => {
     const legacyPlan = {
       turnId: "turn-legacy",

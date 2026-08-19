@@ -422,7 +422,7 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     );
   });
 
-  it("routes message-tail fork through message anchored fork with provider options", () => {
+  it("routes message-tail fork through the same native thread/fork path as composer", () => {
     const source = readFileSync(
       join(currentDir, "layoutNodes/useAppShellLayoutNodesSection.tsx"),
       "utf8",
@@ -435,10 +435,7 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
       ),
     );
 
-    expect(forkHandler).toContain("forkSessionFromMessageForWorkspace");
-    expect(forkHandler).toContain("messageId");
-    expect(forkHandler).toContain('mode: "messages-only"');
-    expect(forkHandler).toContain('operation: "fork"');
+    expect(forkHandler).toContain("forkThreadForWorkspace");
     expect(forkHandler).toContain(
       "providerProfileId: options?.providerProfileId ?? null",
     );
@@ -448,8 +445,8 @@ describe("useAppShellLayoutNodesSection adapter contract", () => {
     expect(forkHandler).toContain(
       'throw new Error("Fork did not return a child conversation.")',
     );
+    expect(forkHandler).not.toContain("forkSessionFromMessageForWorkspace");
     expect(forkHandler).not.toContain("updateThreadParent(");
-    expect(forkHandler).not.toContain('await startFork("/fork");');
     expect(forkHandler).not.toContain(
       "forkClaudeSessionFromMessageForWorkspace",
     );

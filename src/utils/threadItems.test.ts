@@ -1411,6 +1411,27 @@ go lang`,
     expectToolItem(prepared[0]);
   });
 
+  it("keeps todo_write arguments when a host mislabels the item as fileChange", () => {
+    const item = buildConversationItem({
+      type: "fileChange",
+      id: "todo-1",
+      title: "todo_write",
+      tool: "todo_write",
+      status: "completed",
+      arguments: {
+        todos: [{ content: "step", status: "in_progress" }],
+      },
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "tool") {
+      expect(item.toolType).toBe("mcpToolCall");
+      expect(item.title).toBe("todo_write");
+      expect(JSON.parse(item.detail)).toEqual({
+        todos: [{ content: "step", status: "in_progress" }],
+      });
+    }
+  });
+
   it("builds file change items with summary details", () => {
     const item = buildConversationItem({
       type: "fileChange",
@@ -2980,6 +3001,76 @@ go lang`,
   it("returns 0 for invalid thread timestamps", () => {
     const timestamp = getThreadTimestamp({ updated_at: "not-a-date" });
     expect(timestamp).toBe(0);
+  });
+
+  it("keeps an empty assistant shell when a later user follows it", () => {
+    const items: ConversationItem[] = [
+      { id: "user-a", kind: "message", role: "user", text: "第一问" },
+      { id: "empty-assistant", kind: "message", role: "assistant", text: "" },
+      { id: "user-b", kind: "message", role: "user", text: "第二问" },
+    ];
+    const prepared = prepareThreadItems(items);
+    expect(prepared.map((item) => item.id)).toEqual([
+      "user-a",
+      "empty-assistant",
+      "user-b",
+    ]);
+  });
+
+  it("keeps an empty assistant shell referenced by live-text preserve ids", () => {
+    const items: ConversationItem[] = [
+      { id: "user-live", kind: "message", role: "user", text: "正在问" },
+      { id: "live-shell", kind: "message", role: "assistant", text: "" },
+    ];
+    const prepared = prepareThreadItems(items, {
+      preserveMessageTextIds: new Set(["live-shell"]),
+    });
+    expect(prepared.map((item) => item.id)).toEqual(["user-live", "live-shell"]);
+  });
+
+  it("keeps an empty assistant shell that belongs to the live turn", () => {
+    const items: ConversationItem[] = [
+      { id: "user-live-turn", kind: "message", role: "user", text: "进行中" },
+      {
+        id: "live-turn-shell",
+        kind: "message",
+        role: "assistant",
+        text: "",
+        turnId: "turn-live",
+      },
+    ];
+    const prepared = prepareThreadItems(items, { liveTurnId: "turn-live" });
+    expect(prepared.map((item) => item.id)).toEqual([
+      "user-live-turn",
+      "live-turn-shell",
+    ]);
+  });
+
+  it("still drops a settled empty assistant with no later user and no live reference", () => {
+    const items: ConversationItem[] = [
+      { id: "user-settled", kind: "message", role: "user", text: "已结束" },
+      {
+        id: "settled-empty",
+        kind: "message",
+        role: "assistant",
+        text: "",
+        isFinal: true,
+      },
+    ];
+    const prepared = prepareThreadItems(items);
+    expect(prepared.map((item) => item.id)).toEqual(["user-settled"]);
+  });
+
+  it("does not invent an assistant between two genuine adjacent users", () => {
+    const items: ConversationItem[] = [
+      { id: "user-one", kind: "message", role: "user", text: "先问这个" },
+      { id: "user-two", kind: "message", role: "user", text: "再问那个" },
+    ];
+    const prepared = prepareThreadItems(items);
+    expect(prepared.map((item) => item.id)).toEqual(["user-one", "user-two"]);
+    expect(prepared.every((item) => item.kind === "message" && item.role === "user")).toBe(
+      true,
+    );
   });
 
 });

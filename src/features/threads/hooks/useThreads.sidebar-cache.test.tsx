@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import {
   deleteWorkspaceSessions,
+  listSessionIndexForWorkspace,
   listThreads,
   loadClaudeSession,
+  loadDshSession,
   resumeThread,
 } from "../../../services/tauri";
 import {
@@ -47,9 +49,12 @@ vi.mock("../../../services/tauri", () => ({
   startThread: vi.fn(),
   listThreads: vi.fn(),
   loadClaudeSession: vi.fn(),
+  loadDshSession: vi.fn(),
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
   deleteWorkspaceSessions: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
@@ -138,6 +143,18 @@ describe("useThreads sidebar cache", () => {
     vi.clearAllMocks();
     writeClientStoreData("threads", {});
     vi.mocked(loadClaudeSession).mockResolvedValue({ messages: [] });
+    vi.mocked(loadDshSession).mockResolvedValue({ messages: [] });
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
   });
 
   it("hydrates cached thread summaries before live thread list resolves", () => {
@@ -195,7 +212,7 @@ describe("useThreads sidebar cache", () => {
     });
   });
 
-  it("resumes Codex history in the background without a select-frame curtain", async () => {
+  it("tracks Codex history loading while selecting an unloaded thread", async () => {
     vi.useFakeTimers();
     let resolveResume:
       | ((value: {
@@ -228,9 +245,9 @@ describe("useThreads sidebar cache", () => {
         result.current.setActiveThreadId("thread-history");
       });
 
-      expect(
-        result.current.historyLoadingByThreadId["thread-history"],
-      ).toBeUndefined();
+      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(
+        true,
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -240,9 +257,9 @@ describe("useThreads sidebar cache", () => {
         "ws-1",
         "thread-history",
       );
-      expect(
-        result.current.historyLoadingByThreadId["thread-history"],
-      ).toBeUndefined();
+      expect(result.current.historyLoadingByThreadId["thread-history"]).toBe(
+        true,
+      );
 
       await act(async () => {
         resolveResume?.({
@@ -276,7 +293,77 @@ describe("useThreads sidebar cache", () => {
     }
   });
 
-  it("does not apply an older resume after a newer thread is selected", async () => {
+  it("keeps cached items visible when reselecting an already-loaded thread", async () => {
+    vi.useFakeTimers();
+    vi.mocked(resumeThread).mockResolvedValue({
+      result: {
+        thread: {
+          id: "thread-history",
+          preview: "Loaded thread",
+          updated_at: 456,
+          turns: [
+            {
+              items: [
+                {
+                  type: "agentMessage",
+                  id: "assistant-thread-history",
+                  text: "Loaded history",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    } as never);
+
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.setActiveThreadId("thread-history");
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(result.current.activeItems).toEqual([
+        expect.objectContaining({
+          id: "assistant-thread-history",
+          text: "Loaded history",
+        }),
+      ]);
+
+      act(() => {
+        result.current.setActiveThreadId("thread-history-other");
+      });
+      expect(result.current.activeItems).toEqual([]);
+
+      act(() => {
+        result.current.setActiveThreadId("thread-history");
+      });
+      expect(result.current.activeItems).toEqual([
+        expect.objectContaining({
+          id: "assistant-thread-history",
+          text: "Loaded history",
+        }),
+      ]);
+      expect(
+        result.current.historyLoadingByThreadId["thread-history"],
+      ).toBeUndefined();
+      expect(vi.mocked(resumeThread)).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not clear the next selected thread loading state when an older resume finishes", async () => {
     vi.useFakeTimers();
     const resumeResolvers = new Map<
       string,
@@ -312,9 +399,9 @@ describe("useThreads sidebar cache", () => {
       await act(async () => {
         vi.advanceTimersByTime(50);
       });
-      expect(
-        result.current.historyLoadingByThreadId["thread-history-a"],
-      ).toBeUndefined();
+      expect(result.current.historyLoadingByThreadId["thread-history-a"]).toBe(
+        true,
+      );
 
       act(() => {
         result.current.setActiveThreadId("thread-history-b");
@@ -322,9 +409,9 @@ describe("useThreads sidebar cache", () => {
       expect(
         result.current.historyLoadingByThreadId["thread-history-a"],
       ).toBeUndefined();
-      expect(
-        result.current.historyLoadingByThreadId["thread-history-b"],
-      ).toBeUndefined();
+      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(
+        true,
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -355,9 +442,9 @@ describe("useThreads sidebar cache", () => {
       });
 
       expect(result.current.activeThreadId).toBe("thread-history-b");
-      expect(
-        result.current.historyLoadingByThreadId["thread-history-b"],
-      ).toBeUndefined();
+      expect(result.current.historyLoadingByThreadId["thread-history-b"]).toBe(
+        true,
+      );
 
       await act(async () => {
         resumeResolvers.get("thread-history-b")?.({
@@ -391,7 +478,7 @@ describe("useThreads sidebar cache", () => {
     }
   });
 
-  it("loads Claude history in the background without a select-frame curtain", async () => {
+  it("tracks Claude history loading while selecting an unloaded session", async () => {
     vi.mocked(listThreads).mockResolvedValue({
       result: { data: [], nextCursor: null },
     } as never);
@@ -422,7 +509,7 @@ describe("useThreads sidebar cache", () => {
 
       expect(
         result.current.historyLoadingByThreadId["claude:session-history"],
-      ).toBeUndefined();
+      ).toBe(true);
 
       await act(async () => {
         vi.advanceTimersByTime(50);
@@ -435,7 +522,7 @@ describe("useThreads sidebar cache", () => {
       );
       expect(
         result.current.historyLoadingByThreadId["claude:session-history"],
-      ).toBeUndefined();
+      ).toBe(true);
 
       await act(async () => {
         resolveLoad?.({
@@ -457,6 +544,168 @@ describe("useThreads sidebar cache", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("tracks DSH history loading while selecting an unloaded session", async () => {
+    let resolveLoad: ((value: { messages: unknown[] }) => void) | null = null;
+    vi.mocked(loadDshSession).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveLoad = resolve;
+        }) as never,
+    );
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.setActiveThreadId("dsh:session-history");
+    });
+
+    expect(
+      result.current.historyLoadingByThreadId["dsh:session-history"],
+    ).toBe(true);
+    expect(
+      result.current.historyLoadingProgressByThreadId["dsh:session-history"],
+    ).toEqual({
+      phase: "prepare",
+      percent: 8,
+      titleKey: "restoringHistory",
+      detailKey: "restoringHistoryPrepare",
+    });
+
+    await waitFor(() => {
+      expect(vi.mocked(loadDshSession)).toHaveBeenCalledWith(
+        "/tmp/codex",
+        "session-history",
+        { limit: 200 },
+      );
+    });
+    expect(
+      result.current.historyLoadingByThreadId["dsh:session-history"],
+    ).toBe(true);
+
+    await act(async () => {
+      resolveLoad?.({
+        messages: [
+          {
+            role: "assistant",
+            content: "Loaded DSH history",
+          },
+        ],
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(
+        result.current.historyLoadingByThreadId["dsh:session-history"],
+      ).toBeUndefined();
+    });
+  });
+
+  it("does not mark pending DSH threads as history loading", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.setActiveThreadId("dsh-pending-1");
+      });
+
+      expect(
+        result.current.historyLoadingByThreadId["dsh-pending-1"],
+      ).toBeUndefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      expect(loadDshSession).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not resume a never-started DSH session with empty disk metadata", async () => {
+    vi.useFakeTimers();
+    writeClientStoreValue("threads", "sidebarSnapshot", {
+      version: 1,
+      updatedAt: 123,
+      workspaces: [workspace],
+      threadsByWorkspace: {
+        "ws-1": [
+          {
+            id: "dsh:new-empty",
+            name: "New DSH chat",
+            updatedAt: 123,
+            engineSource: "dsh",
+            sizeBytes: 0,
+          },
+        ],
+      },
+    });
+
+    try {
+      const { result } = renderHook(() =>
+        useThreads({
+          activeWorkspace: workspace,
+          onWorkspaceConnected: vi.fn(),
+        }),
+      );
+
+      act(() => {
+        result.current.setActiveThreadId("dsh:new-empty");
+      });
+
+      expect(
+        result.current.historyLoadingByThreadId["dsh:new-empty"],
+      ).toBeUndefined();
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      expect(loadDshSession).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows Shared restore progress on the select-frame curtain", () => {
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.setActiveThreadId("shared:session-history");
+    });
+
+    expect(
+      result.current.historyLoadingByThreadId["shared:session-history"],
+    ).toBe(true);
+    expect(
+      result.current.historyLoadingProgressByThreadId["shared:session-history"],
+    ).toEqual({
+      phase: "prepare",
+      percent: 8,
+      titleKey: "restoringSharedHistory",
+      detailKey: "restoringSharedHistoryPrepare",
+    });
   });
 
   it("loads cached Claude sessions before live thread list seeds the workspace path", async () => {
@@ -634,7 +883,7 @@ describe("useThreads sidebar cache", () => {
 
       expect(
         result.current.historyLoadingByThreadId["thread-history-error"],
-      ).toBeUndefined();
+      ).toBe(true);
 
       await act(async () => {
         vi.advanceTimersByTime(50);

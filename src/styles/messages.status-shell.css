@@ -7,7 +7,7 @@
  */
 .messages-anchor-rail {
   position: absolute;
-  left: 40px;
+  left: 12px;
   top: calc(var(--main-topbar-height) + 22px);
   bottom: 22px;
   width: 52px;
@@ -48,7 +48,7 @@
   position: absolute;
   left: 0;
   top: 50%;
-  width: 14px;
+  width: 9px;
   height: 2px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text-faint) 54%, transparent);
@@ -149,26 +149,6 @@
   from {
     opacity: 0;
     margin-left: -2px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .messages-anchor-rail {
-    display: none;
-  }
-
-  .messages-shell.has-anchor-rail .messages-full {
-    padding-left: 0;
-  }
-}
-
-@container (max-width: 960px) {
-  .messages-anchor-rail {
-    display: none;
-  }
-
-  .messages-shell.has-anchor-rail .messages-full {
-    padding-left: 0;
   }
 }
 
@@ -510,25 +490,115 @@
   width: 100%;
 }
 
-.messages-history-loading {
-  min-height: 220px;
+/* 历史恢复时把 Spine 拉满消息画布，避免 360px 贴顶浮块。
+   不用 :has() / cqh：macOS 10.13 WebKit 不支持。 */
+.messages-timeline-root.is-history-loading {
+  min-height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
+  flex-direction: column;
+}
+
+.messages-timeline-root.is-history-loading .messages-full {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+.messages-empty.messages-history-loading {
+  padding: 0;
+  min-height: 360px;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: stretch;
   color: var(--text-fainter);
 }
 
-.messages-history-loading .working-spinner {
-  flex: 0 0 auto;
+.messages-history-loading-rail {
+  position: relative;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.messages-history-loading-rail::before {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: 24px;
+  bottom: 24px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text-fainter) 30%, transparent);
+}
+
+.messages-history-loading-logo {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  object-fit: cover;
+  transform: translate3d(0, -50%, 0);
+}
+
+.messages-history-loading-track {
+  position: absolute;
+  left: 25px;
+  top: 28px;
+  bottom: 28px;
+  width: 5px;
+  overflow: hidden;
+}
+
+.messages-history-loading-shuttle {
+  height: 100%;
+  animation: messages-history-loading-climb 1.8s ease-in-out infinite;
+}
+
+.messages-history-loading-traveler {
+  display: block;
+  width: 5px;
+  height: 28px;
+  border-radius: 99px;
+  background: var(--text-accent);
+}
+
+.messages-history-loading-nodes {
+  position: absolute;
+  left: 23px;
+  top: 36px;
+  bottom: 36px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.messages-history-loading-node {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface-messages);
+  border: 1px solid var(--text-fainter);
+}
+
+.messages-history-loading-node.is-done {
+  background: var(--text-stronger);
+  border-color: var(--text-stronger);
+}
+
+.messages-history-loading-node.is-current {
+  background: var(--status-success);
+  border-color: var(--status-success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-success) 18%, transparent);
 }
 
 .messages-history-loading-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: min(360px, 72vw);
-  max-width: 420px;
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  padding: 0 28px;
+  text-align: left;
 }
 
 .messages-history-loading-copy strong {
@@ -538,45 +608,38 @@
 }
 
 .messages-history-loading-copy > span {
+  margin-top: 6px;
   font-size: 12px;
   line-height: 1.5;
 }
 
-.messages-history-loading-bar {
-  position: relative;
-  width: 100%;
-  height: 6px;
-  margin-top: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text-fainter) 22%, transparent);
-}
-
-.messages-history-loading-bar-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--accent, #3b82f6) 88%, white 12%);
-  transition: width 160ms ease-out;
-}
-
-.messages-history-loading-bar.is-indeterminate .messages-history-loading-bar-fill {
-  width: 36%;
-  animation: messages-history-loading-indeterminate 1.1s ease-in-out infinite;
-}
-
-.messages-history-loading-percent {
+.messages-history-loading-phases {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--text-dim);
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-fainter);
+  letter-spacing: 0.06em;
 }
 
-@keyframes messages-history-loading-indeterminate {
-  0% {
-    transform: translateX(-120%);
-  }
+.messages-history-loading-phase.is-current {
+  color: var(--text-muted);
+}
+
+@keyframes messages-history-loading-climb {
+  0%,
   100% {
-    transform: translateX(320%);
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, calc(100% - 28px), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .messages-history-loading-shuttle {
+    animation: none;
+    transform: translate3d(0, calc(50% - 14px), 0);
   }
 }
 

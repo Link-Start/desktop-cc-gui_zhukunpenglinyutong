@@ -76,6 +76,11 @@ const chat = {
     "claudeContextCategoryTitle": "分類詳細資訊",
     "claudeContextMcpToolsTitle": "MCP 工具",
     "claudeContextUnavailable": "正在等待 CLI 遙測資料",
+    "dshContextTooltipTitle": "上下文已用",
+    "dshContextUnavailable": "等待佔用回傳",
+    "dshContextSystem": "系統提示詞",
+    "dshContextTools": "工具",
+    "dshContextMessages": "對話訊息",
     "claudeContextFreshness": {
       "live": "即時 Claude CLI 情境用量",
       "restored": "已從歷史記錄還原情境用量",

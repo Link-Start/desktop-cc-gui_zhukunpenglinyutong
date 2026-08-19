@@ -36,7 +36,7 @@ describe("composerEnginePrefsStore", () => {
   });
 
   it("seeds from a persisted record and skips notifying on same reference", () => {
-    const record = { claude: { modelId: "seed", effort: null, accessMode: null, collaborationModeId: null } };
+    const record = { claude: { modelId: "seed", effort: null, accessMode: null, collaborationModeId: null, dshAgentPreset: null } };
     seedComposerEnginePrefs(record);
     expect(getComposerEnginePrefForEngine("claude").modelId).toBe("seed");
     expect(getComposerEnginePrefsSnapshot()).toBe(record);

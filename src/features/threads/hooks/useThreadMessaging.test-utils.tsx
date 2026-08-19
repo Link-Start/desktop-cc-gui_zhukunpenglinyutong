@@ -172,6 +172,7 @@ export function makeThreadMessagingHook(
     forkThreadForWorkspace?: ReturnType<typeof vi.fn>;
     dispatch?: ReturnType<typeof vi.fn>;
     runWithCreateSessionLoading?: ReturnType<typeof vi.fn>;
+    model?: string | null;
     resolveComposerSelection?: () => {
       id?: string | null;
       model: string | null;
@@ -217,7 +218,7 @@ export function makeThreadMessagingHook(
       activeWorkspace: overrides.workspace ?? workspace,
       activeThreadId,
       accessMode: "current",
-      model: null,
+      model: overrides.model ?? null,
       effort: null,
       collaborationMode: null,
       steerEnabled: false,

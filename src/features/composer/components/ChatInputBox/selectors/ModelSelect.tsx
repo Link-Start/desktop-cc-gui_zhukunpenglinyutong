@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckIcon from 'lucide-react/dist/esm/icons/check';
 import ChevronDownIcon from 'lucide-react/dist/esm/icons/chevron-down';
@@ -533,6 +533,8 @@ export const ModelSelect = memo(({
   const [profileOverrides, setProfileOverrides] = useState<
     Partial<Record<ProviderId, string>>
   >({});
+  const profileOverridesRef = useRef(profileOverrides);
+  profileOverridesRef.current = profileOverrides;
 
   // 切会话 / 目标渠道变化时丢弃底栏预览覆盖，避免仍显示上一会话的 DeepSeek 等旧渠道名
   useEffect(() => {
@@ -708,6 +710,7 @@ export const ModelSelect = memo(({
   const getModelLabel = (
     model: ModelInfo,
     providerId?: string | null,
+    options?: { closed?: boolean },
   ): string => {
     if (!providerId || providerId === "claude") {
       const claudeLabel = resolveClaudeCatalogModelLabel(model, modelMapping);
@@ -724,7 +727,7 @@ export const ModelSelect = memo(({
     }
 
     if (providerId === 'dsh') {
-      return formatDshModelDisplayLabel(model);
+      return formatDshModelDisplayLabel(model, { closed: options?.closed === true });
     }
 
     const parentLabel = model.label?.trim() || "";
@@ -763,7 +766,7 @@ export const ModelSelect = memo(({
   const modelResolved = Boolean(currentModel);
   // 未解析到已选模型时：固定占位 loading，禁止用「选择模型」空缺再闪成真名（冷启/切会话 UX）
   const currentModelLabel = modelResolved
-    ? getModelLabel(currentModel!, selectedModelProvider)
+    ? getModelLabel(currentModel!, selectedModelProvider, { closed: true })
     : t('models.loading', { defaultValue: '加载中' });
   const hasConfigActions = Boolean(onAddModel || onRefreshConfig);
 
@@ -800,14 +803,14 @@ export const ModelSelect = memo(({
 
   const handleTargetModelSelect = useCallback(
     (group: PickerModelGroup, model: ModelInfo) => {
-      if (!group.targetProfileId) {
+      if (!onExecutionTargetChange || !group.targetProfileId) {
         return;
       }
       const runtimeModel = resolveRuntimeModel(model);
       if (!runtimeModel) {
         return;
       }
-      onExecutionTargetChange?.(
+      onExecutionTargetChange(
         buildProviderExecutionTarget(
           executionTarget,
           group.providerId,
@@ -879,10 +882,32 @@ export const ModelSelect = memo(({
       if (!profile || profile.id === group.targetProfileId) {
         return;
       }
-      setProfileOverrides((current) => ({
-        ...current,
-        [group.providerId]: profileId,
-      }));
+      const previousOverride = profileOverridesRef.current[group.providerId];
+      let cancelled = false;
+      setProfileOverrides((current) => {
+        if (cancelled) {
+          return current;
+        }
+        return {
+          ...current,
+          [group.providerId]: profileId,
+        };
+      });
+      const rollbackOverride = () => {
+        cancelled = true;
+        setProfileOverrides((current) => {
+          if (current[group.providerId] !== profileId) {
+            return current;
+          }
+          const next = { ...current };
+          if (previousOverride === undefined) {
+            delete next[group.providerId];
+          } else {
+            next[group.providerId] = previousOverride;
+          }
+          return next;
+        });
+      };
 
       void (async () => {
         let profileModels = profile.models;
@@ -911,6 +936,7 @@ export const ModelSelect = memo(({
         }
 
         if (!hasTargetGroups || !onExecutionTargetChange) {
+          rollbackOverride();
           return;
         }
         // Shared / create-session：渠道切换必须立刻写完整 ExecutionTarget。
@@ -931,11 +957,13 @@ export const ModelSelect = memo(({
           : profileModels[0];
         // 无新 catalog 时不得沿用上一引擎/渠道的 model id
         if (!keptModel) {
+          rollbackOverride();
           return;
         }
         const runtimeModel = resolveRuntimeModel(keptModel);
         const catalogEntryId = keptModel.id || runtimeModel || "";
         if (!catalogEntryId && !runtimeModel) {
+          rollbackOverride();
           return;
         }
         onExecutionTargetChange(

@@ -37,6 +37,7 @@ import {
   shouldAcceptReasoningDelta,
 } from "./threadReducerReasoningGuards";
 import { areEquivalentAssistantMessageTexts } from "../assembly/conversationNormalization";
+import { resolveMergedThreadCreatedAt } from "../utils/threadSummarySort";
 import {
   addSummaryBoundary,
   findDuplicateReasoningSnapshotIndex,
@@ -85,6 +86,10 @@ import {
   schedulePersistTurnFinalMetaFromItems,
   scheduleRenameTurnFinalMetaThreadId,
 } from "../utils/turnFinalMetaStorage";
+import {
+  scheduleTombstoneLocalPendingDraftIndexRow,
+  writeRemappedClientSessionIndex,
+} from "../../../services/tauri/sessionIndex";
 import {
   dropLatestLocalReviewStart,
   ensureUniqueReviewId,
@@ -321,6 +326,7 @@ function threadSummaryEqual(left: ThreadSummary, right: ThreadSummary) {
     left.id === right.id &&
     left.name === right.name &&
     left.updatedAt === right.updatedAt &&
+    (left.createdAt ?? null) === (right.createdAt ?? null) &&
     (left.archivedAt ?? null) === (right.archivedAt ?? null) &&
     (left.threadKind ?? null) === (right.threadKind ?? null) &&
     (left.sizeBytes ?? null) === (right.sizeBytes ?? null) &&
@@ -550,6 +556,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (
           (!action.engine || existing.engineSource) &&
           action.name === undefined &&
+          action.dshAgentPreset === undefined &&
           action.parentThreadId === undefined &&
           action.folderId === undefined &&
           action.autoSession === undefined &&
@@ -562,12 +569,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           return state;
         }
         const ensuredName = normalizeEnsureThreadMetadataValue(action.name);
+        const ensuredDshAgentPreset = normalizeEnsureThreadMetadataValue(
+          action.dshAgentPreset,
+        );
         const ensuredParentThreadId = parentThreadIdFromEnsureThreadAction(action);
         const providerBindingPatch = providerBindingFromEnsureThreadAction(action);
         const updated = {
           ...existing,
           engineSource: existing.engineSource ?? action.engine,
           name: ensuredName ?? existing.name,
+          dshAgentPreset: ensuredDshAgentPreset ?? existing.dshAgentPreset,
           parentThreadId:
             ensuredParentThreadId && ensuredParentThreadId !== existing.id
               ? ensuredParentThreadId
@@ -579,6 +590,7 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         if (
           updated.engineSource === existing.engineSource &&
           updated.name === existing.name &&
+          (updated.dshAgentPreset ?? null) === (existing.dshAgentPreset ?? null) &&
           (updated.parentThreadId ?? null) === (existing.parentThreadId ?? null) &&
           updated.folderId === existing.folderId &&
           updated.autoSession === existing.autoSession &&
@@ -653,6 +665,16 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           const oldThreadId = pendingThread.id;
           const newThreadId = action.threadId;
           scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
+          scheduleTombstoneLocalPendingDraftIndexRow(oldThreadId);
+          writeRemappedClientSessionIndex({
+            workspaceId: action.workspaceId,
+            threadId: newThreadId,
+            engine: pendingEngine ?? pendingThread.engineSource,
+            providerProfileId:
+              action.providerProfileId ?? pendingThread.providerProfileId,
+            providerProfileName:
+              action.providerProfileName ?? pendingThread.providerProfileName,
+          });
 
           // Rename thread inline (similar to renameThreadId action)
           const updatedThread = attachReplacedThreadId(
@@ -661,6 +683,9 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
               id: newThreadId,
               name:
                 normalizeEnsureThreadMetadataValue(action.name) ?? pendingThread.name,
+              dshAgentPreset:
+                normalizeEnsureThreadMetadataValue(action.dshAgentPreset) ??
+                pendingThread.dshAgentPreset,
               parentThreadId:
                 parentThreadIdFromEnsureThreadAction(action) ?? pendingThread.parentThreadId,
               ...providerBindingFromEnsureThreadAction(action),
@@ -763,12 +788,21 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         ? "Claude Session"
         : `Agent ${list.length + 1}`;
       const parentThreadId = parentThreadIdFromEnsureThreadAction(action);
+      const createdAt = Date.now();
       const thread: ThreadSummary = {
         id: action.threadId,
         name: normalizeEnsureThreadMetadataValue(action.name) ?? fallbackName,
-        // 新建会话以当前时间戳排序，使其出现在列表顶部而非底部（updatedAt: 0 会被排到最旧）
-        updatedAt: Date.now(),
+        // 新建会话用 createdAt 排到顶部；之后只刷新 updatedAt，避免侧栏跳动。
+        createdAt,
+        updatedAt: createdAt,
         engineSource: action.engine,
+        ...(normalizeEnsureThreadMetadataValue(action.dshAgentPreset)
+          ? {
+              dshAgentPreset: normalizeEnsureThreadMetadataValue(
+                action.dshAgentPreset,
+              ),
+            }
+          : {}),
         folderId: action.folderId ?? null,
         autoSession: action.autoSession ?? null,
         ...(parentThreadId ? { parentThreadId } : {}),
@@ -1326,6 +1360,32 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             }
           : thread,
       );
+      return {
+        ...state,
+        threadsByWorkspace: {
+          ...state.threadsByWorkspace,
+          [action.workspaceId]: next,
+        },
+      };
+    }
+    case "setThreadDshAgentPreset": {
+      const list = state.threadsByWorkspace[action.workspaceId] ?? [];
+      const preset = action.dshAgentPreset?.trim() || null;
+      let changed = false;
+      const next = list.map((thread) => {
+        if (thread.id !== action.threadId) {
+          return thread;
+        }
+        const current = thread.dshAgentPreset?.trim() || null;
+        if (current === preset || (!preset && current)) {
+          return thread;
+        }
+        changed = true;
+        return { ...thread, dshAgentPreset: preset };
+      });
+      if (!changed) {
+        return state;
+      }
       return {
         ...state,
         threadsByWorkspace: {
@@ -2117,6 +2177,17 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
     case "renameThreadId": {
       const { workspaceId, oldThreadId, newThreadId } = action;
       scheduleRenameTurnFinalMetaThreadId(oldThreadId, newThreadId);
+      scheduleTombstoneLocalPendingDraftIndexRow(oldThreadId);
+      const renamedThread = (state.threadsByWorkspace[workspaceId] ?? []).find(
+        (thread) => thread.id === oldThreadId,
+      );
+      writeRemappedClientSessionIndex({
+        workspaceId,
+        threadId: newThreadId,
+        engine: renamedThread?.engineSource,
+        providerProfileId: renamedThread?.providerProfileId,
+        providerProfileName: renamedThread?.providerProfileName,
+      });
       return renameThreadStateIdentity({
         state,
         workspaceId,
@@ -2696,11 +2767,15 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
                 selectedEngine,
                 nativeThreadIds,
                 autoSession,
+                createdAt: resolveMergedThreadCreatedAt(existing, thread),
               },
               existing,
             );
           }
-          return thread;
+          const createdAt = resolveMergedThreadCreatedAt(undefined, thread);
+          return createdAt === thread.createdAt
+            ? thread
+            : { ...thread, createdAt };
         })
         // fix-shared-session-target-race-and-merge T5 后置矫正：
         // 所有 shared: 前缀 id 的条目 threadKind 强制为 "shared"，
@@ -2793,25 +2868,56 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
       locallyAcceptedCodexToPreserve.forEach((thread) => {
         preservedThreadIds.add(thread.id);
       });
-      const mergedVisibleThreads =
+      const continuityThreadsToPreserve = action.unionMembership
+        ? existingThreads.filter((thread) => {
+        const threadId = thread.id;
+        if (
+          !threadId ||
+          newThreadIds.has(threadId) ||
+          preservedThreadIds.has(threadId) ||
+          threadId === activeThreadId
+        ) {
+          return false;
+        }
+        if (
+          hidden[threadId] ||
+          isHiddenAutomaticThread(thread) ||
+          promotedPendingAliases.has(threadId)
+        ) {
+          return false;
+        }
+        if (threadId.includes("-pending-") && !isClaudeForkThreadId(threadId)) {
+          return false;
+        }
+        return true;
+      })
+        : [];
+      continuityThreadsToPreserve.forEach((thread) => {
+        preservedThreadIds.add(thread.id);
+      });
+      const hasPreservedRows =
         provisionalThreadsToPreserve.length > 0 ||
         finalizedCodexToPreserve.length > 0 ||
-        locallyAcceptedCodexToPreserve.length > 0
-          ? activeThreadId && visibleThreads[0]?.id === activeThreadId
-            ? [
+        locallyAcceptedCodexToPreserve.length > 0 ||
+        continuityThreadsToPreserve.length > 0;
+      const mergedVisibleThreads = hasPreservedRows
+        ? activeThreadId && visibleThreads[0]?.id === activeThreadId
+          ? [
               visibleThreads[0],
               ...finalizedCodexToPreserve,
               ...locallyAcceptedCodexToPreserve,
               ...provisionalThreadsToPreserve,
+              ...continuityThreadsToPreserve,
               ...visibleThreads.slice(1),
             ]
-            : [
+          : [
               ...finalizedCodexToPreserve,
               ...locallyAcceptedCodexToPreserve,
               ...provisionalThreadsToPreserve,
+              ...continuityThreadsToPreserve,
               ...visibleThreads,
             ]
-          : visibleThreads;
+        : visibleThreads;
       if (threadSummaryListEqual(existingThreads, mergedVisibleThreads)) {
         return state;
       }
@@ -2883,6 +2989,72 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           [action.workspaceId]: action.cursor,
         },
       };
+    case "setThreadDshTodos": {
+      const previousTokenUsage = state.tokenUsageByThread[action.threadId];
+      const nextUsage: ThreadTokenUsage = previousTokenUsage
+        ? { ...previousTokenUsage, dshTodos: action.todos ?? [] }
+        : {
+            total: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            last: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            modelContextWindow: null,
+            dshTodos: action.todos ?? [],
+          };
+      if (isThreadTokenUsageEqual(previousTokenUsage, nextUsage)) {
+        return state;
+      }
+      return {
+        ...state,
+        tokenUsageByThread: {
+          ...state.tokenUsageByThread,
+          [action.threadId]: nextUsage,
+        },
+      };
+    }
+    case "patchThreadDshContextUsage": {
+      const previousTokenUsage = state.tokenUsageByThread[action.threadId];
+      const nextUsage: ThreadTokenUsage = previousTokenUsage
+        ? { ...previousTokenUsage, ...action.patch }
+        : {
+            total: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            last: {
+              totalTokens: 0,
+              inputTokens: 0,
+              cachedInputTokens: 0,
+              outputTokens: 0,
+              reasoningOutputTokens: 0,
+            },
+            modelContextWindow: action.patch.modelContextWindow ?? null,
+            ...action.patch,
+          };
+      if (isThreadTokenUsageEqual(previousTokenUsage, nextUsage)) {
+        return state;
+      }
+      return {
+        ...state,
+        tokenUsageByThread: {
+          ...state.tokenUsageByThread,
+          [action.threadId]: nextUsage,
+        },
+      };
+    }
     case "setThreadSessionStats": {
       const previousTokenUsage = state.tokenUsageByThread[action.threadId];
       const nextUsage: ThreadTokenUsage = previousTokenUsage
@@ -2921,6 +3093,10 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
         state.threadStatusById[action.threadId],
       );
       const previousTokenUsage = state.tokenUsageByThread[action.threadId] ?? null;
+      const preserveDshOccupancy =
+        previousTokenUsage?.contextUsageSource === "dsh-context-pressure" &&
+        action.tokenUsage.contextUsageSource !== "dsh-context-pressure" &&
+        action.tokenUsage.contextUsedTokens == null;
       const nextTokenUsage = {
         ...action.tokenUsage,
         sessionStats:
@@ -2932,6 +3108,52 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
           previousTokenUsage?.cacheWriteInputTokens != null
             ? previousTokenUsage.cacheWriteInputTokens
             : action.tokenUsage.cacheWriteInputTokens,
+        dshTodos:
+          action.tokenUsage.dshTodos == null && previousTokenUsage?.dshTodos != null
+            ? previousTokenUsage.dshTodos
+            : action.tokenUsage.dshTodos,
+        contextUsedTokens: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsedTokens
+          : action.tokenUsage.contextUsedTokens == null &&
+              previousTokenUsage?.contextUsedTokens != null
+            ? previousTokenUsage.contextUsedTokens
+            : action.tokenUsage.contextUsedTokens,
+        modelContextWindow: preserveDshOccupancy
+          ? previousTokenUsage?.modelContextWindow ?? null
+          : action.tokenUsage.modelContextWindow == null &&
+              previousTokenUsage?.modelContextWindow != null
+            ? previousTokenUsage.modelContextWindow
+            : action.tokenUsage.modelContextWindow,
+        contextUsedPercent: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsedPercent
+          : action.tokenUsage.contextUsedPercent == null &&
+              previousTokenUsage?.contextUsedPercent != null
+            ? previousTokenUsage.contextUsedPercent
+            : action.tokenUsage.contextUsedPercent,
+        contextRemainingPercent: preserveDshOccupancy
+          ? previousTokenUsage?.contextRemainingPercent
+          : action.tokenUsage.contextRemainingPercent == null &&
+              previousTokenUsage?.contextRemainingPercent != null
+            ? previousTokenUsage.contextRemainingPercent
+            : action.tokenUsage.contextRemainingPercent,
+        contextCategoryUsages: preserveDshOccupancy
+          ? previousTokenUsage?.contextCategoryUsages
+          : action.tokenUsage.contextCategoryUsages == null &&
+              previousTokenUsage?.contextCategoryUsages != null
+            ? previousTokenUsage.contextCategoryUsages
+            : action.tokenUsage.contextCategoryUsages,
+        contextUsageSource: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsageSource
+          : action.tokenUsage.contextUsageSource == null &&
+              previousTokenUsage?.contextUsageSource
+            ? previousTokenUsage.contextUsageSource
+            : action.tokenUsage.contextUsageSource,
+        contextUsageFreshness: preserveDshOccupancy
+          ? previousTokenUsage?.contextUsageFreshness
+          : action.tokenUsage.contextUsageFreshness == null &&
+              previousTokenUsage?.contextUsageFreshness
+            ? previousTokenUsage.contextUsageFreshness
+            : action.tokenUsage.contextUsageFreshness,
       };
       const usageSnapshotChanged = !isThreadTokenUsageEqual(
         previousTokenUsage,

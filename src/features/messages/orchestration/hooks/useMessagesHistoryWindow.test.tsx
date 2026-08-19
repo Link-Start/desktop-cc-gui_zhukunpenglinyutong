@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { createRef } from "react";
 import { describe, expect, it } from "vitest";
 import type { ConversationItem } from "../../../../types";
-import { useMessagesHistoryPresentationWindow } from "./useMessagesHistoryWindow";
+import { OLDER_HISTORY_REVEAL_PAGE_SIZE } from "../../../threads/utils/dispatchThreadItemsProgressively";
+import {
+  useMessagesHistoryPresentationWindow,
+  useMessagesHistoryWindow,
+} from "./useMessagesHistoryWindow";
 
 const readableAssistantItem: ConversationItem = {
   id: "assistant-readable",
@@ -63,5 +67,74 @@ describe("useMessagesHistoryPresentationWindow", () => {
 
     expect(result.current.shouldUseReadableWindowRecovery).toBe(false);
     expect(result.current.presentationRenderedItems).toEqual([]);
+  });
+});
+
+describe("useMessagesHistoryWindow", () => {
+  it("expands the presentation reveal budget by one viewport page", () => {
+    const { result } = renderHook(() =>
+      useMessagesHistoryWindow({ scopeKey: "ws\u0000thread" }),
+    );
+
+    act(() => {
+      result.current.revealNextHistoryPage(OLDER_HISTORY_REVEAL_PAGE_SIZE);
+    });
+
+    expect(result.current.revealedHistoryItemCount).toBe(
+      OLDER_HISTORY_REVEAL_PAGE_SIZE,
+    );
+
+    act(() => {
+      result.current.revealNextHistoryPage(OLDER_HISTORY_REVEAL_PAGE_SIZE);
+    });
+
+    expect(result.current.revealedHistoryItemCount).toBe(
+      OLDER_HISTORY_REVEAL_PAGE_SIZE * 2,
+    );
+  });
+
+  it("opens the full presentation window on a one-shot reveal", () => {
+    const { result } = renderHook(() =>
+      useMessagesHistoryWindow({ scopeKey: "ws\u0000thread" }),
+    );
+
+    act(() => {
+      result.current.revealAllHistoryItems("manual");
+    });
+
+    expect(result.current.showAllHistoryItems).toBe(true);
+    expect(result.current.historyExpansionMode).toBe("manual");
+  });
+
+  it("keeps the reveal budget when only the first store item changes", () => {
+    const { result, rerender } = renderHook(
+      ({ scopeKey }) => useMessagesHistoryWindow({ scopeKey }),
+      { initialProps: { scopeKey: "ws\u0000thread" } },
+    );
+
+    act(() => {
+      result.current.revealNextHistoryPage(OLDER_HISTORY_REVEAL_PAGE_SIZE);
+    });
+
+    rerender({ scopeKey: "ws\u0000thread" });
+
+    expect(result.current.revealedHistoryItemCount).toBe(
+      OLDER_HISTORY_REVEAL_PAGE_SIZE,
+    );
+  });
+
+  it("resets the reveal budget when the conversation scope changes", () => {
+    const { result, rerender } = renderHook(
+      ({ scopeKey }) => useMessagesHistoryWindow({ scopeKey }),
+      { initialProps: { scopeKey: "ws\u0000thread-a" } },
+    );
+
+    act(() => {
+      result.current.revealNextHistoryPage(OLDER_HISTORY_REVEAL_PAGE_SIZE);
+    });
+
+    rerender({ scopeKey: "ws\u0000thread-b" });
+
+    expect(result.current.revealedHistoryItemCount).toBe(0);
   });
 });

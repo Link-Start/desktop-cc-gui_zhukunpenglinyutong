@@ -307,6 +307,8 @@ const git = {
     "historyPushDialogPushTags": "Enviar tags",
     "historyPushDialogRunHooks": "Executar hooks do Git",
     "historyPushDialogForceWithLease": "Force with lease",
+    "historyPushDialogRecentLabel": "Pushes recentes",
+    "historyPushDialogRecentGerrit": "Gerrit",
     "historyCreatePr": "PR",
     "historyCreatePrDialogTitle": "Criar Pull Request",
     "historyCreatePrDialogSubtitle": "Confirme os parâmetros e execute a verificação prévia, o push, a criação do PR e o comentário de aprovação opcional.",

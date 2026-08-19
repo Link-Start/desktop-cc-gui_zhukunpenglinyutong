@@ -1509,6 +1509,8 @@ pub(crate) struct WorkspaceWallpaperSettings {
     pub(crate) custom_image_path: Option<String>,
     #[serde(default = "default_workspace_wallpaper_fluid_preset")]
     pub(crate) fluid_preset: String,
+    #[serde(default = "default_workspace_wallpaper_fluid_motion")]
+    pub(crate) fluid_motion: String,
     #[serde(default = "default_workspace_wallpaper_veil_opacity")]
     pub(crate) veil_opacity: u8,
 }
@@ -1521,6 +1523,10 @@ fn default_workspace_wallpaper_fluid_preset() -> String {
     "mist".to_string()
 }
 
+fn default_workspace_wallpaper_fluid_motion() -> String {
+    "drift".to_string()
+}
+
 fn default_workspace_wallpaper_veil_opacity() -> u8 {
     12
 }
@@ -1530,6 +1536,7 @@ fn default_workspace_wallpaper() -> WorkspaceWallpaperSettings {
         mode: default_workspace_wallpaper_mode(),
         custom_image_path: None,
         fluid_preset: default_workspace_wallpaper_fluid_preset(),
+        fluid_motion: default_workspace_wallpaper_fluid_motion(),
         veil_opacity: default_workspace_wallpaper_veil_opacity(),
     }
 }
@@ -2300,6 +2307,38 @@ mod tests {
         };
         let modified_json = serde_json::to_value(modified).expect("serialize modified status");
         assert!(modified_json.get("oldPath").is_none());
+    }
+
+    #[test]
+    fn workspace_wallpaper_round_trips_fluid_motion() {
+        let raw = r#"{
+            "workspaceWallpaper": {
+                "mode": "fluid",
+                "customImagePath": null,
+                "fluidPreset": "ash",
+                "fluidMotion": "tornado",
+                "veilOpacity": 20
+            }
+        }"#;
+        let settings: AppSettings = serde_json::from_str(raw).expect("settings deserialize");
+        assert_eq!(settings.workspace_wallpaper.fluid_motion, "tornado");
+        assert_eq!(settings.workspace_wallpaper.fluid_preset, "ash");
+        assert_eq!(settings.workspace_wallpaper.veil_opacity, 20);
+
+        let echoed = serde_json::to_value(&settings).expect("serialize");
+        assert_eq!(echoed["workspaceWallpaper"]["fluidMotion"], "tornado");
+        assert_eq!(echoed["workspaceWallpaper"]["fluidPreset"], "ash");
+
+        let legacy = r#"{
+            "workspaceWallpaper": {
+                "mode": "fluid",
+                "fluidPreset": "ash"
+            }
+        }"#;
+        let legacy_settings: AppSettings =
+            serde_json::from_str(legacy).expect("legacy deserialize");
+        assert_eq!(legacy_settings.workspace_wallpaper.fluid_motion, "drift");
+        assert_eq!(legacy_settings.workspace_wallpaper.fluid_preset, "ash");
     }
 
     #[test]

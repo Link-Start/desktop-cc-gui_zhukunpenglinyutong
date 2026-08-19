@@ -519,6 +519,21 @@
   margin-top: 14px;
 }
 
+/* Global card must share dense width, but MUST NOT use .vendor-tab-content
+ * (min-height: 100% would swallow the engine detail below). */
+.vendor-global-settings {
+  max-width: 640px;
+  min-width: 0;
+}
+
+.vendor-global-settings > .vendor-settings-section {
+  margin-top: 0;
+}
+
+.vendor-global-settings + .vendor-tab-content {
+  margin-top: 14px;
+}
+
 /* Provider list title matches the engine section label weight. */
 .vendor-tab-content-dense .vendor-list-title {
   font-size: 14px;

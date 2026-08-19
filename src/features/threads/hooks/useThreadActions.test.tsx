@@ -284,6 +284,40 @@ describe("useThreadActions", () => {
     );
   });
 
+  it("keeps provisional Claude fork threads local without calling a history backend", async () => {
+    const onDebug = vi.fn();
+    const { result, loadedThreadsRef } = renderActions({
+      useUnifiedHistoryLoader: true,
+      onDebug,
+    });
+
+    await act(async () => {
+      await result.current.resumeThreadForWorkspace(
+        "ws-1",
+        "claude-fork:parent-session:local-1",
+      );
+    });
+
+    expect(resumeThread).not.toHaveBeenCalled();
+    expect(loadCodexSession).not.toHaveBeenCalled();
+    expect(loadedThreadsRef.current["claude-fork:parent-session:local-1"]).toBe(
+      true,
+    );
+    expect(onDebug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/resume skipped",
+        payload: expect.objectContaining({
+          reason: "provisional-claude-fork",
+        }),
+      }),
+    );
+    expect(onDebug).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "thread/history readable surface",
+      }),
+    );
+  });
+
   it("hydrates unified codex history through assembler before dispatching thread items", async () => {
     vi.mocked(resumeThread).mockResolvedValue({
       result: {
@@ -2408,7 +2442,7 @@ describe("useThreadActions", () => {
         scanQuality: "preview",
       },
       cursor: null,
-      limit: 5,
+      limit: 12,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
@@ -2530,7 +2564,7 @@ describe("useThreadActions", () => {
       );
     });
 
-    expect(listClaudeSessions).toHaveBeenCalledWith("/tmp/codex", 5);
+    expect(listClaudeSessions).toHaveBeenCalledWith("/tmp/codex", 12);
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {
         id: "claude:claude-visible-200",
@@ -2612,7 +2646,7 @@ describe("useThreadActions", () => {
         scanQuality: "preview",
       },
       cursor: null,
-      limit: 5,
+      limit: 12,
     });
     expectSetThreadsDispatched(dispatch, "ws-1", [
       {

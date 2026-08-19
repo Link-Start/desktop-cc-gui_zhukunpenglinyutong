@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isWindowsPlatform } from "../../../utils/platform";
 import {
   isThemeMutationAttribute,
   readDocumentThemeAppearance,
@@ -12,46 +11,65 @@ import {
   type FluidShaderProfile,
 } from "../utils/fluidShader";
 import {
+  DEFAULT_WORKSPACE_FLUID_MOTION,
   DEFAULT_WORKSPACE_FLUID_PRESET,
-  fluidToneColors,
+  fluidPresetToneColors,
+  resolveWorkspaceFluidMotion,
   resolveWorkspaceFluidPreset,
+  type WorkspaceFluidMotionId,
   type WorkspaceFluidPresetId,
 } from "../utils/fluidTones";
 
 function buildFluidParams(
   dark: boolean,
   presetId: WorkspaceFluidPresetId,
+  motionId: WorkspaceFluidMotionId,
+  speed: number,
 ): FluidParams {
   const preset = resolveWorkspaceFluidPreset(presetId);
+  const motion = resolveWorkspaceFluidMotion(motionId);
   return {
     ...SITE_FLUID_PARAMS,
-    ...fluidToneColors(dark, preset.hue, preset.depth),
+    ...fluidPresetToneColors(dark, preset),
+    motionMode: motion.mode,
+    speed,
   };
 }
 
 export function FirstRunFluidBackdrop({
   paused = false,
   presetId = DEFAULT_WORKSPACE_FLUID_PRESET,
+  motionId = DEFAULT_WORKSPACE_FLUID_MOTION,
+  speed = SITE_FLUID_PARAMS.speed,
   profile = "full",
+  forceAnimate = false,
+  deferChase = false,
+  onAttachChange,
 }: {
   paused?: boolean;
   presetId?: WorkspaceFluidPresetId;
+  motionId?: WorkspaceFluidMotionId;
+  speed?: number;
   profile?: FluidShaderProfile;
+  forceAnimate?: boolean;
+  deferChase?: boolean;
+  onAttachChange?: (attached: boolean) => void;
 } = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const handleRef = useRef<FluidShaderHandle | null>(null);
-  const solidOnly = isWindowsPlatform();
+  const onAttachChangeRef = useRef(onAttachChange);
+  onAttachChangeRef.current = onAttachChange;
+  const [attached, setAttached] = useState(false);
   const [dark, setDark] = useState(
     () => readDocumentThemeAppearance() === "dark",
   );
   const params = useMemo(
-    () => buildFluidParams(dark, presetId),
-    [dark, presetId],
+    () => buildFluidParams(dark, presetId, motionId, speed),
+    [dark, presetId, motionId, speed],
   );
 
   useEffect(() => {
     if (
-      solidOnly ||
       typeof MutationObserver === "undefined" ||
       typeof document === "undefined"
     ) {
@@ -70,7 +88,7 @@ export function FirstRunFluidBackdrop({
     observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
     sync();
     return () => observer.disconnect();
-  }, [solidOnly]);
+  }, []);
 
   // Params changes (preset / light-dark flip) are pushed through setParams so
   // the WebGL context survives; only a profile switch re-attaches.
@@ -78,24 +96,28 @@ export function FirstRunFluidBackdrop({
   paramsRef.current = params;
 
   useEffect(() => {
-    if (solidOnly) {
-      return undefined;
-    }
     const canvas = canvasRef.current;
     if (!canvas) {
       return undefined;
     }
-    const handle = attachFluidShader(canvas, paramsRef.current, profile);
+    const handle = attachFluidShader(canvas, paramsRef.current, profile, {
+      forceAnimate,
+      deferChase,
+    });
     handleRef.current = handle;
+    setAttached(handle.attached);
+    onAttachChangeRef.current?.(handle.attached);
     if (paused) {
       handle.pause();
     }
     return () => {
       handleRef.current = null;
+      setAttached(false);
+      onAttachChangeRef.current?.(false);
       handle.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, solidOnly]);
+  }, [profile, forceAnimate, deferChase]);
 
   useEffect(() => {
     handleRef.current?.setParams(params);
@@ -119,11 +141,11 @@ export function FirstRunFluidBackdrop({
       aria-hidden
       data-testid="first-run-fluid"
       data-scheme={dark ? "dark" : "light"}
-      data-solid={solidOnly ? "true" : undefined}
+      data-motion={motionId}
+      data-profile={profile}
+      data-attached={attached ? "true" : "false"}
     >
-      {solidOnly ? null : (
-        <canvas ref={canvasRef} className="first-run-fluid-canvas" />
-      )}
+      <canvas ref={canvasRef} className="first-run-fluid-canvas" />
     </div>
   );
 }

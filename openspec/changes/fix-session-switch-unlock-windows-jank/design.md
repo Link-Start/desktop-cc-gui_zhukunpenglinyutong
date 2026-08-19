@@ -16,7 +16,7 @@ Review 后仍卡的 click-path：
 **Goals**
 
 1. identity 帧只提交 workspace + thread。
-2. 空 surface 不在 select 帧拉幕布；never-started 不 resume。
+2. 未加载且可能有历史的 Native / Shared 在 select 帧拉幕布；never-started 不 resume、不拉幕布。
 3. 切会话不触发 thread list disk/full-catalog。
 4. recovery click 先 paint；成功空 V0 可交互。
 
@@ -53,8 +53,8 @@ scheduleChrome(default startTransition)
 | loaded 且未到 20s | skip |
 | loaded 且 ≥20s | refresh |
 | !loaded 且空 surface 且 20s 内已 resume | skip empty-cooldown |
-| !loaded 且空 surface 首次（未知是否有历史） | resume，无幕布 |
-| !loaded 非空 / 有历史 hint | resume，无幕布 |
+| !loaded 且空 surface 首次（未知是否有历史） | resume，Native/Shared 拉幕布 |
+| !loaded 非空 / 有历史 hint | resume，Native/Shared 拉幕布 |
 
 **known never-started** 仅当：
 
@@ -68,7 +68,7 @@ scheduleChrome(default startTransition)
 - `extractThreadSizeBytes` 保留显式 0，缺失字段仍是 `undefined`（禁止 `asNumber` 把缺失变成 0）
 - `mergeSessionDisplaySummary` 用 `next.sizeBytes ?? previous.sizeBytes`，避免后到的 undefined 抹掉 Index 的 0
 
-select 路径 **禁止** `setThreadHistoryLoading(true)`。真正的 Claude blank curtain 仍走 `scheduleClaudeBlankCurtainRecovery`。
+select 路径对未加载 Native / Shared **必须** `setThreadHistoryLoading(true)`。Native 含 Claude / Codex / DSH（`dsh:*` 走 `loadDshSession`）。known never-started / loaded / failed 不拉幕布。DSH 只开布尔幕布，不种 Shared prepare 进度。真正的 Claude blank curtain 仍走 `scheduleClaudeBlankCurtainRecovery`。
 
 删除已死的 `shouldForceThreadResumeOnCallback`（failed 已在决策层 skip）。
 
@@ -92,7 +92,7 @@ select 路径 **禁止** `setThreadHistoryLoading(true)`。真正的 Claude blan
 
 | 风险 | 缓解 |
 |------|------|
-| Index 行缺 sizeBytes 的真实会话 | 当未知，后台 resume 一次，无幕布 |
+| Index 行缺 sizeBytes 的真实会话 | 当未知，后台 resume 一次，并显示 select 幕布 |
 | 空会话 20s 内缺迟到 transcript | cooldown 后再 resume；failed 走显式 refresh |
 | startTransition 推迟 engine 一帧 | 选中态先出，符合 Win hit-test |
 

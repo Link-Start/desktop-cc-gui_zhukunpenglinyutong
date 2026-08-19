@@ -6,6 +6,8 @@ import {
   buildSharedSidebarHiddenParentKeys,
   isSharedSidebarHiddenPup,
 } from "../../shared-session/runtime/sharedSessionSummaries";
+import { lastVerifiedSharedHide } from "../../threads/hooks/sharedNativeVisibility";
+import { compareThreadSummariesByCreatedAtDesc } from "../../threads/utils/threadSummarySort";
 
 type ThreadRow = {
   thread: ThreadSummary;
@@ -35,7 +37,10 @@ export function useThreadRows(threadParentById: Record<string, string>) {
       visibleThreadRootCount = DEFAULT_VISIBLE_THREAD_ROOT_COUNT,
     ): ThreadRowResult => {
       const threadIds = new Set(threads.map((thread) => thread.id));
-      const sharedHiddenParentKeys = buildSharedSidebarHiddenParentKeys(threads);
+      const sharedHiddenParentKeys = buildSharedSidebarHiddenParentKeys(
+        threads,
+        lastVerifiedSharedHide(workspaceId),
+      );
       const childrenByParent = new Map<string, ThreadSummary[]>();
       const roots: ThreadSummary[] = [];
 
@@ -54,34 +59,10 @@ export function useThreadRows(threadParentById: Record<string, string>) {
         }
       });
 
-      const subtreeUpdatedAtCache = new Map<string, number>();
-      const getSubtreeUpdatedAt = (thread: ThreadSummary): number => {
-        const cached = subtreeUpdatedAtCache.get(thread.id);
-        if (cached != null) {
-          return cached;
-        }
-        const children = childrenByParent.get(thread.id) ?? [];
-        const updatedAt = children.reduce(
-          (maxUpdatedAt, child) =>
-            Math.max(maxUpdatedAt, getSubtreeUpdatedAt(child)),
-          Number.isFinite(thread.updatedAt) ? thread.updatedAt : 0,
-        );
-        subtreeUpdatedAtCache.set(thread.id, updatedAt);
-        return updatedAt;
-      };
-      const compareThreadRows = (left: ThreadSummary, right: ThreadSummary) => {
-        const leftUpdatedAt = getSubtreeUpdatedAt(left);
-        const rightUpdatedAt = getSubtreeUpdatedAt(right);
-        if (rightUpdatedAt !== leftUpdatedAt) {
-          return rightUpdatedAt - leftUpdatedAt;
-        }
-        return left.id.localeCompare(right.id);
-      };
-
       childrenByParent.forEach((children) => {
-        children.sort(compareThreadRows);
+        children.sort(compareThreadSummariesByCreatedAtDesc);
       });
-      roots.sort(compareThreadRows);
+      roots.sort(compareThreadSummariesByCreatedAtDesc);
 
       const pinnedRoots: ThreadSummary[] = [];
       const unpinnedRoots: ThreadSummary[] = [];
@@ -101,7 +82,7 @@ export function useThreadRows(threadParentById: Record<string, string>) {
         if (aTime !== bTime) {
           return aTime - bTime;
         }
-        return compareThreadRows(a, b);
+        return compareThreadSummariesByCreatedAtDesc(a, b);
       });
 
       const visibleRootCount = isExpanded

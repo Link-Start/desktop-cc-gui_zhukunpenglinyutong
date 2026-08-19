@@ -1152,6 +1152,36 @@ export function VendorSettingsPanel({
             {t("settings.backToCliList", { defaultValue: "返回 CLI 列表" })}
           </span>
         </button>
+        <div className="vendor-global-settings">
+          <VendorSettingsSection
+            label={t("settings.vendor.globalSettings", {
+              defaultValue: "Global settings",
+            })}
+          >
+            <div className="vendor-group-card">
+              <div className="settings-toggle-row vendor-group-row">
+                <div className="vendor-group-row-copy">
+                  <span className="vendor-group-row-title">
+                    {t("settings.sidebarProviderLabels")}
+                    <SettingsRowHelp>
+                      {t("settings.sidebarProviderLabelsDesc")}
+                    </SettingsRowHelp>
+                  </span>
+                </div>
+                <Switch
+                  checked={appSettings.showSidebarProviderLabels === true}
+                  aria-label={t("settings.sidebarProviderLabels")}
+                  onCheckedChange={(checked) =>
+                    void onUpdateAppSettings({
+                      ...appSettings,
+                      showSidebarProviderLabels: checked,
+                    })
+                  }
+                />
+              </div>
+            </div>
+          </VendorSettingsSection>
+        </div>
         {activeCli === "claude" ? (
           <CliLifecycleProvider key="claude" engine="claude" active>
             <div className="vendor-tab-content vendor-tab-content-dense">
@@ -1363,27 +1393,6 @@ export function VendorSettingsPanel({
                       {t("settings.backgroundTerminalOfficialWriteDisabled")}
                     </button>
                   </div>
-                </div>
-
-                <div className="settings-toggle-row vendor-group-row">
-                  <div className="vendor-group-row-copy">
-                    <span className="vendor-group-row-title">
-                      {t("settings.sidebarProviderLabels")}
-                      <SettingsRowHelp>
-                        {t("settings.sidebarProviderLabelsDesc")}
-                      </SettingsRowHelp>
-                    </span>
-                  </div>
-                  <Switch
-                    checked={appSettings.showSidebarProviderLabels === true}
-                    aria-label={t("settings.sidebarProviderLabels")}
-                    onCheckedChange={(checked) =>
-                      void onUpdateAppSettings({
-                        ...appSettings,
-                        showSidebarProviderLabels: checked,
-                      })
-                    }
-                  />
                 </div>
               </div>
             </VendorSettingsSection>

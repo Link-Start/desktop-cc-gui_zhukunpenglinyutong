@@ -53,6 +53,8 @@ vi.mock("../../../services/tauri", () => ({
   archiveThread: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   deleteWorkspaceSessions: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
   writeClientCreatedSessionIndex: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),

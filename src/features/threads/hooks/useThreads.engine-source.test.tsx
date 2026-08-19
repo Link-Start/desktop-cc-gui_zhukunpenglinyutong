@@ -11,6 +11,8 @@ import {
   listWorkspaceSessions,
   noteWebServiceReconnected,
   resumeThread,
+  listSessionIndexForWorkspace,
+  tombstoneSessionIndexRows,
 } from "../../../services/tauri";
 import type { useAppServerEvents } from "../../app/hooks/useAppServerEvents";
 import {
@@ -90,6 +92,8 @@ vi.mock("../../../services/tauri", () => ({
   listGrokSessions: vi.fn(),
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
+  listSessionIndexForWorkspace: vi.fn(),
   noteWebServiceReconnected: vi.fn(async () => ({
     rows: [],
     summary: {},
@@ -100,6 +104,7 @@ vi.mock("../../../services/tauri", () => ({
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
   deleteWorkspaceSessions: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
   interruptTurn: vi.fn(),
@@ -146,6 +151,18 @@ describe("useThreads engine source", () => {
     handlers = null;
     delete window.__MOSSX_WEB_SERVICE__;
     vi.clearAllMocks();
+    vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(0);
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
     vi.mocked(deleteWorkspaceSessions).mockImplementation(
       async (_workspaceId: string, sessionIds: string[]) => ({
         results: sessionIds.map((sessionId) => ({
@@ -548,6 +565,64 @@ describe("useThreads engine source", () => {
       ),
     ).toBeDefined();
     expect(result.current.activeThreadId).toBe("opencode:invalid-session");
+  });
+
+  it("removes ghost sidebar rows when delete cannot resolve workspace ownership", async () => {
+    vi.mocked(tombstoneSessionIndexRows).mockResolvedValue(1);
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValue({
+      results: [
+        {
+          sessionId: "claude:hello-ghost",
+          ok: false,
+          archivedAt: null,
+          error: "session does not belong to target workspace",
+          code: "OWNER_WORKSPACE_UNRESOLVED",
+          deletedFromDisk: false,
+          metadataCleaned: false,
+        },
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useThreads({
+        activeWorkspace: workspace,
+        activeEngine: "claude",
+        onWorkspaceConnected: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      handlers?.onThreadStarted?.("ws-1", {
+        id: "claude:hello-ghost",
+        preview: "你好",
+        updatedAt: 1_730_000_000_000,
+      });
+      result.current.setActiveThreadId("claude:hello-ghost");
+    });
+
+    let output: Awaited<ReturnType<typeof result.current.removeThread>> | null = null;
+    await act(async () => {
+      output = await result.current.removeThread("ws-1", "claude:hello-ghost");
+    });
+
+    expect(output).toEqual({
+      threadId: "claude:hello-ghost",
+      success: true,
+      code: null,
+      message: null,
+    });
+    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith([
+      "claude:hello-ghost",
+    ]);
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "claude:hello-ghost",
+    ]);
+    expect(
+      result.current.threadsByWorkspace["ws-1"]?.find(
+        (thread) => thread.id === "claude:hello-ghost",
+      ),
+    ).toBeUndefined();
+    expect(result.current.activeThreadId).not.toBe("claude:hello-ghost");
   });
 
   it("keeps claude sidebar entries when delete fails with a retryable error", async () => {

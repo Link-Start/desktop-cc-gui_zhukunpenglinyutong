@@ -253,19 +253,79 @@ export function resolveNativeSessionIdForSend(input: {
   return null;
 }
 
+/** mossx managed catalog prefix. DSH host has no adapter for this provider. */
+const DSH_RESERVED_MOSSX_PROVIDERS = new Set(["ccgui"]);
+
+export function isReservedMossxDshProvider(provider: string): boolean {
+  return DSH_RESERVED_MOSSX_PROVIDERS.has(provider.trim().toLowerCase());
+}
+
+/**
+ * Parse a DSH catalog id `provider/model`. First slash is the provider
+ * boundary so model ids such as `ovh/Qwen2.5` stay intact.
+ */
+export function splitDshCatalogSelection(
+  catalogOrModel: string | null | undefined,
+): { provider: string; model: string } | null {
+  const trimmed = catalogOrModel?.trim() || "";
+  if (!trimmed) {
+    return null;
+  }
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === trimmed.length - 1) {
+    return null;
+  }
+  const provider = trimmed.slice(0, slashIndex).trim();
+  const model = trimmed.slice(slashIndex + 1).trim();
+  if (!provider || !model) {
+    return null;
+  }
+  return { provider, model };
+}
+
+export function isTrustedDshCatalogId(
+  catalogOrModel: string | null | undefined,
+): boolean {
+  const split = splitDshCatalogSelection(catalogOrModel);
+  if (!split) {
+    return false;
+  }
+  return !isReservedMossxDshProvider(split.provider);
+}
+
 export function resolveDshModelForSend(input: {
   catalogId?: string | null;
   runtimeModel?: string | null;
+  fallbackCatalogId?: string | null;
 }): string | null {
-  const catalogId = input.catalogId?.trim() || "";
-  if (catalogId.includes("/")) {
-    return catalogId;
+  for (const candidate of [
+    input.catalogId,
+    input.runtimeModel,
+    input.fallbackCatalogId,
+  ]) {
+    const trimmed = candidate?.trim() || "";
+    if (isTrustedDshCatalogId(trimmed)) {
+      return trimmed;
+    }
   }
-  const runtimeModel = input.runtimeModel?.trim() || "";
-  if (runtimeModel.includes("/")) {
-    return runtimeModel;
+  return null;
+}
+
+/**
+ * Global `composerEnginePrefs.dsh.modelId` is engine-wide, not thread-local.
+ * Only first-send pending threads may fall back to it. An existing `dsh:`
+ * session must omit the model so `selectModel` does not retarget another
+ * thread's last DSH pick.
+ */
+export function resolveDshSendFallbackCatalogId(
+  threadId: string,
+  prefCatalogId?: string | null,
+): string | null {
+  if (!threadId.startsWith("dsh-pending-")) {
+    return null;
   }
-  return catalogId || runtimeModel || null;
+  const trimmed = prefCatalogId?.trim() || "";
+  return trimmed || null;
 }
 
 type GeminiSessionSummary = {
@@ -346,13 +406,81 @@ export function pickLikelyPiSessionId(
   return pickLikelyGeminiSessionId(payload, minUpdatedAt);
 }
 
+export function collectOccupiedGrokSessionIds(input: {
+  itemsByThread: Record<string, readonly unknown[] | undefined>;
+  pendingSessionIdByThread: ReadonlyMap<string, string>;
+  currentThreadId: string;
+}): {
+  occupiedSessionIds: Set<string>;
+  hasOtherPendingWithItems: boolean;
+} {
+  const occupiedSessionIds = new Set<string>();
+  let hasOtherPendingWithItems = false;
+
+  for (const [threadId, items] of Object.entries(input.itemsByThread)) {
+    if (threadId === input.currentThreadId) {
+      continue;
+    }
+    if (threadId.startsWith("grok:")) {
+      const sessionId = threadId.slice("grok:".length).trim();
+      if (sessionId) {
+        occupiedSessionIds.add(sessionId);
+      }
+    }
+    if (
+      threadId.startsWith("grok-pending-") &&
+      Array.isArray(items) &&
+      items.length > 0
+    ) {
+      hasOtherPendingWithItems = true;
+    }
+  }
+
+  for (const [threadId, sessionId] of input.pendingSessionIdByThread) {
+    if (threadId === input.currentThreadId) {
+      continue;
+    }
+    const normalized = sessionId.trim();
+    if (normalized) {
+      occupiedSessionIds.add(normalized);
+    }
+  }
+
+  return { occupiedSessionIds, hasOtherPendingWithItems };
+}
+
+function filterUnoccupiedGrokSessionPayload(
+  payload: unknown,
+  occupiedSessionIds: ReadonlySet<string>,
+): unknown {
+  const nestedSessions =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>).sessions
+      : null;
+  const entries = Array.isArray(payload)
+    ? payload
+    : Array.isArray(nestedSessions)
+      ? nestedSessions
+      : [];
+  return entries.filter((entry) => {
+    const summary = normalizeGeminiSessionSummary(entry);
+    return summary !== null && !occupiedSessionIds.has(summary.sessionId);
+  });
+}
+
 export function pickLikelyGrokSessionId(
   payload: unknown,
   minUpdatedAt: number,
+  occupiedSessionIds?: ReadonlySet<string>,
 ): string | null {
   // Grok session summaries share the Gemini summary shape, so the same
-  // single-candidate safety rule applies.
-  return pickLikelyGeminiSessionId(payload, minUpdatedAt);
+  // single-candidate safety rule applies. Occupied ids belong to another
+  // mossx thread and must not be rebound onto a fresh pending tab.
+  const filteredPayload =
+    occupiedSessionIds && occupiedSessionIds.size > 0
+      ? filterUnoccupiedGrokSessionPayload(payload, occupiedSessionIds)
+      : payload;
+  return pickLikelyGeminiSessionId(filteredPayload, minUpdatedAt);
 }
 
 export function resolveRecoverableCodexFirstPacketTimeout(

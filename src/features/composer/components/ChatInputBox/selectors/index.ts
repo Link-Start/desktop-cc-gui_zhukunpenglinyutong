@@ -7,3 +7,5 @@ export { buildAccountUsageSnapshot } from './accountUsageSnapshot';
 export type { AccountUsageSnapshot } from './accountUsageSnapshot';
 export { ReasoningSelect } from './ReasoningSelect';
 export { ShortcutActionsSelect } from './ShortcutActionsSelect';
+export { DshAgentPresetSelect } from './DshAgentPresetSelect';
+export type { DshAgentPresetId } from './dshAgentPresets';

@@ -75,6 +75,11 @@ const chat = {
     claudeContextCategoryTitle: "分类明细",
     claudeContextMcpToolsTitle: "MCP tools",
     claudeContextUnavailable: "等待 CLI 回传",
+    dshContextTooltipTitle: "上下文已用",
+    dshContextUnavailable: "等待占用回传",
+    dshContextSystem: "系统提示词",
+    dshContextTools: "工具",
+    dshContextMessages: "对话消息",
     claudeContextFreshness: {
       live: "Claude CLI 实时上下文用量",
       restored: "来自已恢复会话的上下文用量",

@@ -1,36 +1,48 @@
 /** @vitest-environment jsdom */
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   resetWorkspaceWallpaperStoreForTests,
 } from "../utils/workspaceWallpaperStore";
 
+vi.mock("../../onboarding/components/FirstRunFluidBackdrop", () => ({
+  FirstRunFluidBackdrop: ({
+    profile,
+    motionId,
+    speed,
+    forceAnimate,
+    onAttachChange,
+  }: {
+    profile?: string;
+    motionId?: string;
+    speed?: number;
+    forceAnimate?: boolean;
+    onAttachChange?: (attached: boolean) => void;
+  }) => {
+    useEffect(() => {
+      onAttachChange?.(true);
+      return () => onAttachChange?.(false);
+    }, [onAttachChange]);
+    return (
+      <div
+        data-testid="first-run-fluid"
+        aria-hidden
+        data-profile={profile ?? "full"}
+        data-motion={motionId ?? "drift"}
+        data-animate={forceAnimate ? "true" : "false"}
+        data-speed={speed === undefined ? "" : String(speed)}
+      />
+    );
+  },
+}));
+
 const platformMocks = vi.hoisted(() => ({
   isWindowsPlatform: vi.fn(() => false),
 }));
 
-vi.mock("../../../utils/platform", async () => {
-  const actual = await vi.importActual<typeof import("../../../utils/platform")>(
-    "../../../utils/platform",
-  );
-  return {
-    ...actual,
-    isWindowsPlatform: platformMocks.isWindowsPlatform,
-  };
-});
-
-vi.mock("../../onboarding/components/FirstRunFluidBackdrop", () => ({
-  FirstRunFluidBackdrop: ({
-    profile,
-  }: {
-    profile?: string;
-  }) => (
-    <div
-      data-testid="first-run-fluid"
-      aria-hidden
-      data-profile={profile ?? "full"}
-    />
-  ),
+vi.mock("../../../utils/platform", () => ({
+  isWindowsPlatform: platformMocks.isWindowsPlatform,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -44,6 +56,8 @@ const getAppSettings = vi.hoisted(() =>
         mode: string;
         customImagePath: string | null;
         veilOpacity?: number;
+        fluidPreset?: string;
+        fluidMotion?: string;
       };
     }> => ({
       workspaceWallpaper: { mode: "none", customImagePath: null },
@@ -90,7 +104,27 @@ describe("WorkspaceWallpaperHost", () => {
       );
     });
     expect(screen.getByTestId("first-run-fluid")).not.toBeNull();
-    expect(document.documentElement.dataset.workspaceWallpaper).toBe("fluid");
+    expect(screen.getByTestId("first-run-fluid").dataset.animate).toBe("false");
+    expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe("drift");
+    await waitFor(() => {
+      expect(document.documentElement.dataset.workspaceWallpaper).toBe("fluid");
+    });
+  });
+
+  it("forwards a persisted structured motion to the fluid backdrop", async () => {
+    getAppSettings.mockResolvedValueOnce({
+      workspaceWallpaper: {
+        mode: "fluid",
+        customImagePath: null,
+        fluidMotion: "tornado",
+      },
+    });
+    render(<WorkspaceWallpaperHost />);
+    await waitFor(() => {
+      expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe(
+        "tornado",
+      );
+    });
   });
 
   it("does not mount a wallpaper layer when mode is none", async () => {
@@ -147,7 +181,16 @@ describe("WorkspaceWallpaperHost", () => {
     });
   });
 
-  it("keeps the workspace fluid backdrop on the lite profile", async () => {
+  it("uses the full fluid profile on Mac and lite on Windows", async () => {
+    getAppSettings.mockResolvedValueOnce({
+      workspaceWallpaper: { mode: "fluid", customImagePath: null },
+    });
+    render(<WorkspaceWallpaperHost />);
+    await waitFor(() => {
+      expect(screen.getByTestId("first-run-fluid").dataset.profile).toBe("full");
+    });
+    cleanup();
+    platformMocks.isWindowsPlatform.mockReturnValue(true);
     getAppSettings.mockResolvedValueOnce({
       workspaceWallpaper: { mode: "fluid", customImagePath: null },
     });
@@ -157,17 +200,34 @@ describe("WorkspaceWallpaperHost", () => {
     });
   });
 
-  it("does not mount a wallpaper layer on Windows even when fluid is persisted", async () => {
+  it("forwards sanitized motion and workspace speed to the fluid backdrop", async () => {
+    getAppSettings.mockResolvedValueOnce({
+      workspaceWallpaper: {
+        mode: "fluid",
+        customImagePath: null,
+        fluidMotion: "taiji",
+      },
+    });
+    render(<WorkspaceWallpaperHost />);
+    await waitFor(() => {
+      expect(screen.getByTestId("first-run-fluid").dataset.motion).toBe("taiji");
+    });
+    expect(screen.getByTestId("first-run-fluid").dataset.speed).toBe("9");
+  });
+
+  it("applies WebView2 fluid compat only on Windows", async () => {
     platformMocks.isWindowsPlatform.mockReturnValue(true);
     getAppSettings.mockResolvedValueOnce({
       workspaceWallpaper: { mode: "fluid", customImagePath: null },
     });
     render(<WorkspaceWallpaperHost />);
     await waitFor(() => {
-      expect(getAppSettings).toHaveBeenCalled();
+      expect(screen.getByTestId("first-run-fluid").dataset.animate).toBe(
+        "true",
+      );
     });
-    expect(screen.queryByTestId("workspace-wallpaper")).toBeNull();
-    expect(screen.queryByTestId("first-run-fluid")).toBeNull();
-    expect(document.documentElement.dataset.workspaceWallpaper).toBeUndefined();
+    await waitFor(() => {
+      expect(document.documentElement.dataset.workspaceWallpaper).toBe("fluid");
+    });
   });
 });
