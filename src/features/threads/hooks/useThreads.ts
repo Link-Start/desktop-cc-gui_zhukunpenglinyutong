@@ -80,7 +80,9 @@ export {
   resolvePendingThreadIdForTurn,
 } from "../utils/threadPendingResolution";
 import {
+  isGhostClientSessionIndexDeleteError,
   mapDeleteErrorCode,
+  sessionIndexIdsForThreadTombstone,
   shouldSettleDeleteAsSuccess,
   type ThreadDeleteErrorCode,
 } from "../utils/threadDelete";
@@ -109,6 +111,7 @@ import {
   projectMemoryCompleteTurn,
   deleteWorkspaceSessions,
   noteWebServiceReconnected,
+  tombstoneSessionIndexRows,
 } from "../../../services/tauri";
 import { buildAssistantOutputDigest } from "../../project-memory/utils/outputDigest";
 import {
@@ -2623,6 +2626,11 @@ export function useThreads({
         const message = error instanceof Error ? error.message : String(error);
         const code = mapDeleteErrorCode(message);
         if (shouldSettleDeleteAsSuccess(message)) {
+          if (isGhostClientSessionIndexDeleteError(message)) {
+            await tombstoneSessionIndexRows(
+              sessionIndexIdsForThreadTombstone(threadId),
+            ).catch(() => 0);
+          }
           return settleThreadDeletionLocally({
             success: true,
             code: null,
@@ -2679,11 +2687,22 @@ export function useThreads({
             workspaceId,
             batchedThreadIds,
           );
-          response.results.forEach((result) => {
+          for (const result of response.results) {
             const message =
               (result.error ?? "").trim() || "Failed to delete session";
             const code = mapDeleteErrorCode(message);
-            if (result.ok || shouldSettleDeleteAsSuccess(message)) {
+            if (
+              result.ok ||
+              shouldSettleDeleteAsSuccess(message, result.code)
+            ) {
+              if (
+                !result.ok &&
+                isGhostClientSessionIndexDeleteError(message, result.code)
+              ) {
+                await tombstoneSessionIndexRows(
+                  sessionIndexIdsForThreadTombstone(result.sessionId),
+                ).catch(() => 0);
+              }
               loadedThreadsRef.current[result.sessionId] = false;
               unpinThread(workspaceId, result.sessionId);
               dispatch({
@@ -2702,7 +2721,7 @@ export function useThreads({
                 code: null,
                 message: null,
               });
-              return;
+              continue;
             }
             batchedResultByThreadId.set(result.sessionId, {
               threadId: result.sessionId,
@@ -2710,7 +2729,7 @@ export function useThreads({
               code,
               message,
             });
-          });
+          }
         } catch (error) {
           const message =
             error instanceof Error ? error.message : String(error);

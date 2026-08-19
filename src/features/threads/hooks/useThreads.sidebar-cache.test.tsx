@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkspaceInfo } from "../../../types";
 import {
   deleteWorkspaceSessions,
+  listSessionIndexForWorkspace,
   listThreads,
   loadClaudeSession,
   loadDshSession,
@@ -52,6 +53,8 @@ vi.mock("../../../services/tauri", () => ({
   resumeThread: vi.fn(),
   archiveThread: vi.fn(),
   deleteWorkspaceSessions: vi.fn(),
+  tombstoneSessionIndexRows: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
   deleteOpenCodeSession: vi.fn(),
   getAccountRateLimits: vi.fn(),
   getAccountInfo: vi.fn(),
@@ -141,6 +144,17 @@ describe("useThreads sidebar cache", () => {
     writeClientStoreData("threads", {});
     vi.mocked(loadClaudeSession).mockResolvedValue({ messages: [] });
     vi.mocked(loadDshSession).mockResolvedValue({ messages: [] });
+    vi.mocked(listSessionIndexForWorkspace).mockResolvedValue({
+      data: [],
+      source: "session-index",
+      synced: false,
+      engines: [],
+      visibility: {
+        available: true,
+        freshness: "verified",
+        hiddenNativeIds: [],
+      },
+    });
   });
 
   it("hydrates cached thread summaries before live thread list resolves", () => {

@@ -60,6 +60,7 @@ vi.mock("../../../services/tauri", () => ({
   getOpenCodeSessionList: vi.fn(),
   listWorkspaceSessions: vi.fn(),
   listSessionIndexForWorkspace: vi.fn(),
+  rememberSessionIndexWorkspacePath: vi.fn(),
   loadClaudeSession: vi.fn(),
   loadGeminiSession: vi.fn(),
   loadCodexSession: vi.fn(),
@@ -503,6 +504,38 @@ describe("useThreadActions native session bridges", () => {
     });
   });
 
+  it("tombstones ghost index rows when unified delete cannot resolve workspace ownership", async () => {
+    vi.mocked(deleteWorkspaceSessions).mockResolvedValueOnce({
+      results: [
+        {
+          sessionId: "claude:hello-ghost",
+          ok: false,
+          archivedAt: null,
+          error: "session does not belong to target workspace",
+          code: "OWNER_WORKSPACE_UNRESOLVED",
+          deletedFromDisk: false,
+          metadataCleaned: false,
+        },
+      ],
+    });
+
+    const { result } = renderActions();
+
+    await act(async () => {
+      await result.current.deleteThreadForWorkspace(
+        "ws-1",
+        "claude:hello-ghost",
+      );
+    });
+
+    expect(deleteWorkspaceSessions).toHaveBeenCalledWith("ws-1", [
+      "claude:hello-ghost",
+    ]);
+    expect(tombstoneSessionIndexRows).toHaveBeenCalledWith([
+      "claude:hello-ghost",
+    ]);
+  });
+
   it("routes opencode delete to the unified backend delete", async () => {
     const { result } = renderActions();
 
@@ -623,6 +656,7 @@ describe("useThreadActions native session bridges", () => {
       type: "setThreads",
       workspaceId: "ws-1",
       threads: [],
+      unionMembership: false,
     });
   });
 

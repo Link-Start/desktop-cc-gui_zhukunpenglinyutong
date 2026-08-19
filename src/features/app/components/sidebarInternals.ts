@@ -24,6 +24,7 @@ import {
   expandHiddenSharedBindingIds,
   lookupSharedOwnerByNativeParent,
 } from "../../shared-session/runtime/sharedSessionSummaries";
+import { isGhostClientSessionIndexDeleteError } from "../../threads/utils/threadDelete";
 
 export type WorkspaceGroupSection = {
   id: string | null;
@@ -112,11 +113,7 @@ export { isSharedSessionThreadId } from "../../shared-session/utils/sharedSessio
 
 export function isSessionCatalogNotReadyError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  const normalizedMessage = message.toLowerCase();
-  return (
-    normalizedMessage.includes("session does not belong to target workspace") ||
-    normalizedMessage.includes("codex session target could not be resolved safely")
-  );
+  return isGhostClientSessionIndexDeleteError(message);
 }
 
 export function resolveEnginePrefix(
