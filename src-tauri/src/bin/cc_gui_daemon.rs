@@ -142,6 +142,26 @@ mod session_index {
             Ok(0)
         }
     }
+
+    // session_management overlay types; daemon has no SQLite index.
+    pub(crate) mod store {
+        #[derive(Debug, Clone, Default)]
+        pub struct SessionIndexRow {
+            pub engine: String,
+            pub session_id: String,
+            pub title: String,
+            pub native_title: Option<String>,
+            pub updated_at: i64,
+            pub created_at: Option<i64>,
+            pub cwd: Option<String>,
+            pub workspace_path: Option<String>,
+            pub physical_path: Option<String>,
+            pub parent_session_id: Option<String>,
+            pub size_bytes: Option<u64>,
+            pub provider_profile_id: Option<String>,
+            pub provider_profile_name: Option<String>,
+        }
+    }
 }
 // session_management now catalogs/deletes shared sessions via crate::shared_sessions.
 // The desktop app gets the full module from lib.rs; the daemon only needs the pure
