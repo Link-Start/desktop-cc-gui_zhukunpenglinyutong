@@ -314,6 +314,10 @@ docs(readme): 校准项目文档索引
 
 ---
 
+## Star History
+
+[![Star History Chart](https://star-history.dera.page/svg?repos=zhukunpenglinyutong/desktop-cc-gui&type=date&legend=top-left)](https://star-history.dera.page/#zhukunpenglinyutong/desktop-cc-gui&type=date&legend=top-left)
+
 <!-- LINK GROUP -->
 
 [github-contributors-shield]: https://img.shields.io/github/contributors/zhukunpenglinyutong/desktop-cc-gui?color=c4f042&labelColor=black&style=flat-square
