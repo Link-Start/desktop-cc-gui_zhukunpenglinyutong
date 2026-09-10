@@ -65,6 +65,7 @@ interface StreamPart {
 }
 interface PendingStream {
   model: string | null;
+  effort?: string | null;
   parts: StreamPart[];
 }
 /** sessionKey -> ordered stream chunks not yet flushed into rows */
@@ -72,25 +73,43 @@ const pendingStreams = new Map<string, PendingStream>();
 let rafScheduled = false;
 let fallbackScheduled = false;
 
-/** Fold stream parts into the message list in place: a part grows the last
- * row when it is the same role and still live, otherwise it starts a new
- * live row. The streaming message therefore *is* the final message — no
- * buffer→commit transition for content to hide behind, no replay of text
- * the user already watched arrive. Row order stays chronological, matching
- * what history parsing produces. */
+/** Fold stream parts into the message list in place. omp interleaves the
+ *  thinking and text channels within ONE assistant message (GLM emits
+ *  reasoning deltas between text deltas), so each channel must grow a
+ *  single row: appending to the last live row OF THAT ROLE — skipping the
+ *  other channel's live row — instead of the last row overall. Text
+ *  therefore stays one continuous markdown document (a mid-message split
+ *  leaves `**`/backticks unclosed and renders literally) and thinking folds
+ *  into one process section. A settled row ends its segment: tool starts
+ *  and turn boundaries settle rows, so post-tool text correctly starts a
+ *  fresh row. */
 export function applyStreamParts(
   messages: Message[],
   parts: StreamPart[],
   model: string | null,
+  effort: string | null = null,
 ): Message[] {
   let out = messages;
   for (const part of parts) {
     if (!part.text) continue;
     const role = part.kind === "thinking" ? "thinking" : "assistant";
-    const last = out[out.length - 1];
-    if (last?.live && last.role === role) {
+    // Scan back over live rows (the other channel) to this channel's row;
+    // stop at the first settled row — everything before it is history.
+    let target = -1;
+    for (let i = out.length - 1; i >= 0; i--) {
+      if (out[i].live) {
+        if (out[i].role === role) {
+          target = i;
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    if (target >= 0) {
       if (out === messages) out = messages.slice();
-      out[out.length - 1] = { ...last, text: last.text + part.text };
+      const last = out[target];
+      out[target] = { ...last, text: last.text + part.text };
       continue;
     }
     const seq = out.length ? out[out.length - 1].seq + 1 : 1;
@@ -101,7 +120,7 @@ export function applyStreamParts(
       text: part.text,
       ts: new Date().toISOString(),
       live: true,
-      ...(role === "assistant" ? { model } : {}),
+      ...(role === "assistant" ? { model, effort } : {}),
     });
   }
   return out;
@@ -119,8 +138,11 @@ export function bufferStreamPart(
   kind: StreamPart["kind"],
   text: string,
   model: string | null,
+  effort: string | null = null,
 ) {
-  const pending = pendingStreams.get(key) ?? { model, parts: [] };
+  const pending = pendingStreams.get(key) ?? { model, effort, parts: [] };
+  if (!pending.model && model) pending.model = model;
+  if (!pending.effort && effort) pending.effort = effort;
   const last = pending.parts[pending.parts.length - 1];
   if (last?.kind === kind) last.text += text;
   else pending.parts.push({ kind, text });
@@ -164,6 +186,9 @@ export function appendToolMessage<T extends BySessionSlice>(
   model: string | null,
   path: string | null = null,
   todos: TodosPayload | null = null,
+  args?: unknown,
+  patch = false,
+  result?: unknown,
 ) {
   const pending = drainPending(key);
   set((s) => {
@@ -172,6 +197,41 @@ export function appendToolMessage<T extends BySessionSlice>(
       ? applyStreamParts(prev.messages, pending.parts, pending.model ?? model)
       : prev.messages;
     messages = settleLiveRows(messages);
+    // If this is a result patch, attach to the matching or latest tool message
+    if (patch && result !== undefined) {
+      const target = text
+        ? messages.slice().reverse().find((m) => m.role === "tool" && (!text || m.text.includes(text)))
+        : messages.slice().reverse().find((m) => m.role === "tool");
+      if (target) {
+        messages = messages.map((m) =>
+          m.seq === target.seq ? { ...m, result } : m,
+        );
+      }
+      return { bySession: { ...s.bySession, [key]: { ...prev, messages } } } as Partial<T>;
+    }
+    // Claude streams the tool name first, then patches args onto that row.
+    // Match the oldest still-empty same-name tool so parallel Reads stay in
+    // order. Unmatched patches are dropped — appending would duplicate.
+    if (patch) {
+      const target = messages.find(
+        (m) => m.role === "tool" && m.text === text && m.args == null,
+      );
+      if (!target) {
+        return { bySession: { ...s.bySession, [key]: { ...prev, messages } } } as Partial<T>;
+      }
+      messages = messages.map((m) =>
+        m.seq === target.seq
+          ? {
+              ...m,
+              path: path ?? m.path,
+              ...(todos ? { todos } : {}),
+              ...(args !== undefined ? { args } : {}),
+              ...(result !== undefined ? { result } : {}),
+            }
+          : m,
+      );
+      return { bySession: { ...s.bySession, [key]: { ...prev, messages } } } as Partial<T>;
+    }
     const seq = messages.length ? messages[messages.length - 1].seq + 1 : 1;
     messages = [
       ...messages,
@@ -182,6 +242,8 @@ export function appendToolMessage<T extends BySessionSlice>(
         ts: new Date().toISOString(),
         seq,
         ...(todos ? { todos } : {}),
+        ...(args !== undefined ? { args } : {}),
+        ...(result !== undefined ? { result } : {}),
       },
     ];
     return { bySession: { ...s.bySession, [key]: { ...prev, messages } } } as Partial<T>;

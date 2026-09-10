@@ -10,9 +10,11 @@ import { AgentThinking } from "@/components/application/agent-thinking/agent-thi
 import { streamParseInterval, useThrottled } from "@/hooks/use-throttled";
 import { useCopied } from "@/hooks/use-copied";
 import { MessageImages } from "./MessageImages";
+import { GrantCard } from "./GrantCard";
 import { MessageAnchorRail } from "./MessageAnchorRail";
 import { createAnchorRowsBuilder } from "./timeline-anchors";
 import { buildRows, collectToolKeys, rowKey, type TimelineRow } from "./timeline-rows";
+import { formatDuration } from "./format-duration";
 import { ProcessDisclosure } from "./ProcessDisclosure";
 import { useScrollFollow, useTailPin } from "./use-scroll-follow";
 import { ScrollToBottomButton } from "./ScrollToBottomButton";
@@ -123,12 +125,32 @@ function formatUsage(usage: unknown): string | null {
   return parts.join(" ");
 }
 
-/** Passive per-message facts, revealed on message hover: time · token usage · model. */
+/** Passive per-message facts, revealed on message hover: time · duration · token usage · model · effort. */
 function MessageMeta({ message }: { message: Message }) {
+  const { t } = useTranslation();
+  const effortText = useMemo(() => {
+    if (!message.effort) return null;
+    const key = `chat.effort${message.effort.charAt(0).toUpperCase() + message.effort.slice(1).toLowerCase()}`;
+    const translated = t(key);
+    const effortVal = translated && translated !== key ? translated : message.effort;
+    return t("chat.metaEffort", { effort: effortVal });
+  }, [message.effort, t]);
+
+  const durationFormatted = useMemo(() => {
+    const d = formatDuration(message.durationMs);
+    return d ? t("chat.metaDuration", { duration: d }) : null;
+  }, [message.durationMs, t]);
+
+  const modelFormatted = useMemo(() => {
+    return message.model ? t("chat.metaModel", { model: message.model }) : null;
+  }, [message.model, t]);
+
   const parts = [
     formatMessageTime(message.ts),
+    durationFormatted,
     formatUsage(message.usage),
-    message.model || null,
+    modelFormatted,
+    effortText,
   ].filter((p): p is string => Boolean(p));
   if (parts.length === 0) return null;
   return (
@@ -176,6 +198,10 @@ const MessageRow = memo(function MessageRow({
   // main thread, so the parse is throttled. Settled rows never change and
   // render as-is.
   const text = useThrottled(message.text, message.live ? streamParseInterval(message.text.length) : 0);
+  if (message.role === "grant") {
+    // Permission-denial card: actionable directory grant, not a chat bubble.
+    return <GrantCard message={message} />;
+  }
   if (message.role === "user") {
     return (
       <div className="-mr-1.5 ml-auto flex w-fit max-w-[85%] flex-col rounded-xl bg-bubble-user px-3.5 py-2.5 text-left text-body-regular whitespace-pre-wrap break-words text-text-white">

@@ -8,8 +8,8 @@ import { cx } from "@/utils/cx";
 import { SOFT_EASE } from "@/components/application/agent-log/agent-log-motion";
 import { StepRow, type TaskListChip } from "@/components/application/task-list/task-list";
 import { getFileTreeIconSvg } from "@/features/files/fileIcons";
-import { SmoothThinkingText } from "./reveal-text";
 import { markToolKeys, toolEntranceKey, type ProcessItem } from "./timeline-rows";
+import { ToolPayloadViewer } from "./ToolPayloadViewer";
 
 /** Classify a tool-call label (tool name or shell command) into a type chip. */
 function toolTypeKey(text: string): string {
@@ -62,7 +62,17 @@ function fileChipFor(path: string | null | undefined): TaskListChip | null {
 
 type ProcessSection =
   | { type: "thinking"; text: string; live?: boolean; firstIndex: number }
-  | { type: "tools"; calls: { text: string; path: string | null; index: number }[]; firstIndex: number };
+  | {
+      type: "tools";
+      calls: {
+        text: string;
+        path: string | null;
+        args?: unknown;
+        result?: unknown;
+        index: number;
+      }[];
+      firstIndex: number;
+    };
 
 function groupProcessSections(items: ProcessItem[]): ProcessSection[] {
   const sections: ProcessSection[] = [];
@@ -71,7 +81,13 @@ function groupProcessSections(items: ProcessItem[]): ProcessSection[] {
       sections.push({ type: "thinking", text: item.text, live: item.live, firstIndex: index });
     } else {
       const last = sections[sections.length - 1];
-      const call = { text: item.text, path: item.path ?? null, index };
+      const call = {
+        text: item.text,
+        path: item.path ?? null,
+        args: item.args,
+        result: item.result,
+        index,
+      };
       if (last?.type === "tools") last.calls.push(call);
       else sections.push({ type: "tools", calls: [call], firstIndex: index });
     }
@@ -85,17 +101,23 @@ const FrozenStepRow = memo(function FrozenStepRow({
   play,
   text,
   path,
+  args,
+  result,
   first,
   last,
 }: {
   play: boolean;
   text: string;
   path: string | null;
+  args?: unknown;
+  result?: unknown;
   first: boolean;
   last: boolean;
 }) {
   const reduceRef = useRef(!play);
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const hasPayload = args != null || result != null;
   const fileChip = fileChipFor(path);
   const step = {
     label: text,
@@ -111,13 +133,59 @@ const FrozenStepRow = memo(function FrozenStepRow({
       first={first}
       last={last}
       reduce={reduceRef.current}
-    />
+    >
+      {hasPayload ? (
+        <div className="-mt-0.5 mb-1">
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-label={open ? t("chat.toolCallCollapse") : t("chat.toolCallExpand")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
+            className="flex cursor-pointer items-center gap-0.5 text-caption-1-regular text-text-tertiary transition-colors hover:text-text-secondary"
+          >
+            <ChevronRight
+              className={cx("size-3 transition-transform duration-150", open && "rotate-90")}
+              aria-hidden
+            />
+            <span>{t("chat.toolCallArgs")}</span>
+          </button>
+          {open ? (
+            <ToolPayloadViewer
+              toolName={text}
+              path={path}
+              args={args}
+              result={result}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </StepRow>
   );
 });
 
+/** Live thinking window: the last ~2000 chars, cut at a LINE boundary so a
+ *  row slides out as a whole instead of dissolving character by character.
+ *  `truncated` tells the surface to fade its top edge, hinting at the
+ *  content above the window. */
+function liveThinkingWindow(text: string): { body: string; truncated: boolean } {
+  const WINDOW_CHARS = 2000;
+  if (text.length <= WINDOW_CHARS) return { body: text, truncated: false };
+  const cut = text.length - WINDOW_CHARS;
+  const newline = text.indexOf("\n", cut);
+  // No newline inside the window (one enormous line): keep the char cut —
+  // there is no line boundary to honor.
+  const start = newline === -1 ? cut : newline + 1;
+  return { body: text.slice(start), truncated: true };
+}
+
 /** Thinking body: brain header + left-railed gray content, mirroring the
  * reference chat UI. Plain pre-wrapped text — never markdown-reparsed per
- * delta; the live view is windowed to the last 2000 chars. */
+ * delta. The live view is windowed to the last 2000 chars; the cut lands on
+ * a line boundary and the top edge fades out, so overflow leaves as whole
+ * dissolving rows rather than a hard char-by-char wipe. */
 function ThinkingSurface({
   text,
   title,
@@ -127,6 +195,7 @@ function ThinkingSurface({
   title?: string;
   live?: boolean;
 }) {
+  const { body, truncated } = live ? liveThinkingWindow(text) : { body: text, truncated: false };
   return (
     <div className="flex flex-col gap-1">
       {title && (
@@ -135,37 +204,77 @@ function ThinkingSurface({
           <span>{title}</span>
         </div>
       )}
-      <div className="ml-2 whitespace-pre-wrap break-words border-l border-foreground-icon-quaternary pl-4 text-[12px] leading-[1.65] text-text-tertiary">
-        {live ? <SmoothThinkingText text={text} /> : text}
+      <div
+        className={cx(
+          "ml-2 whitespace-pre-wrap break-words border-l border-foreground-icon-quaternary pl-4 text-[12px] leading-[1.65] text-text-tertiary",
+          truncated &&
+            "[mask-image:linear-gradient(to_bottom,transparent_0,#000_36px)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_36px)]",
+        )}
+      >
+        {body}
       </div>
     </div>
   );
 }
 
-/** Expanded-state machine: automation opens the latest row and folds older
- * ones as the turn settles, until the user's own click takes over. */
-function useProcessExpansion(autoExpand: boolean, turnLive: boolean) {
+type ExpansionProps = { auto: boolean; live: boolean; thinking: boolean };
+
+/** Pure transition table for the expanded-state machine: given the previous
+ *  and current prop snapshot plus the user's override flag, decide the next
+ *  expanded/overridden pair. Automation opens a row while its thinking is
+ *  streaming and folds it the moment that thinking settles (the user asked
+ *  for exactly that rhythm); a superseded or turn-settled row folds too,
+ *  until the user's own click takes over. */
+function expansionTransition(
+  prev: ExpansionProps,
+  next: ExpansionProps,
+  expanded: boolean,
+  overridden: boolean,
+): { expanded: boolean; overridden: boolean } {
+  if (next.auto && !prev.auto) {
+    // Became the latest row: open it and hand control back to automation.
+    return { expanded: true, overridden: false };
+  }
+  if (next.thinking && !prev.thinking && !overridden) {
+    // Thinking resumed inside this row (extended thinking between tool
+    // calls): show it again unless the user folded the row on purpose.
+    return { expanded: true, overridden };
+  }
+  if (!next.thinking && prev.thinking && !overridden) {
+    // The thinking settled: fold immediately — expanded-on-demand shows
+    // the full text afterwards. A deliberate user click wins: it keeps
+    // its chosen state and stays sticky across thinking resume cycles.
+    return { expanded: false, overridden };
+  }
+  if (!next.auto && !next.live) {
+    const superseded = prev.auto;
+    const turnJustSettled = prev.live;
+    if ((superseded || turnJustSettled) && !overridden) {
+      return { expanded: false, overridden };
+    }
+  }
+  return { expanded, overridden };
+}
+
+/** Expanded-state hook: holds the expanded flag and the user's override,
+ *  delegating every prop-change decision to `expansionTransition`. */
+function useProcessExpansion(autoExpand: boolean, turnLive: boolean, hasLiveThinking: boolean) {
   const [expanded, setExpanded] = useState(autoExpand);
   // Once the user clicks the header, their choice wins over the auto
-  // expand/collapse driven by newer rows appearing below.
+  // expand/collapse driven by streaming state.
   const [overridden, setOverridden] = useState(false);
   // React-blessed adjust-during-render: previous prop values live in state,
   // so a prop change settles in the same commit that observed it — no
   // one-frame paint of the stale expanded value.
-  const [prev, setPrev] = useState({ auto: autoExpand, live: turnLive });
-  if (prev.auto !== autoExpand || prev.live !== turnLive) {
-    setPrev({ auto: autoExpand, live: turnLive });
-    if (autoExpand && !prev.auto) {
-      // Became the latest row: open it and hand control back to automation.
-      setOverridden(false);
-      setExpanded(true);
-    } else if (!autoExpand && !turnLive) {
-      const superseded = prev.auto;
-      const turnJustSettled = prev.live;
-      if ((superseded || turnJustSettled) && !overridden) {
-        setExpanded(false);
-      }
-    }
+  const [prev, setPrev] = useState({ auto: autoExpand, live: turnLive, thinking: hasLiveThinking });
+  const next = { auto: autoExpand, live: turnLive, thinking: hasLiveThinking };
+  if (prev.auto !== next.auto || prev.live !== next.live || prev.thinking !== next.thinking) {
+    setPrev(next);
+    const settled = expansionTransition(prev, next, expanded, overridden);
+    // Setting state to its current value bails out without a re-render, so
+    // the no-op transitions are free.
+    setOverridden(settled.overridden);
+    setExpanded(settled.expanded);
   }
   const toggleExpanded = () => {
     setOverridden(true);
@@ -227,6 +336,8 @@ function ProcessDisclosureBody({
                   play={play}
                   text={call.text}
                   path={call.path}
+                  args={call.args}
+                  result={call.result}
                   first={j === 0}
                   last={j === section.calls.length - 1}
                 />
@@ -254,15 +365,17 @@ export const ProcessDisclosure = memo(function ProcessDisclosure({
 }: {
   items: ProcessItem[];
   autoExpand?: boolean;
-  /** True while the turn is still streaming: nothing folds away mid-turn —
-   * the reader may be watching a row grow. Older rows fold when the turn
-   * settles instead. */
+  /** True while the turn is still streaming. The row folds when its own
+   *  thinking settles even mid-turn; this only keeps pre-thinking content
+   *  (early tool rows) mounted until the turn ends. */
   turnLive?: boolean;
   processId: number;
   seenTools: Set<string>;
 }) {
   const { t } = useTranslation();
-  const { expanded, toggleExpanded } = useProcessExpansion(autoExpand, turnLive);
+  const sections = useMemo(() => groupProcessSections(items), [items]);
+  const hasLiveThinking = sections.some((s) => s.type === "thinking" && s.live);
+  const { expanded, toggleExpanded } = useProcessExpansion(autoExpand, turnLive, hasLiveThinking);
   const reduceMotion = useReducedMotion() ?? false;
   // Mark after paint, not at animation complete: a virtualizer remount
   // mid-entrance must skip the replay. New keys still play on this first
@@ -276,10 +389,11 @@ export const ProcessDisclosure = memo(function ProcessDisclosure({
   // "思考过程" title itself, and the expanded body drops the inner repeat.
   const singleThinking = items.length === 1 && items[0].type === "thinking";
   const label = processSummaryLabel(t, singleThinking, thinkingCount, toolCount);
-  // Regrouping per render walks every item; items are reference-stable
-  // between flushes (see buildRows caches), so memo on identity.
-  const sections = useMemo(() => groupProcessSections(items), [items]);
-  const showBody = expanded || turnLive;
+  // Body stays mounted while expanded or while this row's own thinking is
+  // streaming (the auto-open above makes both true then); once the thinking
+  // settles the body unmounts, so expanding later re-renders the FULL
+  // settled text — the 2000-char live window only ever applies live.
+  const showBody = expanded || hasLiveThinking;
   return (
     <div className="mb-1.5 flex flex-col">
       <button

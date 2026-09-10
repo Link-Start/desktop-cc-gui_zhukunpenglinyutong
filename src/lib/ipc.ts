@@ -40,12 +40,28 @@ export interface Message {
   text: string;
   /** Target file of a tool call (read/edit/write/...); renders as a file chip. */
   path?: string | null;
+  /** Full tool-call arguments; shown in the expandable tool-call panel. */
+  args?: unknown;
+  /** Tool execution result/output; shown in the tool panel. */
+  result?: unknown;
   todos?: TodosPayload;
   ts: string | null;
   usage?: unknown;
   model?: string | null;
+  /** Reasoning effort level ("low" | "medium" | "high" | "xhigh" | "max") */
+  effort?: string | null;
+  /** Turn duration in milliseconds (measured from prompt send to turn completion) */
+  durationMs?: number | null;
   /** True while the row belongs to the in-flight stream and may still grow. */
   live?: boolean;
+  /** Permission-denial card state (role "grant"): the CLI denied a tool call
+   * targeting `path`; pending until the user answers the card. `dir` is the
+   * directory a grant would cover (grant_scope preview). Grant rows are
+   * ephemeral UI — they are not part of the CLI's session history. */
+  grant?: {
+    status: "pending" | "granted" | "declined";
+    dir?: string | null;
+  };
   /** Image attachments: data URLs render directly, absolute paths load via readFile. */
   images?: string[];
 }
@@ -234,6 +250,18 @@ export interface GitStatus {
   unstaged: GitFileEntry[];
   untracked: GitFileEntry[];
 }
+
+/** Compact status for a directory that is itself a Git worktree root. */
+export interface RepositorySummary {
+  path: string;
+  branch: string;
+  changed: number;
+  untracked: number;
+}
+
+/** Per-entry git state for one loaded tree level. `repository` marks an
+ *  exact repo-root directory (blue name); plain folders never carry color. */
+export type FileTreeColor = "modified" | "untracked" | "repository";
 
 export interface BranchInfo {
   name: string;
@@ -478,9 +506,19 @@ export const ipc = {
     withGrantRetry(() => invoke<FileIndexEntry[]>("list_file_index", { path })),
   // granted directories (desktop-only commands; the settings list hides on web)
   listGrantedRoots: () => invoke<string[]>("list_granted_roots"),
+  /** Directory a grant for `path` would cover (path itself when a dir, else
+   * its parent) — the grant card shows this before the user approves. */
+  grantScope: (path: string) => invoke<string>("grant_scope", { path }),
+  /** Persist a user-approved directory grant; subsequent claude launches
+   * receive it as --add-dir. */
+  grantRoot: (path: string) => invoke<void>("grant_root", { path }),
   revokeGrantedRoot: (path: string) => invoke<void>("revoke_granted_root", { path }),
   // git
   gitStatus: (path: string) => invoke<GitStatus>("git_status", { path }),
+  gitRepositorySummaries: (paths: string[]) =>
+    invoke<RepositorySummary[]>("git_repository_summaries", { paths }),
+  gitFileColors: (path: string, files: string[]) =>
+    invoke<Record<string, FileTreeColor>>("git_file_colors", { path, files }),
   gitDiff: (path: string, file: string, staged: boolean) =>
     invoke<string>("git_diff", { path, file, staged }),
   gitStage: (path: string, files: string[]) => invoke<void>("git_stage", { path, files }),

@@ -15,7 +15,7 @@ use crate::event_sink;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdout, Command};
@@ -46,6 +46,11 @@ pub struct SendRequest {
     /// resolves it against the modes it can actually honor at spawn (see
     /// `Engine::resolve_permission`).
     pub permission: Option<String>,
+    /// User-granted extra directories (db `granted_roots`); claude launches
+    /// pass them as `--add-dir` so reads outside the workspace stop hitting
+    /// headless permission denials. Engines without an equivalent flag
+    /// ignore them.
+    pub additional_dirs: Vec<String>,
 }
 
 pub struct BuiltCommand {
@@ -58,6 +63,7 @@ pub struct BuiltCommand {
     pub preassigned_session_id: Option<String>,
 }
 
+#[derive(Debug)]
 pub enum EngineEvent {
     /// Streaming text delta (append).
     Delta(String),
@@ -65,7 +71,10 @@ pub enum EngineEvent {
     Thinking(String),
     /// A completed message block (role, text). `path` carries the target
     /// file of a tool call (read/edit/write/...) so the UI can render a
-    /// file chip; None for everything else.
+    /// file chip; None for everything else. `args` is the tool-call payload
+    /// (pretty-printed in the timeline). `patch` updates the oldest
+    /// still-incomplete tool row of the same name (claude streams args
+    /// after the name-only start).
     Message {
         role: String,
         text: String,
@@ -73,6 +82,9 @@ pub enum EngineEvent {
         /// Todo-list snapshot/patch from a todo tool call (claude TodoWrite,
         /// omp todo op); feeds the run-status strip's task pill.
         todos: Option<TodosPayload>,
+        args: Option<Value>,
+        result: Option<Value>,
+        patch: bool,
     },
     /// Native session id became known.
     SessionId(String),
@@ -83,6 +95,15 @@ pub enum EngineEvent {
     /// Non-terminal engine notice (e.g. an upstream 429 the CLI is
     /// retrying): surfaced to the UI, but the turn is still running.
     Warn(String),
+    /// A tool call was denied by the CLI's permission system (headless mode
+    /// cannot prompt). `path` is the denied absolute path when the denial
+    /// text or tool input carries one — the UI offers a directory grant for
+    /// it; `tool` is the denied tool name when known.
+    PermissionDenied {
+        tool: Option<String>,
+        path: Option<String>,
+        message: String,
+    },
     /// Turn finished successfully.
     Done {
         session_id: Option<String>,
@@ -103,6 +124,90 @@ pub struct TodoItem {
 pub struct TodosPayload {
     pub items: Vec<TodoItem>,
     pub replace: bool,
+}
+
+/// Drop empty / null payloads so the UI does not render a blank args panel.
+/// JSON-encoded strings (OpenAI-style `function.arguments`) are parsed first.
+pub(crate) fn parse_tool_args_value(value: &Value) -> Option<Value> {
+    match value {
+        Value::Null => None,
+        Value::Object(map) if map.is_empty() => None,
+        Value::Array(items) if items.is_empty() => None,
+        Value::String(s) => {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            match serde_json::from_str::<Value>(trimmed) {
+                Ok(parsed) => parse_tool_args_value(&parsed).or_else(|| Some(Value::String(trimmed.to_string()))),
+                Err(_) => Some(Value::String(trimmed.to_string())),
+            }
+        }
+        other => Some(other.clone()),
+    }
+}
+
+/// Tool-call start: name plus parsed args (path / todos derived from args).
+pub(crate) fn tool_call_message(name: impl Into<String>, args: Option<&Value>) -> EngineEvent {
+    let args = args.and_then(parse_tool_args_value);
+    EngineEvent::Message {
+        role: "tool".to_string(),
+        text: name.into(),
+        path: args.as_ref().and_then(tool_path_arg),
+        todos: args.as_ref().and_then(parse_todo_args),
+        args,
+        result: None,
+        patch: false,
+    }
+}
+
+/// Same as [`tool_call_message`] but patches the matching in-flight tool row.
+pub(crate) fn tool_call_patch(name: impl Into<String>, args: Option<&Value>) -> EngineEvent {
+    match tool_call_message(name, args) {
+        EngineEvent::Message {
+            role,
+            text,
+            path,
+            todos,
+            args,
+            ..
+        } => EngineEvent::Message {
+            role,
+            text,
+            path,
+            todos,
+            args,
+            result: None,
+            patch: true,
+        },
+        other => other,
+    }
+}
+
+/// Patches execution result onto the matching in-flight tool row.
+pub(crate) fn tool_result_patch(name: impl Into<String>, result: Option<&Value>) -> EngineEvent {
+    EngineEvent::Message {
+        role: "tool".to_string(),
+        text: name.into(),
+        path: None,
+        todos: None,
+        args: None,
+        result: result.cloned(),
+        patch: true,
+    }
+}
+
+/// Assistant snapshot with no tool metadata.
+pub(crate) fn assistant_message(text: String) -> EngineEvent {
+    EngineEvent::Message {
+        role: "assistant".to_string(),
+        text,
+        path: None,
+        todos: None,
+        args: None,
+        result: None,
+        patch: false,
+    }
 }
 
 /// First path-like argument of a tool call (`read`/`edit`/`write` use
@@ -235,7 +340,7 @@ pub trait Engine: Send + Sync {
 
 pub fn engine_by_id(id: &str) -> Option<Box<dyn Engine>> {
     match id {
-        "claude" => Some(Box::new(claude::ClaudeEngine)),
+        "claude" => Some(Box::new(claude::ClaudeEngine::new())),
         "kimi" => Some(Box::new(kimi::KimiEngine)),
         "grok" => Some(Box::new(grok::GrokEngine)),
         "codex" => Some(Box::new(codex::CodexEngine)),
@@ -258,7 +363,25 @@ pub(crate) fn engine_home(env_key: Option<&str>, default_dir: &str) -> PathBuf {
             return PathBuf::from(value);
         }
     }
-    dirs::home_dir().unwrap_or_default().join(default_dir)
+    fallback_home().join(default_dir)
+}
+
+/// Home dir for the default engine path. Production uses `dirs` (Known
+/// Folder API on Windows); tests steer the fallback through HOME /
+/// USERPROFILE env instead, because `dirs` ignores env on Windows and would
+/// scan the real profile.
+fn fallback_home() -> PathBuf {
+    #[cfg(test)]
+    {
+        if let Some(home) = std::env::var_os("HOME").filter(|v| !v.is_empty()) {
+            return PathBuf::from(home);
+        }
+        #[cfg(windows)]
+        if let Some(profile) = std::env::var_os("USERPROFILE").filter(|v| !v.is_empty()) {
+            return PathBuf::from(profile);
+        }
+    }
+    dirs::home_dir().unwrap_or_default()
 }
 
 /// A leading '-' would parse as a flag (pi also treats '@' as a file
@@ -284,7 +407,10 @@ pub(crate) fn push_session_id(value: &Value, key: &str, out: &mut Vec<EngineEven
 // ==================== Process registry ====================
 
 /// Live engine child processes keyed by session key (native session id once
-/// known, otherwise the run id). Drop kills everything synchronously.
+/// known, otherwise the run id). Drop kills everything synchronously. Clone
+/// is a refcount bump: the registry keys the same child under BOTH keys
+/// after `rekey` so either route can interrupt it.
+#[derive(Clone)]
 pub struct ChildEntry {
     pub child: Arc<TokioMutex<Child>>,
     pub pid: u32,
@@ -313,8 +439,13 @@ impl ProcessRegistry {
         self.0.lock().map(|map| map.len()).unwrap_or(0)
     }
 
-    /// Move an entry to the native-session key once known. A colliding target
-    /// key belongs to another live run — keep both instead of overwriting.
+    /// Copy the entry to the native-session key once known. The run_id key
+    /// STAYS: the frontend interrupts by session id and by run id (a resume
+    /// whose session-id announcement never arrives leaves run id as the only
+    /// route), and a moving rekey closed exactly that path — the user hit
+    /// Stop, the by-run-id lookup found nothing, and the CLI kept streaming.
+    /// `kill` de-duplicates by pid: hitting both keys kills the tree once.
+    /// A colliding target key belongs to another live run — never overwrite.
     fn rekey(&self, from: &str, to: String) {
         if from == to {
             return;
@@ -323,7 +454,7 @@ impl ProcessRegistry {
             if map.contains_key(&to) {
                 return;
             }
-            if let Some(entry) = map.remove(from) {
+            if let Some(entry) = map.get(from).cloned() {
                 map.insert(to, entry);
             }
         }
@@ -340,51 +471,70 @@ impl ProcessRegistry {
         }
     }
 
-    pub fn kill(&self, key: &str) -> bool {
-        let entry = match self.0.lock() {
-            Ok(map) => map
-                .get(key)
-                .map(|e| (e.pid, Arc::clone(&e.child), Arc::clone(&e.killed))),
-            Err(_) => None,
-        };
-        // Fallback: the frontend may cancel by run id after the entry was
-        // rekeyed to the native session id.
-        let entry = entry.or_else(|| {
-            self.0.lock().ok().and_then(|map| {
-                map.values()
-                    .find(|e| e.run_id == key)
-                    .map(|e| (e.pid, Arc::clone(&e.child), Arc::clone(&e.killed)))
-            })
-        });
-        let Some((pid, child, killed)) = entry else {
-            return false;
-        };
+    /// Kill one entry (pid-reuse guarded). Returns false when the child was
+    /// already reaped — nothing left to signal.
+    fn kill_entry(pid: u32, child: &Arc<TokioMutex<tokio::process::Child>>, killed: &Arc<std::sync::atomic::AtomicBool>) -> bool {
         killed.store(true, std::sync::atomic::Ordering::SeqCst);
         if let Ok(mut guard) = child.try_lock() {
             // Pid-reuse guard: a reaped child's pid may already belong to
             // someone else — never signal a group we no longer own.
             match guard.try_wait() {
-                Ok(Some(_)) => {}
+                Ok(Some(_)) => false,
                 _ => {
                     kill_process_group(pid);
                     let _ = guard.start_kill();
+                    true
                 }
             }
         } else {
             // The runner holds the lock only while reaping post-EOF; that
             // window is tiny and the kill flag already settles the turn.
             kill_process_group(pid);
+            true
         }
-        true
+    }
+
+    /// Kill **every** entry matching `key`: the map key (native session id or
+    /// run id) and the recorded run id both match. One session resumed into
+    /// several parallel runs must all die on a single stop, or the survivors
+    /// keep streaming and fight the next run over the session file.
+    pub fn kill(&self, key: &str) -> bool {
+        let mut entries: Vec<(u32, Arc<TokioMutex<tokio::process::Child>>, Arc<std::sync::atomic::AtomicBool>)> =
+            match self.0.lock() {
+                Ok(map) => map
+                    .iter()
+                    .filter(|(k, e)| *k == key || e.run_id == key)
+                    .map(|(_, e)| (e.pid, Arc::clone(&e.child), Arc::clone(&e.killed)))
+                    .collect(),
+                Err(_) => Vec::new(),
+            };
+        // The registry keys one child under BOTH its session id and run id
+        // (rekey copies): de-duplicate by pid so one stop fires one
+        // taskkill, not one per key.
+        entries.sort_by_key(|(pid, _, _)| *pid);
+        entries.dedup_by_key(|(pid, _, _)| *pid);
+        // No Iterator::any here: it short-circuits on the first true, which
+        // would leave every later parallel run alive — the exact bug this
+        // aggregate kill exists to fix.
+        let mut killed_any = false;
+        for (pid, child, killed) in &entries {
+            killed_any |= Self::kill_entry(*pid, child, killed);
+        }
+        killed_any
     }
 
     pub fn kill_all(&self) {
         // Blocking lock on the teardown path: skipping children because the
         // lock was briefly contended would leak engine processes.
-        let entries: Vec<ChildEntry> = match self.0.lock() {
+        let mut entries: Vec<ChildEntry> = match self.0.lock() {
             Ok(mut map) => map.drain().map(|(_, e)| e).collect(),
             Err(poisoned) => poisoned.into_inner().drain().map(|(_, e)| e).collect(),
         };
+        // rekey keys one child under BOTH its session id and run id:
+        // de-duplicate by pid or the sweep signals the same process group
+        // twice (a second, doomed taskkill on Windows).
+        entries.sort_by_key(|e| e.pid);
+        entries.dedup_by_key(|e| e.pid);
         for entry in entries {
             kill_process_group(entry.pid);
             if let Ok(mut guard) = entry.child.try_lock() {
@@ -399,7 +549,11 @@ impl Drop for ProcessRegistry {
         // &mut self makes locking unnecessary; poisoning must not skip the
         // kill sweep either (a panicked run leaves live children).
         let map = self.0.get_mut().unwrap_or_else(|e| e.into_inner());
-        for (_, entry) in map.drain() {
+        let mut entries: Vec<ChildEntry> = map.drain().map(|(_, e)| e).collect();
+        // Same double-keying as kill_all: signal each process group once.
+        entries.sort_by_key(|e| e.pid);
+        entries.dedup_by_key(|e| e.pid);
+        for entry in entries {
             kill_process_group(entry.pid);
             if let Ok(mut guard) = entry.child.try_lock() {
                 let _ = guard.start_kill();
@@ -554,6 +708,7 @@ fn prepare_launch(
     model: Option<String>,
     effort: Option<String>,
     permission: Option<String>,
+    additional_dirs: Vec<String>,
 ) -> Result<Launch, String> {
     let engine_impl = engine_by_id(engine).ok_or_else(|| format!("unknown engine: {engine}"))?;
     // Channels live in each CLI's native config file (provider_files); the
@@ -581,6 +736,14 @@ fn prepare_launch(
             None
         },
         permission: permission.filter(|p| !p.trim().is_empty()),
+        // Cap defensively: the list lands on a command line, and a
+        // hand-edited db should not produce an argv bomb.
+        additional_dirs: additional_dirs
+            .into_iter()
+            .map(|d| d.trim().to_string())
+            .filter(|d| !d.is_empty() && Path::new(d).is_absolute())
+            .take(32)
+            .collect(),
     };
     let bin = engine_bin(&settings, engine);
     let built = engine_impl.build_command(&req, &bin)?;
@@ -641,6 +804,11 @@ struct TurnState {
     native_session_id: Option<String>,
     saw_done: bool,
     saw_error: bool,
+    // NOTE: TurnState lives for the whole process (one run_reader per
+    // spawn), so once saw_error is set every later Done in this process
+    // is suppressed. That is correct for the current one-process-per-turn
+    // engines (omp --print, codex exec); a future multi-turn-per-process
+    // engine must reset this per turn instead.
     saw_any_output: bool,
 }
 
@@ -732,6 +900,9 @@ impl RunContext {
                 text,
                 path,
                 todos,
+                args,
+                result,
+                patch,
             } => {
                 let mut payload = serde_json::json!({ "role": role, "text": text });
                 if let Some(path) = path {
@@ -741,6 +912,15 @@ impl RunContext {
                     if let Ok(value) = serde_json::to_value(todos) {
                         payload["todos"] = value;
                     }
+                }
+                if let Some(args) = args {
+                    payload["args"] = args;
+                }
+                if let Some(result) = result {
+                    payload["result"] = result;
+                }
+                if patch {
+                    payload["patch"] = Value::Bool(true);
                 }
                 state.push(
                     &self.sink,
@@ -763,6 +943,14 @@ impl RunContext {
                     "error",
                     Value::String(error),
                 );
+                // The turn failed terminally: the frontend settles (send
+                // button back to idle) on this event, so a still-running
+                // CLI process would keep burning tokens invisibly while the
+                // UI claims the session ended. Kill the process tree now —
+                // the killed flag makes the runner's EOF path a no-op
+                // (saw_error already settled the turn) and the registry
+                // entry drains as usual.
+                self.registry.kill(&self.run_id);
             }
             EngineEvent::Warn(error) => {
                 // Not terminal: no saw_error — EOF settle still decides the
@@ -775,7 +963,29 @@ impl RunContext {
                     Value::String(error),
                 );
             }
+            EngineEvent::PermissionDenied {
+                tool,
+                path,
+                message,
+            } => {
+                // Not terminal either: the CLI works around the denial and
+                // the turn continues — the UI offers the grant alongside.
+                state.push(
+                    &self.sink,
+                    &self.run_id,
+                    &self.engine_id,
+                    "permission_denied",
+                    serde_json::json!({ "tool": tool, "path": path, "message": message }),
+                );
+            }
             EngineEvent::Done { session_id, usage } => {
+                // A Done after a terminal Error must never reach the UI: it
+                // clears the error banner and flips a failed turn back to
+                // "success" in the footer. Engines can emit both in one
+                // flush (omp: turn_end error, then agent_end done).
+                if state.saw_error {
+                    return;
+                }
                 state.saw_done = true;
                 if let Some(id) = session_id {
                     self.adopt_session_id(state, &id, false);
@@ -825,18 +1035,34 @@ async fn run_reader(stdout: ChildStdout, ctx: RunContext) {
     for path in &ctx.cleanup_files {
         let _ = std::fs::remove_file(path);
     }
+    // Drain this run's registry entries: under the native session id after
+    // rekey, and under the run id when the session id never arrived.
     if let Some(key) = state.native_session_id.clone() {
         ctx.registry.remove_if_pid(&key, ctx.pid);
     }
     ctx.registry.remove_if_pid(&ctx.run_id, ctx.pid);
+    // omp writes some failures (upstream 403/5xx, quota exhaustion) to
+    // stderr and then exits — sometimes cleanly, after a normal turn_end.
+    // A non-empty stderr on a failed exit must reach the user even when a
+    // done/error event already settled the turn; dropping it hides exactly
+    // the errors the user cannot otherwise see.
+    let stderr_tail = ctx
+        .stderr_buf
+        .lock()
+        .map(|g| redact_secrets(g.trim()))
+        .unwrap_or_default();
+    let failed = status.map(|s| !s.success()).unwrap_or(true);
+    if failed && !state.saw_error && !stderr_tail.is_empty() {
+        state.push(
+            &ctx.sink,
+            &ctx.run_id,
+            &ctx.engine_id,
+            "warn",
+            Value::String(format!("engine stderr: {stderr_tail}")),
+        );
+    }
 
     if !state.saw_done && !state.saw_error {
-        let stderr_tail = ctx
-            .stderr_buf
-            .lock()
-            .map(|g| g.trim().to_string())
-            .unwrap_or_default();
-        let failed = status.map(|s| !s.success()).unwrap_or(true);
         let killed = ctx.killed.load(std::sync::atomic::Ordering::SeqCst);
         if killed {
             // User-initiated stop: commit whatever streamed so far as a
@@ -857,7 +1083,7 @@ async fn run_reader(stdout: ChildStdout, ctx: RunContext) {
                     .unwrap_or_else(|| "unknown".to_string())
             );
             if !stderr_tail.is_empty() {
-                message.push_str(&format!(": {}", redact_secrets(&stderr_tail)));
+                message.push_str(&format!(": {stderr_tail}"));
             }
             state.push(
                 &ctx.sink,
@@ -906,6 +1132,10 @@ pub async fn send_message(
         model,
         effort,
         permission,
+        // Every user-granted directory rides along as a launch argument, so
+        // a grant approved mid-conversation takes effect on the next send
+        // (each send is a fresh process).
+        state.db.granted_roots().unwrap_or_default(),
     )?;
 
     let mut command = launch.built.command;
@@ -1009,6 +1239,7 @@ mod permission_tests {
             effort: None,
             service_tier: None,
             permission: permission.map(str::to_string),
+            additional_dirs: Vec::new(),
         }
     }
 
@@ -1095,7 +1326,7 @@ mod permission_tests {
 
     #[test]
     fn claude_maps_modes_to_permission_flags() {
-        let e = claude::ClaudeEngine;
+        let e = claude::ClaudeEngine::new();
         let auto = argv(&e, &req(Some("auto")));
         assert!(auto.contains(&"--permission-mode".to_string()));
         assert!(auto.contains(&"acceptEdits".to_string()));
@@ -1195,6 +1426,30 @@ mod permission_tests {
     }
 
     #[test]
+    fn claude_passes_granted_dirs_as_add_dir() {
+        let e = claude::ClaudeEngine::new();
+        let mut r = req(Some("auto"));
+        // Workspace itself, blanks and duplicates must not reach argv.
+        r.additional_dirs = vec![
+            "/data/shared".to_string(),
+            "/tmp".to_string(),
+            "   ".to_string(),
+            "/data/shared".to_string(),
+        ];
+        let args = argv(&e, &r);
+        let pairs: Vec<&[String]> = args
+            .windows(2)
+            .filter(|w| w[0] == "--add-dir")
+            .collect();
+        assert_eq!(pairs.len(), 1, "{args:?}");
+        assert_eq!(pairs[0][1], "/data/shared");
+
+        // Other engines have no equivalent flag: the field stays inert.
+        let codex_args = argv(&codex::CodexEngine, &r);
+        assert!(!codex_args.iter().any(|a| a == "--add-dir"));
+    }
+
+    #[test]
     fn grok_always_approves_regardless_of_request() {
         let e = grok::GrokEngine;
         for mode in [
@@ -1205,6 +1460,102 @@ mod permission_tests {
             None,
         ] {
             assert!(argv(&e, &req(mode)).contains(&"--always-approve".to_string()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+
+    /// rekey must COPY (not move) so both the session-id and run-id keys
+    /// route an interrupt to the same process. A resume whose
+    /// thread.started never arrives leaves run id as the only route — a
+    /// moving rekey leaked the child (user pressed Stop, nothing died).
+    #[tokio::test]
+    async fn rekey_keeps_both_keys_and_kill_routes_by_either() {
+        let mut child = tokio::process::Command::new(if cfg!(windows) {
+            "cmd"
+        } else {
+            "sh"
+        })
+        .args(if cfg!(windows) { ["/c", "ping -n 30 127.0.0.1"] } else { ["-c", "sleep 30"] })
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn sleep child");
+        let pid = child.id().unwrap_or(0);
+        let entry = ChildEntry {
+            child: Arc::new(TokioMutex::new(child)),
+            pid,
+            run_id: "run-1".to_string(),
+            killed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
+        let registry = ProcessRegistry::default();
+        registry.insert("run-1".to_string(), entry);
+
+        // Simulate the engine adopting the native session id mid-run.
+        registry.rekey("run-1", "session-9".to_string());
+
+        // Both keys route to the same pid; killing by the RUN id (the
+        // fallback route when the session announcement never arrived) must
+        // still find it, and the session key must survive the by-run-id
+        // kill so a second stop also lands (idempotent, pid-deduped).
+        assert!(registry.kill("run-1"));
+        // kill does not drain: both keys still map to the (now dying)
+        // child, so a second stop via the session id still lands on the
+        // same entry. Its boolean result is racy (the child may already be
+        // reaped, in which case kill_entry reports false on a SUCCESSFUL
+        // interrupt), so assert the routing — not the return value.
+        assert_eq!(registry.len(), 2);
+        let _ = registry.kill("session-9");
+
+        // The registry drains the entry from both keys on exit.
+        registry.remove_if_pid("session-9", pid);
+        registry.remove_if_pid("run-1", pid);
+        assert_eq!(registry.len(), 0);
+    }
+}
+#[cfg(test)]
+mod tool_args_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_tool_args_value_drops_empty_and_parses_strings() {
+        assert_eq!(parse_tool_args_value(&Value::Null), None);
+        assert_eq!(parse_tool_args_value(&json!({})), None);
+        assert_eq!(parse_tool_args_value(&json!([])), None);
+        assert_eq!(
+            parse_tool_args_value(&json!("{\"path\":\"a.ts\"}")),
+            Some(json!({"path": "a.ts"}))
+        );
+        assert_eq!(
+            parse_tool_args_value(&json!({"file_path": "a.ts"})),
+            Some(json!({"file_path": "a.ts"}))
+        );
+        assert_eq!(
+            parse_tool_args_value(&json!("plain command")),
+            Some(json!("plain command"))
+        );
+    }
+
+    #[test]
+    fn tool_call_message_extracts_path_and_marks_patch() {
+        match tool_call_message("Read", Some(&json!({"file_path": "src/a.ts"}))) {
+            EngineEvent::Message {
+                path, args, patch, ..
+            } => {
+                assert_eq!(path.as_deref(), Some("src/a.ts"));
+                assert_eq!(args, Some(json!({"file_path": "src/a.ts"})));
+                assert!(!patch);
+            }
+            _ => panic!("expected tool message"),
+        }
+        match tool_call_patch("Read", Some(&json!({"file_path": "src/a.ts"}))) {
+            EngineEvent::Message { patch, .. } => assert!(patch),
+            _ => panic!("expected patch"),
         }
     }
 }

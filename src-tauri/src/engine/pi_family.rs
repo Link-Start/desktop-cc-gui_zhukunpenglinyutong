@@ -139,7 +139,7 @@ fn parse_pi_family_line(line: &str, out: &mut Vec<EngineEvent>) {
     let event_type = envelope.kind.as_str();
     if !matches!(
         event_type,
-        "session" | "tool_execution_start" | "message_end" | "turn_end" | "agent_end"
+        "session" | "tool_execution_start" | "tool_execution_end" | "message_end" | "turn_end" | "agent_end"
     ) {
         return;
     }
@@ -156,14 +156,18 @@ fn parse_pi_family_line(line: &str, out: &mut Vec<EngineEvent>) {
                 .and_then(Value::as_str)
                 .unwrap_or("tool");
             let intent = value.get("intent").and_then(Value::as_str);
-            let path = value.get("args").and_then(super::tool_path_arg);
-            let todos = value.get("args").and_then(super::parse_todo_args);
-            out.push(EngineEvent::Message {
-                role: "tool".to_string(),
-                text: tool_label(name, intent),
-                path,
-                todos,
-            });
+            out.push(super::tool_call_message(
+                tool_label(name, intent),
+                value.get("args"),
+            ));
+        }
+        "tool_execution_end" => {
+            let name = value
+                .get("toolName")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            let result = value.get("result");
+            out.push(super::tool_result_patch(name, result));
         }
         "message_end" => {
             if let Some(usage) = value
@@ -176,26 +180,25 @@ fn parse_pi_family_line(line: &str, out: &mut Vec<EngineEvent>) {
             // A message-level error is one failed model call (e.g. an
             // upstream 429): the CLI retries and the turn continues, so this
             // is only a notice. turn_end/agent_end errors stay terminal.
-            if let Some(error) = value
-                .get("message")
-                .and_then(|m| m.get("errorMessage"))
-                .and_then(Value::as_str)
-                .or_else(|| value.get("errorMessage").and_then(Value::as_str))
-            {
-                if !error.trim().is_empty() {
-                    out.push(EngineEvent::Warn(error.trim().to_string()));
-                }
+            // omp shapes vary by version: `message.errorMessage`, top-level
+            // `errorMessage`, and nested `error.message` / `message.error`.
+            if let Some(error) = nested_error_text(&value, &["message"]) {
+                out.push(EngineEvent::Warn(error));
             }
         }
         "turn_end" | "agent_end" => {
-            if let Some(error) = value.get("errorMessage").and_then(Value::as_str) {
-                if !error.trim().is_empty() {
-                    out.push(EngineEvent::Error(error.trim().to_string()));
-                }
+            // omp nests the failure in `message.errorMessage` on every one
+            // of these events (e.g. upstream 401 Invalid token): a failed
+            // model call ends the turn with stopReason=error, so this is
+            // terminal — same treatment as a top-level errorMessage.
+            if let Some(error) = nested_error_text(&value, &["message"]) {
+                out.push(EngineEvent::Error(error));
             }
             // No terminal result event exists in this protocol; the runner
-            // emits Done on clean EOF. agent_end still settles the turn.
-            if event_type == "agent_end" {
+            // emits Done on clean EOF. agent_end still settles the turn —
+            // but never after an Error: the Done event would clear the
+            // error banner in the UI and report a failed turn as success.
+            if event_type == "agent_end" && !out.iter().any(|e| matches!(e, EngineEvent::Error(_))) {
                 out.push(EngineEvent::Done {
                     session_id: None,
                     usage: None,
@@ -218,6 +221,33 @@ pub fn tool_label(name: &str, intent: Option<&str>) -> String {
         }
         _ => name.to_string(),
     }
+}
+
+/// Find the first non-empty error text across the shapes omp emits:
+/// `<prefix>.errorMessage`, top-level `errorMessage`, `error.message`, and
+/// `<prefix>.error` when it is a plain string. Returns the
+/// trimmed text; None when the event carries no error.
+fn nested_error_text(value: &Value, prefix: &[&str]) -> Option<String> {
+    let mut candidates: Vec<Option<&str>> = Vec::new();
+    for pre in prefix {
+        candidates.push(
+            value
+                .get(*pre)
+                .and_then(|m| m.get("errorMessage"))
+                .and_then(Value::as_str),
+        );
+    }
+    candidates.push(value.get("errorMessage").and_then(Value::as_str));
+    candidates.push(value.get("error").and_then(|e| e.get("message")).and_then(Value::as_str));
+    for pre in prefix {
+        candidates.push(value.get(*pre).and_then(|m| m.get("error")).and_then(Value::as_str));
+    }
+    candidates
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|text| !text.is_empty())
+        .map(str::to_string)
 }
 
 #[cfg(test)]
@@ -290,16 +320,25 @@ mod tests {
         parse_pi_family_line(&line, &mut out);
         match &out[0] {
             EngineEvent::Message {
-                role, text, path, ..
+                role,
+                text,
+                path,
+                args,
+                ..
             } => {
                 assert_eq!(role, "tool");
                 assert_eq!(text, "edit · Adding chrome token");
                 assert_eq!(path.as_deref(), Some("src/app.tsx"));
+                assert_eq!(
+                    args,
+                    &Some(serde_json::json!({"path": "src/app.tsx", "input": {}}))
+                );
             }
             _ => panic!("expected tool message"),
         }
 
-        // bash-style args carry no path key -> None.
+        // bash-style args carry no path key -> None. No file chip, but the
+        // command still lands in `args` for the expandable panel.
         let line = serde_json::json!({
             "type": "tool_execution_start",
             "toolCallId": "tool_2",
@@ -310,7 +349,10 @@ mod tests {
         let mut out = Vec::new();
         parse_pi_family_line(&line, &mut out);
         match &out[0] {
-            EngineEvent::Message { path, .. } => assert_eq!(*path, None),
+            EngineEvent::Message { path, args, .. } => {
+                assert_eq!(*path, None);
+                assert_eq!(args, &Some(serde_json::json!({"command": "ls"})));
+            }
             _ => panic!("expected tool message"),
         }
     }
@@ -359,5 +401,62 @@ mod tests {
             EngineEvent::Message { todos, .. } => assert!(todos.is_none()),
             _ => panic!("expected tool message"),
         }
+    }
+
+    #[test]
+    fn message_end_extracts_nested_error_shapes_as_warn() {
+        for line in [
+            serde_json::json!({"type":"message_end","message":{"errorMessage":"upstream 429"}}),
+            serde_json::json!({"type":"message_end","errorMessage":"top-level 429"}),
+            serde_json::json!({"type":"message_end","error":{"message":"nested 429"}}),
+            serde_json::json!({"type":"message_end","message":{"error":"message.error 429"}}),
+        ] {
+            let mut out = Vec::new();
+            parse_pi_family_line(&line.to_string(), &mut out);
+            match out.last() {
+                Some(EngineEvent::Warn(text)) => assert!(text.contains("429"), "{line}"),
+                other => panic!("expected Warn for {line}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn turn_end_extracts_error_from_all_shapes() {
+        for line in [
+            serde_json::json!({"type":"turn_end","errorMessage":"boom"}),
+            serde_json::json!({"type":"turn_end","error":{"message":"nested boom"}}),
+            // Real omp 401 shape: the failure nests in `message.errorMessage`
+            // with stopReason=error on the enclosing message.
+            serde_json::json!({"type":"turn_end","message":{"role":"assistant","stopReason":"error","errorStatus":401,"errorMessage":"401 Invalid token"}}),
+        ] {
+            let mut out = Vec::new();
+            parse_pi_family_line(&line.to_string(), &mut out);
+            match out.first() {
+                Some(EngineEvent::Error(text)) => assert!(text.contains("boom") || text.contains("401"), "{line}"),
+                other => panic!("expected Error for {line}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn agent_end_after_error_does_not_emit_done() {
+        // A failed turn ends turn_end(error) + agent_end: the Done must be
+        // suppressed or the UI clears the error banner and reports success.
+        let line = serde_json::json!({
+            "type":"agent_end",
+            "message":{"stopReason":"error","errorMessage":"401 Invalid token"},
+            "isTerminal":true
+        })
+        .to_string();
+        let mut out = Vec::new();
+        parse_pi_family_line(&line, &mut out);
+        assert!(matches!(out[0], EngineEvent::Error(_)), "got {out:?}");
+        assert!(!out.iter().any(|e| matches!(e, EngineEvent::Done { .. })), "Done leaked after Error: {out:?}");
+
+        // Healthy turn: agent_end without an error still settles with Done.
+        let ok_line = serde_json::json!({"type":"agent_end","isTerminal":true}).to_string();
+        let mut ok_out = Vec::new();
+        parse_pi_family_line(&ok_line, &mut ok_out);
+        assert!(matches!(ok_out[0], EngineEvent::Done { .. }), "got {ok_out:?}");
     }
 }
