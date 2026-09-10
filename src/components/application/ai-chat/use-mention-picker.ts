@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react";
 import {
+  caretLeftPx,
   extractText,
   findMentionTrigger,
   getCaretOffset,
@@ -79,17 +80,10 @@ export function useMentionPicker({
   }
 
   /** Caret x relative to the composer wrapper, clamped to the menu width. */
-  const caretLeftPx = useCallback(() => {
-    const wrapper = wrapperRef.current;
-    const selection = window.getSelection();
-    if (!wrapper || !selection || selection.rangeCount === 0) return 0;
-    const rect = selection.getRangeAt(0).getBoundingClientRect();
-    const wrap = wrapper.getBoundingClientRect();
-    // A collapsed range in an element container (right after a chip) reports
-    // a zero rect in WKWebView — fall back to the wrapper's left edge.
-    const raw = (rect.left || wrap.left) - wrap.left;
-    return Math.max(0, Math.min(raw, Math.max(0, wrap.width - 320)));
-  }, [wrapperRef]);
+  const caretLeft = useCallback(
+    () => caretLeftPx(wrapperRef.current, 320),
+    [wrapperRef],
+  );
 
   /** Re-derive the mention trigger from the DOM (called on real input only,
    *  never during IME composition). */
@@ -101,9 +95,9 @@ export function useMentionPicker({
     setMention((prev) => {
       if (!trigger) return null;
       if (prev && prev.start === trigger.start) return { ...prev, query: trigger.query };
-      return { ...trigger, left: caretLeftPx() };
+      return { ...trigger, left: caretLeft() };
     });
-  }, [editableRef, workspacePath, caretLeftPx]);
+  }, [editableRef, workspacePath, caretLeft]);
 
   // Close the picker when the caret leaves the trigger (mouse click, arrow
   // keys). Typing keeps the same trigger start, so input stays open.

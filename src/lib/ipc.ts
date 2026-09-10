@@ -23,6 +23,7 @@ export interface SessionMeta {
 export type TodoStatus = "pending" | "active" | "complete" | "blocked" | "dropped";
 
 export interface TodoItem {
+  id?: string | null;
   content: string;
   status: TodoStatus;
 }
@@ -48,7 +49,7 @@ export interface Message {
   ts: string | null;
   usage?: unknown;
   model?: string | null;
-  /** Reasoning effort level ("low" | "medium" | "high" | "xhigh" | "max") */
+  /** Reasoning effort level ("low" | "medium" | "high" | "xhigh" | "max" | "ultra") */
   effort?: string | null;
   /** Turn duration in milliseconds (measured from prompt send to turn completion) */
   durationMs?: number | null;
@@ -185,8 +186,12 @@ export interface AppSettings {
   ompBin: string | null;
   dshBin: string | null;
   defaultModels: Record<string, string>;
+  /** Per-engine user-added custom model ids (设置 → CLI → 自定义模型). */
+  customModels: Record<string, string[]>;
   defaultEfforts: Record<string, string>;
   ompOpenaiServiceTier?: "default" | "priority" | null;
+  /** Codex Fast override; null preserves ~/.codex/config.toml. */
+  codexServiceTier?: "default" | "priority" | null;
   /** Max sessions listed per workspace in the sidebar (default 5). */
   sidebarThreadLimit: number;
   /** Composer send gesture: "enter" (Enter sends) or "cmdEnter" (⌘/Ctrl+Enter sends). */
@@ -235,6 +240,25 @@ export interface FileIndexEntry {
   /** Workspace-relative path, "/" separators. */
   rel: string;
   isDir: boolean;
+}
+
+/** What a `/` picker entry is. Commands (`.claude/commands/*.md`) and
+ *  skills (`.claude/skills/<name>/SKILL.md`) share the picker but stay
+ *  distinct: the menu keys icons/badges/section grouping off this field,
+ *  and per-kind merging lets a command and a skill share a name. */
+export type SlashEntryKind = "command" | "skill";
+
+/** A `/` picker entry (`list_slash_commands`): workspace entries shadow
+ *  global ones of the same name and kind. */
+export interface SlashCommandEntry {
+  /** Slash-less name; commands join directory segments with `:`
+   *  ("aimax:plan"), skills use the SKILL.md directory name. */
+  name: string;
+  description?: string | null;
+  argumentHint?: string | null;
+  /** "workspace" (project `.claude/`) or "global" (CLI home). */
+  source: string;
+  kind: SlashEntryKind;
 }
 
 export interface GitFileEntry {
@@ -306,12 +330,29 @@ export interface DshHostStatus {
   error: string | null;
 }
 
-/** Local dsh CLI version + npm registry latest (`dsh_cli_version`). */
-export interface DshCliVersion {
+/** Managed-CLI local version + npm registry latest (`cli_version_status`). */
+export interface CliVersionStatus {
+  engine: string;
   installed: boolean;
   localVersion: string | null;
   latestVersion: string | null;
   updateAvailable: boolean;
+  /** How install/update acts: "npm" | "native"; null = no action (grok). */
+  updateKind: "npm" | "native" | null;
+}
+/** Confirm-dialog execution plan for a one-click install/update. */
+export interface CliUpdatePlan {
+  engine: string;
+  action: "install" | "update";
+  /** "npm" | "native" | "none". */
+  kind: string;
+  /** Exact argv that will execute. */
+  command: string[];
+  /** Copy-paste fallback for a manual run. */
+  manualCommand: string;
+  canRun: boolean;
+  blockers: string[];
+  platform: string;
 }
 
 // ==================== Typed invoke wrappers ====================
@@ -374,6 +415,21 @@ export interface PluginInfo {
   minAppVersion: string | null;
 }
 
+export interface OfficialConfigFile {
+  /** Absolute path — the pane label, and the write-back key. */
+  path: string;
+  /** Editor language mode: "json" | "toml". */
+  format: string;
+  /** Live file content; "" when absent (`exists` distinguishes). */
+  content: string;
+  exists: boolean;
+}
+
+export interface OfficialConfigDraft {
+  path: string;
+  content: string;
+}
+
 export const ipc = {
   // config
   getCliConfig: () => invoke<CliConfig>("get_cli_config"),
@@ -387,6 +443,13 @@ export const ipc = {
    *  switch confirmation); empty for display-only engines. */
   providerFilePaths: (engine: string) =>
     invoke<string[]>("provider_file_paths", { engine }),
+  /** Editable files of the engine's 官方配置 (pane order); empty for
+   *  pi/omp/dsh, whose official state lives in auth stores. */
+  officialConfigRead: (engine: string) =>
+    invoke<OfficialConfigFile[]>("official_config_read", { engine }),
+  /** Gated backend-side on 官方配置 being the active configuration. */
+  officialConfigWrite: (engine: string, files: OfficialConfigDraft[]) =>
+    invoke<void>("official_config_write", { engine, files }),
   reorderProviders: (engine: string, ids: string[]) =>
     invoke<void>("reorder_providers", { engine, ids }),
   setEngineEnabled: (engine: string, enabled: boolean) =>
@@ -410,8 +473,6 @@ export const ipc = {
     invoke<CcSwitchImportResult>("import_cc_switch", { engine }),
   importCcSwitchFromPath: (path: string, engine: string) =>
     invoke<CcSwitchImportResult>("import_cc_switch_from_path", { path, engine }),
-  testProviderConnection: (url: string) =>
-    invoke<number>("test_provider_connection", { url }),
   /** 拉取模型: probe the channel's /v1/models endpoint for its model list. */
   fetchProviderModels: (baseUrl: string, apiKey: string) =>
     invoke<ProviderModelList>("fetch_provider_models", { baseUrl, apiKey }),
@@ -504,6 +565,11 @@ export const ipc = {
    * paths; backend caps at 20k entries). */
   listFileIndex: (path: string) =>
     withGrantRetry(() => invoke<FileIndexEntry[]>("list_file_index", { path })),
+  /** Catalog for the composer `/` picker (workspace
+   *  `.claude/commands` + `.claude/skills`, plus the CLI's global config
+   *  home). Commands and skills are distinguished by `entry.kind`. */
+  listSlashCommands: (path: string) =>
+    withGrantRetry(() => invoke<SlashCommandEntry[]>("list_slash_commands", { path })),
   // granted directories (desktop-only commands; the settings list hides on web)
   listGrantedRoots: () => invoke<string[]>("list_granted_roots"),
   /** Directory a grant for `path` would cover (path itself when a dir, else
@@ -566,6 +632,11 @@ export const ipc = {
   dshHostStatus: () => invoke<DshHostStatus>("dsh_host_status"),
   dshHostStart: () => invoke<DshHostStatus>("dsh_host_start"),
   dshHostStop: () => invoke<{ ok: boolean }>("dsh_host_stop"),
-  dshCliVersion: () => invoke<DshCliVersion>("dsh_cli_version"),
-  dshCliUpdate: () => invoke<{ ok: boolean; version: string | null }>("dsh_cli_update"),
+  // managed-CLI lifecycle (CLI 管理 header: version probe + install/update)
+  cliVersionStatus: (engine: string) =>
+    invoke<CliVersionStatus>("cli_version_status", { engine }),
+  cliUpdatePlan: (engine: string) =>
+    invoke<CliUpdatePlan>("cli_update_plan", { engine }),
+  cliUpdate: (engine: string, runId: string) =>
+    invoke<{ ok: boolean; version: string | null }>("cli_update", { engine, runId }),
 };

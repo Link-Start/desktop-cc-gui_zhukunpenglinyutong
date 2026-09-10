@@ -1,6 +1,10 @@
 import { isValidElement, memo, useLayoutEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
+import { remarkDisplayMath } from "./remark-display-math";
 import { useReducedMotion } from "motion/react";
 import { StreamReveal } from "./stream-reveal";
 import { RevealText } from "./reveal-text";
@@ -22,7 +26,7 @@ import {
   toFileLink,
 } from "@/lib/fileLinks";
 
-const REMARK_PLUGINS = [remarkGfm];
+const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkDisplayMath];
 /** ReactMarkdown's plugin-list prop type, derived here instead of importing
  * `PluggableList` from unified (a transitive dep we don't declare). */
 type PluginListProp = NonNullable<
@@ -175,11 +179,15 @@ export default memo(function Markdown({
   // HAST tree and re-parse the whole document.
   const hostComponents = useMemo<Components>(
     () => ({
-      span: ({ node, className, children }) => {
+      span: ({ node, className, children, ...rest }) => {
         const start = node?.properties.dataStreamStart;
+        // Forward every other prop (style, aria-hidden, ...): KaTeX positions
+        // superscripts, fractions and radicals with inline styles like
+        // `style="top:-3.06em"` on bare spans — dropping them collapses the
+        // whole formula onto the baseline with overlapping glyphs.
         return typeof start === "number" && typeof children === "string"
           ? <RevealText controller={controller} start={start}>{children}</RevealText>
-          : <span className={className}>{children}</span>;
+          : <span className={className} {...rest}>{children}</span>;
       },
       a: ({ href, children }) => {
         const url = href ?? "";
@@ -248,6 +256,10 @@ export default memo(function Markdown({
   const rehypePlugins = useMemo(
     () =>
       [
+        // Math first: a display formula arrives as a code block
+        // (`language-math`), and the highlighter below would otherwise try to
+        // syntax-highlight the TeX as if it were source code.
+        rehypeKatex,
         [cachedHighlight, { streaming }],
         ...contributions.flatMap((c) => c.rehypePlugins ?? []),
         ...(revealEnabled ? [plan.plugin] : []),

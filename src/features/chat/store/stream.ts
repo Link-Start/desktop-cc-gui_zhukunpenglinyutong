@@ -22,6 +22,8 @@ export interface SessionState {
    * indicator's elapsed timer so it survives the indicator's unmount/remount
    * cycle (idle ↔ growing) instead of restarting from 0 every pause. */
   turnStartedAt: number | null;
+  activeModel?: string | null;
+  activeEffort?: string | null;
   usage: unknown;
   error: string | null;
   /** Messages typed while a turn streams; sent FIFO when the turn ends. */
@@ -37,11 +39,42 @@ export const EMPTY_SESSION: SessionState = {
   loading: false,
   streaming: false,
   turnStartedAt: null,
+  activeModel: null,
+  activeEffort: null,
   usage: null,
   error: null,
   queue: [],
   interrupted: false,
 };
+
+/** The model one session runs with, most specific first:
+ *
+ *  1. the tab's own pick (an explicit choice for this session),
+ *  2. what the engine reported running for this session,
+ *  3. the model this session's history was written with,
+ *  4. the engine default (new chats, sessions with no history yet).
+ *
+ * Per session on purpose: two omp sessions may run different models, so the
+ * picker, the send, and the stamped rows must all read the session's model —
+ * an engine-wide default would make one session's pick leak into the other.
+ */
+export function resolveSessionModel(
+  tab: { engine: string; model?: string } | null | undefined,
+  session: Pick<SessionState, "activeModel" | "messages"> | undefined,
+  engineDefault?: string,
+): string | undefined {
+  if (!tab) return engineDefault;
+  if (tab.model) return tab.model;
+  if (session?.activeModel) return session.activeModel;
+  const messages = session?.messages;
+  if (messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const model = messages[i].model;
+      if (model) return model;
+    }
+  }
+  return engineDefault;
+}
 
 /** Minimal store shape these helpers touch. */
 export interface BySessionSlice {
@@ -147,6 +180,13 @@ export function bufferStreamPart(
   if (last?.kind === kind) last.text += text;
   else pending.parts.push({ kind, text });
   pendingStreams.set(key, pending);
+}
+
+export function updatePendingStreamModel(key: string, model: string) {
+  const pending = pendingStreams.get(key);
+  if (pending) {
+    pending.model = model;
+  }
 }
 
 /** Pull one session's unflushed stream chunks out of the pending map. Any

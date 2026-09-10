@@ -1,5 +1,6 @@
 pub mod claude;
 pub mod codex;
+mod codex_provider_env;
 pub mod dsh;
 pub mod grok;
 pub mod images;
@@ -37,10 +38,11 @@ pub struct SendRequest {
     pub prompt: String,
     pub images: Vec<String>,
     pub model: Option<String>,
-    /// Reasoning effort ("low" | "medium" | "high" | "xhigh" | "max"); engines without an
+    /// Reasoning effort ("low" | "medium" | "high" | "xhigh" | "max" | "ultra"); engines without an
     /// effort knob ignore it, engines with a narrower knob clamp.
     pub effort: Option<String>,
-    /// OMP OpenAI service tier override, independent of reasoning effort.
+    /// OpenAI service tier override (OMP `--service-tier` / Codex `-c service_tier`),
+    /// independent of reasoning effort.
     pub service_tier: Option<String>,
     /// Permission mode ("auto" | "manual" | "plan" | "bypass"); each engine
     /// resolves it against the modes it can actually honor at spawn (see
@@ -109,11 +111,15 @@ pub enum EngineEvent {
         session_id: Option<String>,
         usage: Option<Value>,
     },
+    /// Actual model ID emitted by the engine or resolved at launch.
+    Model(String),
 }
 
 /// One todo entry carried to the frontend.
 #[derive(Debug, Clone, Serialize)]
 pub struct TodoItem {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub content: String,
     pub status: String,
 }
@@ -147,14 +153,31 @@ pub(crate) fn parse_tool_args_value(value: &Value) -> Option<Value> {
     }
 }
 
+/// Check if a tool name is a dedicated task/todo management tool.
+#[allow(dead_code)]
+pub(crate) fn is_todo_tool(name: &str) -> bool {
+    let lower = name.trim().to_ascii_lowercase();
+    lower == "todowrite"
+        || lower == "todo_write"
+        || lower == "todo"
+        || lower == "todos"
+        || lower == "taskcreate"
+        || lower == "task_create"
+        || lower == "taskupdate"
+        || lower == "task_update"
+        || lower == "task"
+}
+
 /// Tool-call start: name plus parsed args (path / todos derived from args).
 pub(crate) fn tool_call_message(name: impl Into<String>, args: Option<&Value>) -> EngineEvent {
+    let name = name.into();
     let args = args.and_then(parse_tool_args_value);
+    let todos = args.as_ref().and_then(parse_todo_args);
     EngineEvent::Message {
         role: "tool".to_string(),
-        text: name.into(),
+        text: name,
         path: args.as_ref().and_then(tool_path_arg),
-        todos: args.as_ref().and_then(parse_todo_args),
+        todos,
         args,
         result: None,
         patch: false,
@@ -228,7 +251,18 @@ pub(crate) fn tool_path_arg(args: &Value) -> Option<String> {
 /// protocol (`op` + task/list, mostly patches). None when the args carry
 /// no todo data.
 pub(crate) fn parse_todo_args(args: &Value) -> Option<TodosPayload> {
+    // Normal tools (e.g. Bash, Edit, Read, Write) carry command or file_path;
+    // their description must NEVER be mistaken for a Todo item.
+    if args.get("command").is_some()
+        || args.get("file_path").is_some()
+        || args.get("filePath").is_some()
+        || args.get("pattern").is_some()
+    {
+        return None;
+    }
+
     let pending_item = |content: &str| TodoItem {
+        id: None,
         content: content.to_string(),
         status: "pending".to_string(),
     };
@@ -251,7 +285,7 @@ pub(crate) fn parse_todo_args(args: &Value) -> Option<TodosPayload> {
         let items = todos
             .iter()
             .filter_map(|entry| {
-                let content = ["content", "text", "title", "task"]
+                let content = ["content", "text", "title", "task", "subject"]
                     .iter()
                     .filter_map(|key| entry.get(key).and_then(Value::as_str))
                     .map(|s| s.trim())
@@ -262,7 +296,13 @@ pub(crate) fn parse_todo_args(args: &Value) -> Option<TodosPayload> {
                     "blocked" => "blocked",
                     _ => "pending",
                 };
+                let id = entry
+                    .get("id")
+                    .or_else(|| entry.get("taskId"))
+                    .and_then(Value::as_str)
+                    .map(|s| s.to_string());
                 Some(TodoItem {
+                    id,
                     content: content.to_string(),
                     status: status.to_string(),
                 })
@@ -273,6 +313,62 @@ pub(crate) fn parse_todo_args(args: &Value) -> Option<TodosPayload> {
             replace: true,
         });
     }
+
+    // TaskCreate tool call support: MUST have explicit `subject` (never fallback to tool description)
+    if let Some(subject) = args
+        .get("subject")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        if args.get("taskId").is_none() && args.get("op").is_none() {
+            let status = match args.get("status").and_then(Value::as_str).unwrap_or("") {
+                "in_progress" | "running" | "active" => "active",
+                "completed" | "complete" | "done" => "complete",
+                "blocked" => "blocked",
+                _ => "pending",
+            };
+            return Some(TodosPayload {
+                items: vec![TodoItem {
+                    id: None,
+                    content: subject.to_string(),
+                    status: status.to_string(),
+                }],
+                replace: false,
+            });
+        }
+    }
+
+    // TaskUpdate tool call support: MUST have `taskId`
+    if let Some(task_id) = args
+        .get("taskId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let content = args
+            .get("subject")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("");
+        let status = match args.get("status").and_then(Value::as_str).unwrap_or("") {
+            "in_progress" | "running" | "active" => "active",
+            "completed" | "complete" | "done" => "complete",
+            "blocked" => "blocked",
+            "deleted" => "dropped",
+            _ => "pending",
+        };
+        return Some(TodosPayload {
+            items: vec![TodoItem {
+                id: Some(task_id.to_string()),
+                content: content.to_string(),
+                status: status.to_string(),
+            }],
+            replace: false,
+        });
+    }
+
     let op = args.get("op").and_then(Value::as_str)?;
     match op {
         "init" => Some(TodosPayload {
@@ -300,6 +396,7 @@ pub(crate) fn parse_todo_args(args: &Value) -> Option<TodosPayload> {
             };
             Some(TodosPayload {
                 items: vec![TodoItem {
+                    id: None,
                     content: task.to_string(),
                     status: status.to_string(),
                 }],
@@ -408,8 +505,9 @@ pub(crate) fn push_session_id(value: &Value, key: &str, out: &mut Vec<EngineEven
 
 /// Live engine child processes keyed by session key (native session id once
 /// known, otherwise the run id). Drop kills everything synchronously. Clone
-/// is a refcount bump: the registry keys the same child under BOTH keys
-/// after `rekey` so either route can interrupt it.
+/// is a refcount bump: the registry keys the same child under BOTH keys —
+/// its run id and its session id (preassigned at spawn, or adopted via
+/// `rekey`) — so either route can interrupt it.
 #[derive(Clone)]
 pub struct ChildEntry {
     pub child: Arc<TokioMutex<Child>>,
@@ -437,6 +535,18 @@ impl ProcessRegistry {
 
     fn len(&self) -> usize {
         self.0.lock().map(|map| map.len()).unwrap_or(0)
+    }
+
+    /// Register a second lookup key for the same live child without
+    /// replacing an unrelated concurrent run. A resumed session is keyed
+    /// here at spawn: its id is preassigned, so the engine's own session
+    /// announcement equals it and never triggers a rekey.
+    fn insert_alias(&self, key: String, entry: ChildEntry) {
+        if let Ok(mut map) = self.0.lock() {
+            if !map.contains_key(&key) {
+                map.insert(key, entry);
+            }
+        }
     }
 
     /// Copy the entry to the native-session key once known. The run_id key
@@ -501,11 +611,14 @@ impl ProcessRegistry {
     pub fn kill(&self, key: &str) -> bool {
         let mut entries: Vec<(u32, Arc<TokioMutex<tokio::process::Child>>, Arc<std::sync::atomic::AtomicBool>)> =
             match self.0.lock() {
-                Ok(map) => map
-                    .iter()
-                    .filter(|(k, e)| *k == key || e.run_id == key)
-                    .map(|(_, e)| (e.pid, Arc::clone(&e.child), Arc::clone(&e.killed)))
-                    .collect(),
+                Ok(map) => {
+                    let mut seen_pids = std::collections::HashSet::new();
+                    map.iter()
+                        .filter(|(k, e)| *k == key || e.run_id == key)
+                        .filter(|(_, e)| seen_pids.insert(e.pid))
+                        .map(|(_, e)| (e.pid, Arc::clone(&e.child), Arc::clone(&e.killed)))
+                        .collect()
+                }
                 Err(_) => Vec::new(),
             };
         // The registry keys one child under BOTH its session id and run id
@@ -571,11 +684,15 @@ pub(crate) fn kill_process_group(pid: u32) {
 }
 
 /// Windows has no process groups; npm CLIs spawn as `cmd /c x.cmd`, so the
-/// real CLI is a grandchild. Killing only the direct child (start_kill)
-/// orphans node — the turn keeps streaming and burning API calls, and its
-/// inherited stdout pipe never reaches EOF. `taskkill /T /F` takes the
-/// whole tree down. Fire-and-forget: the callers' start_kill still handles
-/// the direct child synchronously.
+/// real CLI (node/bun) is a grandchild. `taskkill /T /F` walks the tree from
+/// the wrapper down.
+///
+/// This MUST complete before the caller terminates the direct child. It used
+/// to be fire-and-forget, and `kill_entry`'s `start_kill()` killed the
+/// wrapper first: by the time taskkill ran, its target pid was gone, the
+/// tree walk found nothing, and the real CLI kept streaming as an orphan
+/// (dangling ppid) long after the user pressed Stop. Waiting here is what
+/// makes the stop button actually stop the engine.
 #[cfg(not(unix))]
 pub(crate) fn kill_process_group(pid: u32) {
     let mut command = std::process::Command::new("taskkill");
@@ -590,7 +707,23 @@ pub(crate) fn kill_process_group(pid: u32) {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    let _ = command.spawn();
+    let Ok(mut killer) = command.spawn() else {
+        return;
+    };
+    // Bounded: app teardown sweeps every child, and a wedged taskkill must
+    // not hang the exit path. Normal completion is tens of milliseconds.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    loop {
+        match killer.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        }
+    }
 }
 
 // ==================== stderr redaction ====================
@@ -640,7 +773,7 @@ pub struct EngineInfo {
     pub permissions: Vec<String>,
 }
 
-fn engine_bin(settings: &crate::settings::AppSettings, engine_id: &str) -> String {
+pub(crate) fn engine_bin(settings: &crate::settings::AppSettings, engine_id: &str) -> String {
     if let Some(custom) = settings.bin_override(engine_id) {
         let trimmed = custom.trim();
         if !trimmed.is_empty() {
@@ -730,10 +863,10 @@ fn prepare_launch(
         images: image_paths.unwrap_or_default(),
         model,
         effort,
-        service_tier: if engine == "omp" {
-            settings.omp_openai_service_tier.clone()
-        } else {
-            None
+        service_tier: match engine {
+            "omp" => settings.omp_openai_service_tier.clone(),
+            "codex" => settings.codex_service_tier.clone(),
+            _ => None,
         },
         permission: permission.filter(|p| !p.trim().is_empty()),
         // Cap defensively: the list lands on a command line, and a
@@ -853,6 +986,7 @@ struct RunContext {
     pid: u32,
     /// Session id fixed before spawn (grok `-s`); seeds TurnState.
     preassigned_session_id: Option<String>,
+    initial_model: Option<String>,
     child: Arc<TokioMutex<Child>>,
     killed: Arc<std::sync::atomic::AtomicBool>,
     cleanup_files: Vec<PathBuf>,
@@ -950,7 +1084,14 @@ impl RunContext {
                 // the killed flag makes the runner's EOF path a no-op
                 // (saw_error already settled the turn) and the registry
                 // entry drains as usual.
-                self.registry.kill(&self.run_id);
+                //
+                // Off the reader thread: the kill blocks on the Windows tree
+                // walk, and stalling this task would also stall the stdout
+                // drain it owns. saw_error already settled the turn, so
+                // nothing here depends on the kill completing first.
+                let registry = Arc::clone(&self.registry);
+                let run_id = self.run_id.clone();
+                tokio::task::spawn_blocking(move || registry.kill(&run_id));
             }
             EngineEvent::Warn(error) => {
                 // Not terminal: no saw_error — EOF settle still decides the
@@ -976,6 +1117,15 @@ impl RunContext {
                     &self.engine_id,
                     "permission_denied",
                     serde_json::json!({ "tool": tool, "path": path, "message": message }),
+                );
+            }
+            EngineEvent::Model(model) => {
+                state.push(
+                    &self.sink,
+                    &self.run_id,
+                    &self.engine_id,
+                    "model",
+                    Value::String(model),
                 );
             }
             EngineEvent::Done { session_id, usage } => {
@@ -1006,6 +1156,9 @@ impl RunContext {
 /// registry cleanup, temp-file cleanup, and the terminal done/error event.
 async fn run_reader(stdout: ChildStdout, ctx: RunContext) {
     let mut state = TurnState::new(ctx.preassigned_session_id.clone());
+    if let Some(model) = ctx.initial_model.clone() {
+        ctx.dispatch_event(&mut state, EngineEvent::Model(model));
+    }
     let mut reader = BufReader::new(stdout);
     let mut line = String::new();
     loop {
@@ -1139,6 +1292,9 @@ pub async fn send_message(
     )?;
 
     let mut command = launch.built.command;
+    if engine == "codex" {
+        codex_provider_env::apply(&mut command).await;
+    }
     command
         .stdin(if launch.built.stdin_payload.is_some() {
             std::process::Stdio::piped()
@@ -1197,8 +1353,30 @@ pub async fn send_message(
             killed: Arc::clone(&killed),
         },
     );
+    if let Some(session_id) = launch.built.preassigned_session_id.as_deref() {
+        state.processes.insert_alias(
+            session_id.to_string(),
+            ChildEntry {
+                child: Arc::clone(&child),
+                pid,
+                run_id: run_id.clone(),
+                killed: Arc::clone(&killed),
+            },
+        );
+    }
 
     let stderr_buf = spawn_stderr_capture(stderr);
+    let initial_model = if engine == "claude" {
+        launch
+            .req
+            .model
+            .as_deref()
+            .map(models::resolve_claude_launch_model)
+            .or_else(|| Some(models::resolve_claude_launch_model("default")))
+            .filter(|m| !m.is_empty())
+    } else {
+        launch.req.model.clone()
+    };
     let ctx = RunContext {
         sink: Arc::clone(&state.sink),
         registry: Arc::clone(&state.processes),
@@ -1207,6 +1385,7 @@ pub async fn send_message(
         run_id: run_id.clone(),
         pid,
         preassigned_session_id: launch.built.preassigned_session_id.clone(),
+        initial_model,
         child,
         killed,
         cleanup_files: launch.built.cleanup_files,
@@ -1220,9 +1399,18 @@ pub async fn send_message(
     })
 }
 
+/// Async + spawn_blocking: the kill waits for the Windows tree walk to
+/// finish (see `kill_process_group`), and a synchronous command would hold
+/// that wait on the UI thread — the app would visibly hitch on every Stop.
 #[tauri::command]
-pub fn interrupt_session(state: tauri::State<'_, crate::AppState>, session_id: String) -> bool {
-    state.processes.kill(&session_id)
+pub async fn interrupt_session(
+    state: tauri::State<'_, crate::AppState>,
+    session_id: String,
+) -> Result<bool, String> {
+    let registry = Arc::clone(&state.processes);
+    tauri::async_runtime::spawn_blocking(move || registry.kill(&session_id))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -1515,6 +1703,111 @@ mod registry_tests {
         registry.remove_if_pid("session-9", pid);
         registry.remove_if_pid("run-1", pid);
         assert_eq!(registry.len(), 0);
+    }
+
+    /// A resumed session is registered under its preassigned id at spawn:
+    /// the engine's own announcement of that same id equals it, so
+    /// adopt_session_id early-returns and never rekeys. Without the alias a
+    /// by-session-id Stop found nothing.
+    #[tokio::test]
+    async fn preassigned_session_alias_routes_stop_before_session_event() {
+        let child = tokio::process::Command::new(if cfg!(windows) { "cmd" } else { "sh" })
+            .args(if cfg!(windows) { ["/c", "ping -n 30 127.0.0.1"] } else { ["-c", "sleep 30"] })
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn sleep child");
+        let pid = child.id().unwrap_or(0);
+        let entry = ChildEntry {
+            child: Arc::new(TokioMutex::new(child)),
+            pid,
+            run_id: "run-preassigned".to_string(),
+            killed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
+        let registry = ProcessRegistry::default();
+        registry.insert("run-preassigned".to_string(), entry.clone());
+        registry.insert_alias("session-preassigned".to_string(), entry);
+
+        assert!(registry.kill("session-preassigned"));
+        registry.remove_if_pid("session-preassigned", pid);
+        registry.remove_if_pid("run-preassigned", pid);
+        assert_eq!(registry.len(), 0);
+    }
+
+    /// The real Windows stop bug: engine CLIs run as `cmd /c shim.cmd` and
+    /// the model process is a grandchild. Killing must take the WHOLE tree
+    /// down synchronously — a fire-and-forget taskkill that raced the direct
+    /// child's start_kill orphaned the grandchild (it kept streaming and
+    /// burning tokens after the user pressed Stop). This spawns a cmd whose
+    /// grandchild outlives it and asserts the grandchild is gone after kill.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn kill_reaps_windows_grandchild_process_tree() {
+        use std::collections::HashSet;
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
+
+        let child = tokio::process::Command::new("cmd")
+            .args(["/c", "ping -n 60 127.0.0.1 > NUL"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn cmd child");
+        let cmd_pid = child.id().unwrap_or(0);
+
+        // Let cmd spawn its ping grandchild.
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        let mut sys = System::new();
+        sys.refresh_processes_specifics(
+            ProcessesToUpdate::All,
+            true,
+            ProcessRefreshKind::nothing(),
+        );
+        let grandchildren: Vec<Pid> = sys
+            .processes()
+            .iter()
+            .filter(|(_, p)| p.parent() == Some(Pid::from_u32(cmd_pid)))
+            .map(|(pid, _)| *pid)
+            .collect();
+        assert!(
+            !grandchildren.is_empty(),
+            "expected cmd to have spawned a ping grandchild"
+        );
+
+        let entry = ChildEntry {
+            child: Arc::new(TokioMutex::new(child)),
+            pid: cmd_pid,
+            run_id: "run-tree".to_string(),
+            killed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
+        let registry = ProcessRegistry::default();
+        registry.insert("run-tree".to_string(), entry);
+        assert!(registry.kill("run-tree"));
+
+        // Poll: process teardown is observable only after the kernel reaps.
+        let targets: HashSet<Pid> = grandchildren
+            .iter()
+            .copied()
+            .chain(std::iter::once(Pid::from_u32(cmd_pid)))
+            .collect();
+        let mut alive = targets.clone();
+        for _ in 0..50 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            sys.refresh_processes_specifics(
+                ProcessesToUpdate::All,
+                true,
+                ProcessRefreshKind::nothing(),
+            );
+            alive.retain(|pid| sys.process(*pid).is_some());
+            if alive.is_empty() {
+                break;
+            }
+        }
+        assert!(
+            alive.is_empty(),
+            "stop left process-tree survivors alive: {alive:?}"
+        );
     }
 }
 #[cfg(test)]

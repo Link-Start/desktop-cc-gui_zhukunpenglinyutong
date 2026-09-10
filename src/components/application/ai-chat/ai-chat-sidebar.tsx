@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, Ref, RefObject } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
 import FolderPlus from "lucide-react/dist/esm/icons/folder-plus";
@@ -22,8 +22,15 @@ import { CloseButton } from "@/components/base/buttons/close-button";
 import { WorkspaceSortableList } from "@/components/application/ai-chat/workspace-sortable-list";
 import {
   WorkspaceContextMenu,
-  type WorkspaceMenuState,
 } from "@/components/application/ai-chat/workspace-context-menu";
+import {
+  ARCHIVED_SECTION_ID,
+  useCollapsedGroups,
+  useExpandedWorkspaces,
+  useFilteredWorkspaces,
+  useSidebarSearch,
+  useWorkspaceMenu,
+} from "@/components/application/ai-chat/use-sidebar-state";
 import { cx } from "@/utils/cx";
 
 /**
@@ -81,30 +88,6 @@ export interface AiChatRepoSection {
   id: string | null;
   name: string;
   repos: AiChatRepo[];
-}
-
-/** localStorage key for the collapsed workspace-group id set. */
-const COLLAPSED_GROUPS_KEY = "ccgui-next.sidebarCollapsedGroups:v1";
-/** Reserved id in the collapsed-group set for the 已归档 section (group ids
- *  are generated, so a sentinel can't collide). */
-const ARCHIVED_SECTION_ID = "__archived__";
-
-function readCollapsedGroups(): Set<string> {
-  try {
-    const raw = localStorage.getItem(COLLAPSED_GROUPS_KEY);
-    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
-    return new Set(Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function writeCollapsedGroups(collapsed: Set<string>) {
-  try {
-    localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...collapsed]));
-  } catch {
-    // Storage unavailable/full is non-fatal: collapse stays in memory.
-  }
 }
 
 /** Top-level nav row — icon + label, p 8, radius/2lg. */
@@ -529,6 +512,8 @@ function RepoThreadList({
  *  handle (press to reorder, no long-press), remove. */
 function RepoItem({
   repo,
+  open,
+  onToggleOpen,
   forceOpen = false,
   activeThreadId,
   onThreadSelect,
@@ -540,6 +525,9 @@ function RepoItem({
   dragHandleProps = null,
 }: {
   repo: AiChatRepo;
+  /** Expanded state, owned by the sidebar so it can persist across restarts. */
+  open: boolean;
+  onToggleOpen?: () => void;
   /** Query-driven filtering pins the thread list open while searching. */
   forceOpen?: boolean;
   activeThreadId?: string;
@@ -555,12 +543,11 @@ function RepoItem({
   /** Immediate drag entry attached to the row's grip handle. */
   dragHandleProps?: DragHandleProps | null;
 }) {
-  const [open, setOpen] = useState(repo.defaultOpen ?? false);
   const dragDownPos = useRef<{ x: number; y: number } | null>(null);
   // Pagination: 0 = 初始 limit 条, 1 = +50 条, 2 = 全部。
   const [page, setPage] = useState(0);
   const expanded = open || forceOpen;
-  const toggleOpen = useCallback(() => setOpen((o) => !o), []);
+  const toggleOpen = useCallback(() => onToggleOpen?.(), [onToggleOpen]);
   const hasHoverActions = Boolean(
     (repo.id && onNewSession) || dragHandleProps || (repo.id && onRemove),
   );
@@ -751,6 +738,8 @@ function WorkspaceSection({
   sections,
   searching,
   collapsedGroups,
+  isRepoExpanded,
+  onToggleRepo,
   activeThreadId,
   onThreadSelect,
   onThreadAction,
@@ -766,6 +755,9 @@ function WorkspaceSection({
   sections?: AiChatRepoSection[];
   searching: boolean;
   collapsedGroups: Set<string>;
+  /** Sidebar-owned so expansion survives restarts. */
+  isRepoExpanded: (repo: AiChatRepo) => boolean;
+  onToggleRepo: (repo: AiChatRepo) => void;
   activeThreadId?: string;
   onThreadSelect?: (id: string) => void;
   onThreadAction?: (id: string, action: ThreadAction) => void;
@@ -804,6 +796,8 @@ function WorkspaceSection({
         renderItem={(repo, drag) => (
           <RepoItem
             repo={repo}
+            open={isRepoExpanded(repo)}
+            onToggleOpen={() => onToggleRepo(repo)}
             forceOpen={searching}
             activeThreadId={activeThreadId}
             onThreadSelect={onThreadSelect}
@@ -912,112 +906,29 @@ export function AiChatSidebar({
   flat?: boolean;
 } = {}) {
   const { t } = useTranslation();
-
-  // Quick search: the nav row swaps for a field that filters workspaces and
-  // sessions by label; ⌘L focuses it from anywhere.
-  const [searchActive, setSearchActive] = useState(false);
-  const [query, setQuery] = useState("");
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-  // Group collapse: persisted so the tree reopens the way it was left.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(readCollapsedGroups);
-  // Workspace right-click menu: pointer-anchored, one open at a time. The
-  // archived flag selects the 归档/取消归档 entry label.
-  const [workspaceMenu, setWorkspaceMenu] = useState<WorkspaceMenuState | null>(null);
-  const openWorkspaceMenu = useCallback(
-    (event: ReactMouseEvent<HTMLElement>, workspaceId: string, archived = false) => {
-      if (!onWorkspaceAlias && !onSetWorkspaceArchived) return;
-      event.preventDefault();
-      setWorkspaceMenu({ x: event.clientX, y: event.clientY, workspaceId, archived });
-    },
-    [onWorkspaceAlias, onSetWorkspaceArchived],
+  const {
+    searchActive,
+    query,
+    setQuery,
+    normalizedQuery,
+    searchInputRef,
+    activateSearch,
+    deactivateSearch,
+  } = useSidebarSearch();
+  const { collapsedGroups, toggleGroup } = useCollapsedGroups();
+  const allRepos = useMemo(
+    () => (sections ? sections.flatMap((section) => section.repos) : repos),
+    [sections, repos],
   );
-  const openArchivedMenu = useCallback(
-    (event: ReactMouseEvent<HTMLElement>, workspaceId: string) =>
-      openWorkspaceMenu(event, workspaceId, true),
-    [openWorkspaceMenu],
+  const { isRepoExpanded, toggleRepoExpanded } = useExpandedWorkspaces(allRepos);
+  const { workspaceMenu, closeWorkspaceMenu, openWorkspaceMenu, openArchivedMenu } =
+    useWorkspaceMenu(onWorkspaceAlias, onSetWorkspaceArchived);
+  const { filteredRepos, filteredSections, filteredArchivedRepos } = useFilteredWorkspaces(
+    repos,
+    sections,
+    archivedRepos,
+    normalizedQuery,
   );
-  const toggleGroup = useCallback(
-    (groupId: string) => {
-      const next = new Set(collapsedGroups);
-      if (next.has(groupId)) next.delete(groupId);
-      else next.add(groupId);
-      setCollapsedGroups(next);
-      writeCollapsedGroups(next);
-    },
-    [collapsedGroups],
-  );
-
-  const filteredRepos = useMemo(
-    () =>
-      repos.flatMap((repo) => {
-        if (!normalizedQuery || repo.label.toLocaleLowerCase().includes(normalizedQuery)) {
-          return [repo];
-        }
-        const threads = repo.threads.filter((thread) =>
-          thread.label.toLocaleLowerCase().includes(normalizedQuery),
-        );
-        return threads.length ? [{ ...repo, threads }] : [];
-      }),
-    [repos, normalizedQuery],
-  );
-  // Same query filter applied per section; groups with no matches drop out
-  // while searching.
-  const filteredSections = useMemo(() => {
-    if (!sections) return undefined;
-    const matches = (repo: AiChatRepo): AiChatRepo | null => {
-      if (!normalizedQuery || repo.label.toLocaleLowerCase().includes(normalizedQuery)) {
-        return repo;
-      }
-      const threads = repo.threads.filter((thread) =>
-        thread.label.toLocaleLowerCase().includes(normalizedQuery),
-      );
-      return threads.length ? { ...repo, threads } : null;
-    };
-    return sections.reduce<AiChatRepoSection[]>((acc, section) => {
-      const repos = section.repos.flatMap((repo) => {
-        const match = matches(repo);
-        return match ? [match] : [];
-      });
-      if (section.id === null || repos.length > 0) {
-        acc.push({ ...section, repos });
-      }
-      return acc;
-    }, []);
-  }, [sections, normalizedQuery]);
-
-  // Same query filter for the 已归档 section (label match only — archived
-  // rows carry no threads).
-  const filteredArchivedRepos = useMemo(
-    () =>
-      archivedRepos.filter(
-        (repo) =>
-          !normalizedQuery || repo.label.toLocaleLowerCase().includes(normalizedQuery),
-      ),
-    [archivedRepos, normalizedQuery],
-  );
-
-  const deactivateSearch = useCallback(() => {
-    setQuery("");
-    setSearchActive(false);
-  }, []);
-
-  useEffect(() => {
-    if (!searchActive) return;
-    const frame = window.requestAnimationFrame(() => searchInputRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, [searchActive]);
-
-  useEffect(() => {
-    const onShortcut = (event: KeyboardEvent) => {
-      if (event.key.toLocaleLowerCase() === "l" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        setSearchActive(true);
-      }
-    };
-    window.addEventListener("keydown", onShortcut);
-    return () => window.removeEventListener("keydown", onShortcut);
-  }, []);
 
   return (
     <aside
@@ -1071,7 +982,7 @@ export function AiChatSidebar({
                 inputRef={searchInputRef}
               />
             ) : (
-              <NavItem icon={ScanSearch} label={t("common.search")} onClick={() => setSearchActive(true)} />
+              <NavItem icon={ScanSearch} label={t("common.search")} onClick={activateSearch} />
             )}
             <NavItem icon={MessageSquarePlus} label={t("chat.newSession")} onClick={onNewSession} />
           </nav>
@@ -1081,6 +992,8 @@ export function AiChatSidebar({
             sections={filteredSections}
             searching={Boolean(normalizedQuery)}
             collapsedGroups={collapsedGroups}
+            isRepoExpanded={isRepoExpanded}
+            onToggleRepo={toggleRepoExpanded}
             activeThreadId={activeThreadId}
             onThreadSelect={onThreadSelect}
             onThreadAction={onThreadAction}
@@ -1116,7 +1029,7 @@ export function AiChatSidebar({
       {workspaceMenu && (onWorkspaceAlias || onSetWorkspaceArchived) && (
         <WorkspaceContextMenu
           menu={workspaceMenu}
-          onClose={() => setWorkspaceMenu(null)}
+          onClose={closeWorkspaceMenu}
           onSetAlias={onWorkspaceAlias}
           onSetArchived={onSetWorkspaceArchived}
         />

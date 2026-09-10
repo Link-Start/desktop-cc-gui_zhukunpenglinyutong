@@ -37,6 +37,7 @@ import {
   drainPending,
   moveStreamingFlag,
   patchSession,
+  resolveSessionModel,
   runRouting,
   setStreamingFlag,
   settleLiveRows,
@@ -125,9 +126,11 @@ export interface ChatStore {
    * persisted in localStorage; engines resolve unsupported modes to their
    * first supported one at send time (and the picker greys them out). */
   permission: ComposerPermission;
-  /** Per-engine reasoning effort ("low" | … | "max"), persisted in app settings. */
+  /** Per-engine reasoning effort ("low" | … | "ultra"), persisted in app settings. */
   efforts: Record<string, EffortLevel>;
   ompServiceTier: OmpServiceTier;
+  /** Codex Fast override; null preserves ~/.codex. */
+  codexServiceTier: OmpServiceTier;
   /** Per-engine model override ("" = CLI/provider default), persisted in app settings. */
   models: Record<string, string>;
   /** Max sessions listed per workspace in the sidebar, persisted in app settings. */
@@ -198,6 +201,7 @@ export interface ChatStore {
   setPermission: (permission: ComposerPermission) => void;
   setEffort: (engine: string, effort: EffortLevel) => Promise<void>;
   setOmpServiceTier: (tier: OmpServiceTier) => Promise<void>;
+  setCodexServiceTier: (tier: OmpServiceTier) => Promise<void>;
   setModel: (engine: string, model: string) => Promise<void>;
   /** Pin several engines' models at once (startup defaulting); one settings
    * write instead of one per engine. */
@@ -260,6 +264,10 @@ export interface ChatStore {
     sessionId: string,
     title: string,
   ) => Promise<void>;
+  /** Send /compact to compress conversation context. */
+  compactContext: (key?: string) => Promise<void>;
+  /** Re-fetch the latest token usage from session history for the current session. */
+  refreshSessionUsage: (key?: string) => Promise<void>;
 }
 
 /** Persist one app-settings patch; callers have already applied the in-memory
@@ -385,6 +393,15 @@ export const useChatStore = create<ChatStore>((set, get) => {
     if (!prompt.trim() && images.length === 0) return;
     const engine = tab.engine;
     const key = sessionKey(engine, tab.sessionId, tab.workspacePath);
+    // Resolve BEFORE the optimistic rows land: the patch below writes
+    // activeModel, and a resolver reading it afterwards would see its own
+    // write instead of the session's history.
+    // The session's own model, not the engine default: continuing a
+    // conversation keeps running the model that conversation uses.
+    const model =
+      resolveSessionModel(tab, get().bySession[key], get().models[engine]) ||
+      null;
+    const effort = tab.effort ?? get().efforts[engine] ?? null;
     // Optimistic user message.
     set((s) => ({
       streamingByKey: setStreamingFlag(s.streamingByKey, key, true),
@@ -405,6 +422,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
         error: null,
         interrupted: false,
         turnStartedAt: Date.now(),
+        activeModel: model,
+        activeEffort: effort,
       },
     );
     try {
@@ -414,8 +433,8 @@ export const useChatStore = create<ChatStore>((set, get) => {
         sessionId: tab.sessionId,
         prompt,
         imagePaths: images.length ? images : null,
-        model: (tab.model ?? get().models[engine]) || null,
-        effort: tab.effort ?? get().efforts[engine] ?? null,
+        model,
+        effort,
         permission: effectivePermission(
           get().engines,
           engine,
@@ -484,6 +503,25 @@ export const useChatStore = create<ChatStore>((set, get) => {
       } else {
         runRouting.set(result.runId, key);
       }
+      // Stop pressed while this send was still in flight: interrupt() ran
+      // before runRouting had this run (it is written above, after the
+      // await), so it settled the UI and killed nothing — the CLI kept
+      // streaming. Now that the ids exist, kill it. A native id adopted
+      // just above moved the state to a new key, so read the key the turn
+      // actually lives under.
+      const liveKey =
+        result.sessionId && !tab.sessionId
+          ? sessionKey(engine, result.sessionId, tab.workspacePath)
+          : key;
+      if (get().bySession[liveKey]?.interrupted) {
+        runRouting.delete(result.runId);
+        await Promise.all([
+          ipc.interruptSession(result.runId).catch(() => false),
+          ...(result.sessionId
+            ? [ipc.interruptSession(result.sessionId).catch(() => false)]
+            : []),
+        ]);
+      }
     } catch (error) {
       set((s) => ({
         streamingByKey: setStreamingFlag(s.streamingByKey, key, false),
@@ -546,6 +584,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
     permission: readPermissionPref(),
     efforts: {},
     ompServiceTier: null,
+    codexServiceTier: null,
     models: {},
     threadLimit: 10,
     workspaceGroups: [],
@@ -572,6 +611,7 @@ export const useChatStore = create<ChatStore>((set, get) => {
               drainQueue,
               markUnseenIfBackground,
               upsertSessionMeta: (meta) => upsertSessionMetaInto(set, meta),
+              refreshSessionUsage: (k) => get().refreshSessionUsage(k),
             }),
           ),
         ),
@@ -634,6 +674,9 @@ export const useChatStore = create<ChatStore>((set, get) => {
             >,
             ompServiceTier: normalizeOmpServiceTier(
               settings.ompOpenaiServiceTier,
+            ),
+            codexServiceTier: normalizeOmpServiceTier(
+              settings.codexServiceTier,
             ),
             models: settings.defaultModels ?? {},
             threadLimit: settings.sidebarThreadLimit ?? 5,
@@ -894,6 +937,11 @@ export const useChatStore = create<ChatStore>((set, get) => {
       await ipc.updateAppSettings({ ...settings, ompOpenaiServiceTier: tier });
       set({ ompServiceTier: tier });
     },
+    setCodexServiceTier: async (tier) => {
+      const settings = await ipc.getAppSettings();
+      await ipc.updateAppSettings({ ...settings, codexServiceTier: tier });
+      set({ codexServiceTier: tier });
+    },
     setEffort: async (engine, effort) => {
       set({ efforts: { ...get().efforts, [engine]: effort } });
       if (get().active?.engine === engine) stampActiveTab({ effort });
@@ -902,21 +950,29 @@ export const useChatStore = create<ChatStore>((set, get) => {
       }));
     },
     setModel: async (engine, model) => {
-      const models = { ...get().models };
-      if (model) models[engine] = model;
-      else delete models[engine];
-      set({ models });
-      if (get().active?.engine === engine) {
-        // Empty = "CLI default": clear the tab override too, so the tab
-        // follows the (also cleared) global default again.
+      const active = get().active;
+      // Model choice is a property of the CONVERSATION: picking one inside a
+      // session must not rewrite the engine-wide default, or a second session
+      // of the same CLI would silently switch models with it. Only a pending
+      // "new chat" tab (no session yet) edits the default — that tab is where
+      // the next conversation's starting choice is made.
+      if (!active || active.sessionId === null) {
+        const models = { ...get().models };
+        if (model) models[engine] = model;
+        else delete models[engine];
+        set({ models });
+        await persistSettings((settings) => {
+          const defaultModels = { ...settings.defaultModels };
+          if (model) defaultModels[engine] = model;
+          else delete defaultModels[engine];
+          return { defaultModels };
+        });
+      }
+      if (active?.engine === engine) {
+        // Empty = "CLI default": clear the tab override so the session falls
+        // back to its own history/model default again.
         stampActiveTab({ model: model || undefined });
       }
-      await persistSettings((settings) => {
-        const defaultModels = { ...settings.defaultModels };
-        if (model) defaultModels[engine] = model;
-        else delete defaultModels[engine];
-        return { defaultModels };
-      });
     },
     pinModels: async (updates) => {
       const entries = Object.entries(updates).filter(([, model]) =>
@@ -1323,6 +1379,130 @@ export const useChatStore = create<ChatStore>((set, get) => {
         set({ actionError: null });
       } catch (error) {
         set({ actionError: errorText(error) });
+      }
+    },
+
+    compactContext: async (key?: string) => {
+      const { active, streamingByKey, openTabs } = get();
+      const targetKey =
+        key ??
+        (active
+          ? sessionKey(active.engine, active.sessionId, active.workspacePath)
+          : "");
+      if (!targetKey) return;
+      if (streamingByKey[targetKey]) return;
+      const targetTab =
+        openTabs.find(
+          (t) =>
+            sessionKey(t.engine, t.sessionId, t.workspacePath) === targetKey,
+        ) ?? active;
+      if (!targetTab) return;
+
+      // Track the compaction turn completion so callers (and UI) can await it.
+      let cleanup: (() => void) | undefined;
+      const completionPromise = new Promise<void>((resolve) => {
+        let started = false;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        const unsub = useChatStore.subscribe(() => {
+          const currentStreaming = get().streamingByKey;
+          const isStreaming = Boolean(
+            currentStreaming[targetKey] ||
+              (targetTab.sessionId &&
+                currentStreaming[
+                  sessionKey(
+                    targetTab.engine,
+                    targetTab.sessionId,
+                    targetTab.workspacePath,
+                  )
+                ]),
+          );
+          if (isStreaming) {
+            started = true;
+          } else if (started) {
+            done();
+          }
+        });
+
+        const done = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          unsub();
+          resolve();
+        };
+
+        timeoutId = setTimeout(done, 120_000);
+        cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          unsub();
+        };
+      });
+
+      try {
+        await sendPrompt(targetTab, "/compact", []);
+      } catch (error) {
+        cleanup?.();
+        throw error;
+      }
+
+      await completionPromise;
+      // After compaction turn finishes, wait briefly for engine to persist session file,
+      // then refresh session usage snapshot.
+      await new Promise((r) => setTimeout(r, 400));
+      const latestTab =
+        get().openTabs.find(
+          (t) =>
+            sessionKey(t.engine, t.sessionId, t.workspacePath) === targetKey,
+        ) ?? get().active;
+      const finalKey = latestTab
+        ? sessionKey(
+            latestTab.engine,
+            latestTab.sessionId,
+            latestTab.workspacePath,
+          )
+        : targetKey;
+      await get().refreshSessionUsage(finalKey);
+    },
+
+    refreshSessionUsage: async (key?: string) => {
+      const { active, openTabs } = get();
+      const targetKey =
+        key ??
+        (active
+          ? sessionKey(active.engine, active.sessionId, active.workspacePath)
+          : "");
+      if (!targetKey) return;
+      const targetTab =
+        openTabs.find(
+          (t) =>
+            sessionKey(t.engine, t.sessionId, t.workspacePath) === targetKey,
+        ) ?? active;
+
+      let engine = targetTab?.engine;
+      let sessionId = targetTab?.sessionId;
+      if (
+        !sessionId &&
+        targetKey.includes("/") &&
+        !targetKey.startsWith("new:")
+      ) {
+        const slashIdx = targetKey.indexOf("/");
+        engine = targetKey.slice(0, slashIdx);
+        sessionId = targetKey.slice(slashIdx + 1);
+      }
+      if (!engine || !sessionId) return;
+
+      try {
+        const page = await ipc.loadSessionPage(
+          engine,
+          sessionId,
+          100,
+        );
+        const latestUsage =
+          [...page.messages].reverse().find((m) => m.usage)?.usage ?? null;
+        if (latestUsage) {
+          patchSession(set, targetKey, { usage: latestUsage });
+        }
+        void ipc.rescanSessions();
+      } catch (error) {
+        console.error("Failed to refresh session usage:", error);
       }
     },
   };
