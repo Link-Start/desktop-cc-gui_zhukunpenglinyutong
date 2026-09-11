@@ -463,6 +463,17 @@ struct LoadSessionPageArgs {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct UsageSummaryArgs {
+    days: u32,
+    tz_offset_minutes: i32,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageRecordArgs {
+    entry: crate::usage::UsageEntry,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct EngineSessionArgs {
     engine: String,
     session_id: String,
@@ -565,6 +576,17 @@ struct OpenWorkspaceArgs {
     app: Option<String>,
     #[serde(default)]
     args: Vec<String>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OpenCustomProgramArgs {
+    executable_path: String,
+    path: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GetProgramIconArgs {
+    executable_path: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -678,7 +700,10 @@ async fn dispatch(app: &tauri::AppHandle, cmd: &str, raw: Value) -> Result<Value
         "get_app_settings" => ser(crate::settings::get_app_settings()),
         "update_app_settings" => {
             let a: UpdateSettingsArgs = parse_args(&raw)?;
-            ser(crate::settings::update_app_settings(a.settings))
+            ser(crate::settings::update_app_settings(
+                app.clone(),
+                a.settings,
+            ))
         }
         // engine
         "send_message" => {
@@ -718,6 +743,25 @@ async fn dispatch(app: &tauri::AppHandle, cmd: &str, raw: Value) -> Result<Value
         }
         // history
         "list_sessions" => ser(crate::history::reader::list_sessions(app.state())),
+        // Usage ledger: the mobile/web client renders the same page, so the
+        // bridge must route it like every other settings surface.
+        "usage_summary" => {
+            let a: UsageSummaryArgs = parse_args(&raw)?;
+            ser(crate::usage::usage_summary(
+                app.state(),
+                a.days,
+                a.tz_offset_minutes,
+            ))
+        }
+        "usage_record" => {
+            let a: UsageRecordArgs = parse_args(&raw)?;
+            ser(crate::usage::usage_record(
+                app.clone(),
+                app.state(),
+                a.entry,
+            ))
+        }
+        "usage_clear" => ser(crate::usage::usage_clear(app.state())),
         "load_session_page" => {
             let a: LoadSessionPageArgs = parse_args(&raw)?;
             ser(crate::history::reader::load_session_page(
@@ -887,6 +931,14 @@ async fn dispatch(app: &tauri::AppHandle, cmd: &str, raw: Value) -> Result<Value
         "open_workspace_in" => {
             let a: OpenWorkspaceArgs = parse_args(&raw)?;
             ser(crate::open_app::open_workspace_in(a.path, a.app, a.args).await)
+        }
+        "open_custom_program" => {
+            let a: OpenCustomProgramArgs = parse_args(&raw)?;
+            ser(crate::open_app::open_custom_program(a.executable_path, a.path).await)
+        }
+        "get_program_icon" => {
+            let a: GetProgramIconArgs = parse_args(&raw)?;
+            ser(crate::open_app::get_program_icon(a.executable_path).await)
         }
         "reveal_in_file_manager" => {
             let a: PathArgs = parse_args(&raw)?;

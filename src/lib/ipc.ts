@@ -304,6 +304,37 @@ export interface WebAccessInfo {
   token: string;
   lanIp: string;
 }
+
+/** One finished turn as it enters the usage ledger. */
+export interface UsageEntryInput {
+  /** Epoch ms when the turn settled. */
+  ts: number;
+  engine: string;
+  model: string | null;
+  sessionId: string | null;
+  workspacePath: string | null;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  durationMs: number | null;
+  /** Model responses this turn reported (>= 1). */
+  reports: number;
+}
+
+/** Ledger totals for one (local day, engine, model) bucket. */
+export interface UsageRow {
+  /** Local "YYYY-MM-DD". */
+  day: string;
+  engine: string;
+  model: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  /** Model responses in this bucket — the request total. */
+  requests: number;
+}
 // ---- DeepSeek Harness local host ----
 
 /** Snapshot of the DSH local host + CLI probe (`dsh_host_status`,
@@ -488,6 +519,8 @@ export const ipc = {
     // Keep the cache in sync with the authoritative value just persisted.
     settingsPromise = Promise.resolve(settings);
   },
+  setWindowTheme: (dark: boolean) =>
+    invoke<void>("set_window_theme", { dark }),
   // engine
   sendMessage: (args: {
     engine: string;
@@ -602,6 +635,12 @@ export const ipc = {
   // open-app
   openWorkspaceIn: (path: string, options: { appName: string; args?: string[] }) =>
     invoke<void>("open_workspace_in", { path, app: options.appName, args: options.args ?? [] }),
+  /** Launch a user-picked custom program with the workspace path as argument. */
+  openCustomProgram: (executablePath: string, path: string) =>
+    invoke<void>("open_custom_program", { executablePath, path }),
+  /** OS icon for a program executable as a PNG data URL (null when none). */
+  getProgramIcon: (executablePath: string) =>
+    invoke<string | null>("get_program_icon", { executablePath }),
   revealInFileManager: (path: string) =>
     invoke<void>("reveal_in_file_manager", { path }),
   // metrics
@@ -628,6 +667,11 @@ export const ipc = {
   webAccessStart: () => invoke<WebAccessInfo>("web_access_start"),
   webAccessStop: () => invoke<void>("web_access_stop"),
   webAccessStatus: () => invoke<WebAccessInfo | null>("web_access_status"),
+  // usage ledger (settings 用量)
+  usageRecord: (entry: UsageEntryInput) => invoke<void>("usage_record", { entry }),
+  usageSummary: (days: number, tzOffsetMinutes: number) =>
+    invoke<UsageRow[]>("usage_summary", { days, tzOffsetMinutes }),
+  usageClear: () => invoke<void>("usage_clear"),
   // DeepSeek Harness local host (dsh web --host H --port P)
   dshHostStatus: () => invoke<DshHostStatus>("dsh_host_status"),
   dshHostStart: () => invoke<DshHostStatus>("dsh_host_start"),

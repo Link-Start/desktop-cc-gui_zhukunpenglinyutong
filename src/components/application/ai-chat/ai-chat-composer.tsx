@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import GitMerge from "lucide-react/dist/esm/icons/git-merge";
+import Globe from "lucide-react/dist/esm/icons/globe";
 import {
   Button as AriaButton,
   Dialog as AriaDialog,
@@ -42,13 +43,16 @@ import {
   insertTextAtCaret,
   mentionToken,
   renderFileTags,
+  sanitizeEditableHtml,
   setCaretOffset,
 } from "@/components/application/ai-chat/file-tags";
 import { FileMentionMenu } from "@/components/application/ai-chat/file-mention-menu";
 import { SlashCommandMenu } from "@/components/application/ai-chat/slash-command-menu";
 import { findSlashTrigger } from "@/components/application/ai-chat/slash-commands";
 import { type MentionEntry } from "@/components/application/ai-chat/mention-files";
-import { type SlashCommandEntry } from "@/lib/ipc";
+import { ipc, type SlashCommandEntry } from "@/lib/ipc";
+import { listenSettingsChanged } from "@/lib/events";
+import { useTauriEvent } from "@/hooks/use-tauri-event";
 import { joinPath } from "@/features/files/store";
 import {
   usePromptCompletion,
@@ -192,11 +196,11 @@ export function Composer({
       if (!trigger) {
         insertTextAtCaret(el, token);
       } else {
-        el.innerHTML = htmlFromText(
+        const next =
           text.slice(0, trigger.start) +
-            token +
-            text.slice(trigger.start + 1 + trigger.query.length),
-        );
+          token +
+          text.slice(trigger.start + 1 + trigger.query.length);
+        el.innerHTML = sanitizeEditableHtml(htmlFromText(next));
         setCaretOffset(el, trigger.start + token.length);
       }
       emitChange();
@@ -222,11 +226,11 @@ export function Composer({
       if (!trigger) {
         insertTextAtCaret(el, token);
       } else {
-        el.innerHTML = htmlFromText(
+        const next =
           text.slice(0, trigger.start) +
-            token +
-            text.slice(trigger.start + 1 + trigger.query.length),
-        );
+          token +
+          text.slice(trigger.start + 1 + trigger.query.length);
+        el.innerHTML = sanitizeEditableHtml(htmlFromText(next));
         setCaretOffset(el, trigger.start + token.length);
       }
       emitChange();
@@ -244,7 +248,7 @@ export function Composer({
     (text: string) => {
       const el = editableRef.current;
       if (!el) return;
-      el.innerHTML = htmlFromText(text);
+      el.innerHTML = sanitizeEditableHtml(htmlFromText(text));
       setCaretOffset(el, text.length);
       emitChange();
       syncTags();
@@ -267,7 +271,7 @@ export function Composer({
     if (v === lastEmittedRef.current) return;
     lastEmittedRef.current = v;
     const el = editableRef.current;
-    if (el) el.innerHTML = htmlFromText(v);
+    if (el) el.innerHTML = sanitizeEditableHtml(htmlFromText(v));
   }, [value]);
 
   // Expose the field handle (focus + mention insertion from the file tree).
@@ -415,6 +419,65 @@ const CONTEXT_POPOVER_CLASSES = cx(
 const EMPTY_LIMITS: UsageLimit[] = [];
 const EMPTY_PLAN = "";
 
+/**
+ * One-click network-proxy switch for the composer footer: the glyph carries
+ * the state (dim = off, green = on) and the click persists `systemProxyEnabled`
+ * through the same read-modify-write funnel the settings page uses, so the two
+ * surfaces can never clobber each other.
+ */
+function ProxyQuickToggle() {
+  const { t } = useTranslation();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const read = useCallback(() => {
+    void ipc
+      .getAppSettings()
+      .then((s) => setEnabled(s.systemProxyEnabled ?? false))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => read(), [read]);
+  // The settings page (desktop or phone) writes the same field.
+  useTauriEvent(() => listenSettingsChanged(read));
+
+  const toggle = useCallback(async () => {
+    if (busy || enabled === null) return;
+    setBusy(true);
+    try {
+      const latest = await ipc.getAppSettings();
+      const next = !(latest.systemProxyEnabled ?? false);
+      await ipc.updateAppSettings({ ...latest, systemProxyEnabled: next });
+      setEnabled(next);
+    } catch {
+      // Persist failed (e.g. the proxy URL is empty): keep the old glyph, the
+      // settings page is where the reason is shown.
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, enabled]);
+
+  if (enabled === null) return null;
+  const label = enabled ? t("chat.proxyOn") : t("chat.proxyOff");
+  // Mirror the context-meter button exactly: react-aria AriaButton, the same
+  // shape/focus classes, colour carries the state. That control never shows
+  // a stray circle, so this one should not either.
+  return (
+    <AriaButton
+      aria-label={label}
+      aria-pressed={enabled}
+      isDisabled={busy}
+      onPress={() => void toggle()}
+      className={cx(
+        "flex cursor-pointer items-center rounded-full p-1.5 outline-none transition-colors duration-150 ease focus-visible:ring-2 focus-visible:ring-border-focus-ring",
+        enabled ? "text-notification-success-foreground" : "text-foreground-icon-tertiary",
+      )}
+    >
+      <Globe className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+    </AriaButton>
+  );
+}
+
 /** 16px circular context meter at `pct` percent. */
 function ContextRing({ pct }: { pct: number }) {
   const r = 6;
@@ -532,6 +595,7 @@ export function StatusBar({
           ))}
       </div>
       <div className="flex items-center gap-3">
+        <ProxyQuickToggle />
         {/* Context meter is always on: 0% until the first usage report. */}
         <AriaDialogTrigger
           isOpen={contextOpen}
