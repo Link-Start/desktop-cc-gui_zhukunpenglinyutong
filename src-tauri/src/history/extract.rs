@@ -160,6 +160,9 @@ fn fold_rows(rows: Vec<LineRow>) -> ParsedSession {
                         .rposition(|m| m.role == "tool" && m.result.is_none()),
                 };
                 if let Some(index) = index {
+                    if let Some(todos) = crate::engine::parse_todo_result(&res) {
+                        messages[index].todos = Some(todos);
+                    }
                     messages[index].result = Some(res);
                 }
             }
@@ -1475,6 +1478,45 @@ mod tests {
             second.result.as_ref().unwrap()["details"]["jobs"][0]["status"],
             "completed"
         );
+    }
+
+    #[test]
+    fn pi_tool_results_populate_todos_from_details_phases() {
+        let call = serde_json::json!({
+            "type": "message",
+            "message": {"role": "assistant", "content": [{
+                "type": "toolCall",
+                "id": "todo_call_1",
+                "name": "todo",
+                "intent": "Initialize todos",
+                "arguments": {"op": "init", "list": [{"phase": "P1", "items": ["Task 1"]}]}
+            }]}
+        });
+        let result = serde_json::json!({
+            "type": "message",
+            "message": {
+                "role": "toolResult",
+                "toolCallId": "todo_call_1",
+                "content": [{"type": "text", "text": "Done"}],
+                "details": {
+                    "phases": [
+                        {
+                            "name": "P1",
+                            "tasks": [{"content": "Task 1", "status": "completed"}]
+                        }
+                    ]
+                }
+            }
+        });
+        let input = format!("{}\n{}", call, result);
+        let extractor: LineExtractor<'_> =
+            Box::new(|value: &Value| extract_pi_family_line(value, ImageMode::Collect));
+        let parsed = collect_session(std::io::Cursor::new(input), &extractor);
+        assert_eq!(parsed.messages.len(), 1);
+        let todos = parsed.messages[0].todos.as_ref().expect("todos must be populated");
+        assert_eq!(todos.items.len(), 1);
+        assert_eq!(todos.items[0].content, "Task 1");
+        assert_eq!(todos.items[0].status, "complete");
     }
 
     #[test]

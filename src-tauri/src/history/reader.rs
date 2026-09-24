@@ -311,18 +311,49 @@ static PARSED_CACHE_BYTES: LazyLock<Mutex<usize>> = LazyLock::new(|| Mutex::new(
 const PARSED_CACHE_CAPACITY: usize = 32;
 const PARSED_CACHE_BUDGET_BYTES: usize = 128 * 1024 * 1024;
 
-/// Rough in-memory footprint of one parsed session (text + image payloads).
-fn parsed_footprint(parsed: &ParsedSession) -> usize {
-    parsed
-        .messages
+/// Rough in-memory footprint of one parsed session. Text and images used to
+/// be the whole story, but tool-result-heavy sessions keep most of their
+/// bytes in retained payloads: an hourly task's omp transcript measured
+/// 28MB of `result.details` against 18MB of chat text, so a text-only sum
+/// lets the 128MB budget admit multiples of itself.
+fn value_footprint(value: &serde_json::Value) -> usize {
+    match value {
+        serde_json::Value::String(s) => s.len(),
+        serde_json::Value::Array(items) => {
+            items.iter().map(value_footprint).sum::<usize>() + items.len() * 32
+        }
+        serde_json::Value::Object(map) => map
+            .iter()
+            .map(|(k, v)| k.len() + value_footprint(v) + 32)
+            .sum::<usize>(),
+        _ => 8,
+    }
+}
+
+fn todo_footprint(todos: &crate::engine::TodosPayload) -> usize {
+    todos
+        .items
         .iter()
-        .map(|m| {
-            m.text.len()
-                + m.images.iter().map(|i| i.len()).sum::<usize>()
-                + m.ts.as_deref().map(str::len).unwrap_or(0)
-                + 128
-        })
+        .map(|i| i.content.len() + i.status.len() + i.id.as_deref().map(str::len).unwrap_or(0) + 32)
         .sum()
+}
+
+fn message_footprint(m: &Message) -> usize {
+    m.text.len()
+        + m.images.iter().map(|i| i.len()).sum::<usize>()
+        + m.ts.as_deref().map(str::len).unwrap_or(0)
+        + m.path.as_deref().map(str::len).unwrap_or(0)
+        + m.model.as_deref().map(str::len).unwrap_or(0)
+        + m.effort.as_deref().map(str::len).unwrap_or(0)
+        + m.args.as_ref().map(value_footprint).unwrap_or(0)
+        + m.result.as_ref().map(value_footprint).unwrap_or(0)
+        + m.usage.as_ref().map(value_footprint).unwrap_or(0)
+        + m.todos.as_ref().map(todo_footprint).unwrap_or(0)
+        + 128
+}
+
+fn parsed_footprint(parsed: &ParsedSession) -> usize {
+    parsed.messages.iter().map(message_footprint).sum()
 }
 
 fn cached_session(engine: &str, path: &Path) -> Result<Arc<CachedSession>, String> {
@@ -342,7 +373,7 @@ fn cached_session(engine: &str, path: &Path) -> Result<Arc<CachedSession>, Strin
     let footprint = parsed_footprint(&parsed)
         + fold
             .iter()
-            .map(|(_, row)| row.text.len() + 128)
+            .map(|(_, row)| message_footprint(row))
             .sum::<usize>();
     let cached = Arc::new(CachedSession { parsed, fold });
     let mut cache = PARSED_CACHE.lock().map_err(|e| e.to_string())?;
@@ -436,60 +467,28 @@ fn subagent_history_until(messages: &[Message], fold: &SubagentFold, start: usiz
 }
 
 fn is_subagent_history_tool(message: &Message) -> bool {
-    if message
-        .args
-        .as_ref()
-        .is_some_and(|args| args.get("tasks").is_some() || args.get("ids").is_some())
-    {
+    if message.todos.is_some() {
         return true;
     }
-    if message
-        .result
-        .as_ref()
-        .and_then(|result| result.get("details"))
-        .is_some_and(|details| {
-            ["jobs", "peers", "progress"]
-                .iter()
-                .any(|key| details.get(key).is_some())
-                || details.get("op").and_then(serde_json::Value::as_str) == Some("jobs")
-        })
-    {
+    if message.args.as_ref().is_some_and(|args| {
+        args.get("tasks").is_some()
+            || args.get("ids").is_some()
+            || args.get("todos").is_some()
+            || args.get("op").is_some()
+    }) {
         return true;
     }
-    let head = message
-        .text
-        .split('·')
-        .next()
-        .unwrap_or_default()
-        .trim()
-        .to_ascii_lowercase();
-    let first = head
-        .split(|c: char| c.is_whitespace() || c == '/' || c == '\\')
-        .next()
-        .unwrap_or_default()
-        .replace('-', "_");
-    matches!(
-        first.as_str(),
-        "task"
-            | "agent"
-            | "spawn"
-            | "spawn_agent"
-            | "spawn_subagent"
-            | "workflow"
-            | "run_workflow"
-            | "pipeline"
-            | "dispatch"
-            | "dispatch_agent"
-            | "delegate"
-    ) || [
-        "spawn agent",
-        "agent swarm",
-        "agent_swarm",
-        "workflow",
-        "subagent",
-    ]
-    .iter()
-    .any(|name| head.contains(name))
+    if message.result.as_ref().and_then(|result| result.get("details")).is_some_and(|details| {
+        ["jobs", "peers", "progress", "phases"].iter().any(|key| details.get(key).is_some())
+            || details.get("op").and_then(serde_json::Value::as_str) == Some("jobs")
+    }) {
+        return true;
+    }
+    let head = message.text.split('·').next().unwrap_or_default().trim().to_ascii_lowercase();
+    let first = head.split(|c: char| c.is_whitespace() || c == '/' || c == '\\').next().unwrap_or_default().replace('-', "_");
+    matches!(first.as_str(), "task" | "agent" | "spawn" | "spawn_agent" | "spawn_subagent"
+        | "workflow" | "run_workflow" | "pipeline" | "dispatch" | "dispatch_agent" | "delegate" | "todo")
+        || ["spawn agent", "agent swarm", "agent_swarm", "workflow", "subagent", "todo"].iter().any(|name| head.contains(name))
 }
 
 fn subagent_history_row(message: &Message, delegation: bool) -> Message {
@@ -511,17 +510,12 @@ fn subagent_history_row(message: &Message, delegation: bool) -> Message {
         // Status snapshots and result presence matter; the full output still
         // lives in the paginated timeline and need not cross IPC twice.
         result: if delegation {
-            message
-                .result
-                .as_ref()
-                .map(|result| match result.get("details") {
-                    Some(details) => serde_json::json!({ "details": details }),
-                    None => serde_json::Value::Bool(true),
-                })
-        } else {
-            None
-        },
-        todos: None,
+            message.result.as_ref().map(|result| match result.get("details") {
+                Some(details) => serde_json::json!({ "details": details }),
+                None => serde_json::Value::Bool(true),
+            })
+        } else { None },
+        todos: if delegation { message.todos.clone() } else { None },
         usage: None,
         model: None,
         effort: None,
@@ -981,6 +975,13 @@ pub struct Workspace {
     pub sort_order: Option<i64>,
     /// Sidebar group (工作区分组) this workspace belongs to; None = ungrouped.
     pub group_id: Option<String>,
+    /// "worktree" = git worktree child hanging under its parent workspace
+    /// row in the sidebar; None = ordinary workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// Parent workspace id; only set when kind="worktree".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
     /// Opaque metadata written via host-capability callers (plugin
     /// `workspaces.add`); absent for ordinary directories. The backend never
     /// interprets it — consumers (spawn transport, plugin panels) own the shape.
@@ -992,10 +993,10 @@ pub struct Workspace {
 pub fn list_workspaces(state: tauri::State<'_, crate::AppState>) -> Result<Vec<Workspace>, String> {
     query_rows(
         &state,
-        "SELECT id, path, name, last_opened_at, sort_order, group_id, meta FROM workspaces
+        "SELECT id, path, name, last_opened_at, sort_order, group_id, kind, parent_id, meta FROM workspaces
          ORDER BY sort_order IS NULL, sort_order, COALESCE(last_opened_at, 0) DESC",
         |r| {
-            let meta_json: Option<String> = r.get(6)?;
+            let meta_json: Option<String> = r.get(8)?;
             Ok(Workspace {
                 id: r.get(0)?,
                 path: r.get(1)?,
@@ -1003,6 +1004,8 @@ pub fn list_workspaces(state: tauri::State<'_, crate::AppState>) -> Result<Vec<W
                 last_opened_at: r.get(3)?,
                 sort_order: r.get(4)?,
                 group_id: r.get(5)?,
+                kind: r.get(6)?,
+                parent_id: r.get(7)?,
                 meta: meta_json.and_then(|s| serde_json::from_str(&s).ok()),
             })
         },
@@ -1014,6 +1017,8 @@ pub fn add_workspace(
     state: tauri::State<'_, crate::AppState>,
     path: String,
     meta: Option<serde_json::Value>,
+    kind: Option<String>,
+    parent_id: Option<String>,
 ) -> Result<Workspace, String> {
     // `wsl` meta steers engine traffic over ssh to a plugin-named host (出站
     // + 远程执行导向) — it must come through plugin_caps::plugin_add_workspace
@@ -1027,7 +1032,36 @@ pub fn add_workspace(
             );
         }
     }
-    add_workspace_inner(&state, &path, meta)
+    // kind/parent_id shape checks: "worktree" requires an existing parent
+    // row; an ordinary workspace must not carry a parent.
+    match kind.as_deref() {
+        None => {
+            if parent_id.is_some() {
+                return Err("parent_id requires kind=\"worktree\"".to_string());
+            }
+        }
+        Some("worktree") => {
+            let pid = parent_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| "kind=\"worktree\" requires parent_id".to_string())?;
+            let exists = {
+                let conn = state.db.0.lock();
+                conn.query_row(
+                    "SELECT 1 FROM workspaces WHERE id=?1",
+                    rusqlite::params![pid],
+                    |_| Ok(()),
+                )
+                .is_ok()
+            };
+            if !exists {
+                return Err(format!("unknown parent workspace: {pid}"));
+            }
+        }
+        Some(other) => return Err(format!("unknown workspace kind: {other}")),
+    }
+    add_workspace_inner(&state, &path, meta, kind, parent_id)
 }
 
 /// Shared body of `add_workspace` / `plugin_caps::plugin_add_workspace`:
@@ -1036,6 +1070,8 @@ pub(crate) fn add_workspace_inner(
     state: &crate::AppState,
     path: &str,
     meta: Option<serde_json::Value>,
+    kind: Option<String>,
+    parent_id: Option<String>,
 ) -> Result<Workspace, String> {
     let trimmed = path.trim();
     if trimmed.is_empty() {
@@ -1074,10 +1110,13 @@ pub(crate) fn add_workspace_inner(
     {
         let conn = state.db.0.lock();
         conn.execute(
-            "INSERT INTO workspaces(id, path, name, last_opened_at, meta) VALUES(?1,?2,?3,?4,?5)
+            "INSERT INTO workspaces(id, path, name, last_opened_at, kind, parent_id, meta)
+             VALUES(?1,?2,?3,?4,?5,?6,?7)
              ON CONFLICT(path) DO UPDATE SET last_opened_at=excluded.last_opened_at,
+                kind=COALESCE(excluded.kind, workspaces.kind),
+                parent_id=COALESCE(excluded.parent_id, workspaces.parent_id),
                 meta=COALESCE(excluded.meta, workspaces.meta)",
-            rusqlite::params![id, trimmed, name, now, meta_json],
+            rusqlite::params![id, trimmed, name, now, kind, parent_id, meta_json],
         )
         .map_err(|e| e.to_string())?;
     }
@@ -1089,6 +1128,8 @@ pub(crate) fn add_workspace_inner(
         last_opened_at: Some(now),
         sort_order: None,
         group_id: None,
+        kind,
+        parent_id,
         meta,
     })
 }
@@ -1629,5 +1670,51 @@ mod tests {
             "dsh",
             "/home/dev/notes/session.jsonl.zstd"
         ));
+    }
+    /// Tool-result-heavy sessions are the steady state (an hourly task's omp
+    /// transcript measured 28MB of `result.details` against 18MB of chat
+    /// text): the cache budget must see those payloads, or the 128MB cap
+    /// admits multiples of itself. Regression: `parsed_footprint` only
+    /// summed text + images + ts, so args AND result are each sized here.
+    #[test]
+    fn parsed_footprint_counts_retained_tool_payloads() {
+        let big_args = "A".repeat(20_000);
+        let big_result = "R".repeat(20_000);
+        let row = |args: Option<serde_json::Value>, result: Option<serde_json::Value>| Message {
+            seq: 1,
+            role: "tool".into(),
+            text: "ok".into(),
+            ts: None,
+            path: None,
+            args,
+            result,
+            todos: None,
+            usage: Some(json!({ "input_tokens": 10 })),
+            model: None,
+            effort: None,
+            duration_ms: None,
+            images: Vec::new(),
+        };
+        let full = ParsedSession {
+            messages: vec![row(
+                Some(json!({ "command": big_args })),
+                Some(json!({ "details": { "log": big_result } })),
+            )],
+        };
+        // 40k of args+result dwarfs the 2-char text; a threshold above either
+        // payload alone fails if args OR result accounting is dropped.
+        assert!(
+            parsed_footprint(&full) >= 38_000,
+            "args and result payloads must both count toward the cache budget",
+        );
+        // The same row shape without the payloads is orders of magnitude
+        // smaller: the footprint tracks retained bytes, not the row count.
+        let bare = ParsedSession {
+            messages: vec![row(None, None)],
+        };
+        assert!(
+            parsed_footprint(&full) > parsed_footprint(&bare) + 39_000,
+            "the payloads, not the row, drive the footprint",
+        );
     }
 }

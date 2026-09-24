@@ -15,12 +15,15 @@ pub mod engine;
 pub mod event_sink;
 pub mod files;
 pub mod git;
+pub mod git_worktree;
 pub mod history;
 pub mod mcp;
 pub mod metrics;
 pub mod mission;
 pub mod open_app;
 pub mod paths;
+pub mod pet_overlay;
+pub mod pets;
 pub mod plugin_caps;
 pub mod plugins;
 pub mod prompts;
@@ -58,6 +61,9 @@ pub struct AppState {
     pub relay: relay::RelayState,
     pub dsh_host: std::sync::Arc<dsh_host::DshHostState>,
     pub opencode_server: std::sync::Arc<engine::opencode_server::OpencodeServerState>,
+    /// In-flight worktree creations (git_worktree_create) by creationId —
+    /// the cancel command signals through this registry.
+    pub worktree_creations: git_worktree::CreationRegistry,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -97,7 +103,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_drag::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -164,6 +169,7 @@ pub fn run() {
                 opencode_server: std::sync::Arc::new(
                     engine::opencode_server::OpencodeServerState::default(),
                 ),
+                worktree_creations: git_worktree::CreationRegistry::default(),
             };
             // Clone what the initial scan needs before state moves into manage.
             let scan_db = Arc::clone(&state.db);
@@ -283,10 +289,22 @@ pub fn run() {
             // this hook one stray quit kills every live engine run with no
             // dialog (see quit_guard.rs).
             quit_guard::install(app.handle());
+            // The pet is a separate transparent native window. It is created
+            // only when the persisted setting is enabled; the default is off.
+            pet_overlay::init(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
+                // The pet is a secondary window.  It must not run the main
+                // window's process/terminal teardown, and the main window
+                // must destroy it before the app can exit.
+                if window.label() != "main" {
+                    return;
+                }
+                if let Some(pet) = window.app_handle().get_webview_window("pet-overlay") {
+                    let _ = pet.destroy();
+                }
                 if let Some(state) = window.try_state::<AppState>() {
                     state.processes.kill_all();
                     state.dsh_host.kill_spawned();
@@ -331,6 +349,15 @@ pub fn run() {
             settings::get_app_settings,
             settings::update_app_settings,
             settings::set_window_theme,
+            // desktop pet
+            pets::pet_list,
+            pets::pet_import,
+            pets::pet_remove,
+            pets::pet_get_package,
+            pet_overlay::pet_set_visible,
+            pet_overlay::pet_set_scale,
+            pet_overlay::pet_set_state,
+            pet_overlay::pet_save_position,
             // updater
             updater::fetch_latest_release_info,
             // plugins
@@ -365,7 +392,6 @@ pub fn run() {
             // computer use
             computer_use::computer_use_permission_status,
             computer_use::computer_use_open_permission_settings,
-            computer_use::computer_use_drag_source,
             computer_use::computer_use_set_active,
             // MCP inventory (设置 → 能力扩展 → MCP); desktop-only — the
             // web bridge intentionally does not dispatch these.
@@ -453,6 +479,12 @@ pub fn run() {
             git::git_branches,
             git::git_checkout,
             git::git_create_branch,
+            git_worktree::git_worktree_list,
+            git_worktree::git_worktree_create,
+            git_worktree::git_worktree_create_cancel,
+            git_worktree::git_worktree_remove,
+            git_worktree::git_branch_merged,
+            git_worktree::git_resolve_pr,
             // open-app
             open_app::open_workspace_in,
             open_app::open_custom_program,

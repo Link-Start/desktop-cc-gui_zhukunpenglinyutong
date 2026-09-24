@@ -105,9 +105,11 @@ export function useChatTabs({
   // 插件中心页签（原生单实例）：侧栏「插件」入口的落地页。
   const hubOpen = usePluginHubStore((s) => s.open);
   const hubActive = usePluginHubStore((s) => s.active);
-  // 版本更新说明页签（原生单实例）：更新检查发现新版本时自动打开。
+  // 版本更新说明页签（原生单实例）：更新检查发现新版本时自动打开，升级后首启
+  // 也可能带着未读标记出现（见 upgrade-announcement.ts）。
   const notesOpen = useReleaseNotesTabStore((s) => s.open);
   const notesActive = useReleaseNotesTabStore((s) => s.active);
+  const notesUnread = useReleaseNotesTabStore((s) => s.unreadVersion);
   // 内测入口关闭时对应的中心面整体隐藏（store 状态保留，重新开启即恢复）。
   const browserEntryEnabled = useBetaFeature("newBrowser");
   const missionEntryEnabled = useBetaFeature("missionWorkbench");
@@ -119,6 +121,7 @@ export function useChatTabs({
   // starts/stops streaming, so these selectors do not rescan bySession on
   // every per-frame stream flush.
   const streamingByKey = useChatStore((s) => s.streamingByKey);
+  const retryingByKey = useChatStore((s) => s.retryingByKey);
   // Per-tab streaming flags for the tab strip; recomputed only when a flag
   // actually flips (or the tab list changes).
   const tabStreaming = useMemo(
@@ -128,8 +131,16 @@ export function useChatTabs({
       ),
     [openTabs, streamingByKey],
   );
-  // Sidebar status dots: per-thread streaming flags plus the unseen map
-  // (reference-stable until a flag actually changes).
+  // Same for the retry flag: reference-stable, so the strip only re-renders
+  // when a tab actually enters/leaves provider backoff.
+  const tabRetrying = useMemo(
+    () =>
+      openTabs.map(
+        (tab) => retryingByKey[sessionKey(tab.engine, tab.sessionId, tab.workspacePath)] === true,
+      ),
+    [openTabs, retryingByKey],
+  );
+  // Sidebar status dots: per-thread streaming/retry flags plus the unseen map.
   const threadStreaming = useMemo(
     () =>
       sessions.map(
@@ -137,6 +148,14 @@ export function useChatTabs({
           streamingByKey[sessionKey(sess.engine, sess.sessionId, sess.workspacePath)] === true,
       ),
     [sessions, streamingByKey],
+  );
+  const threadRetrying = useMemo(
+    () =>
+      sessions.map(
+        (sess) =>
+          retryingByKey[sessionKey(sess.engine, sess.sessionId, sess.workspacePath)] === true,
+      ),
+    [sessions, retryingByKey],
   );
 
   const sessionById = useMemo(() => {
@@ -155,11 +174,12 @@ export function useChatTabs({
           engine: tab.engine,
           label: meta?.customTitle || meta?.title || t("chat.newChat"),
           streaming: tabStreaming[index] ?? false,
+          retrying: tabRetrying[index] ?? false,
           unseen: unseen[`${tab.engine}/${tab.sessionId}`] ?? false,
           tab,
         };
       }),
-    [openTabs, sessionById, tabStreaming, t, unseen],
+    [openTabs, sessionById, tabStreaming, tabRetrying, t, unseen],
   );
   // File tabs trail the session tabs in the same strip.
   const fileTabItems = useMemo(
@@ -254,10 +274,12 @@ export function useChatTabs({
               title: t("changelog.title"),
               icon: Sparkles as LucideIcon,
               streaming: false,
+              // 升级后首启的未读标记：页签挂强调色圆点，关掉页签即消失。
+              unread: notesUnread ? t("changelog.newVersion") : undefined,
             },
           ]
         : [],
-    [notesOpen, t],
+    [notesOpen, notesUnread, t],
   );
   const tabItems = useMemo(
     () => [
@@ -336,6 +358,7 @@ export function useChatTabs({
     handleTabReorder,
     sessionById,
     threadStreaming,
+    threadRetrying,
     openFiles,
     activeFilePath,
     // Hidden beta surfaces report empty/inactive so ChatCenterPane unmounts
@@ -698,5 +721,6 @@ function useChatTabHandlers({
     handleTabCloseAll,
     handleTabCloseInactive,
     handleTabReorder,
+
   };
 }

@@ -34,8 +34,8 @@ pub(crate) use resolve::command_for_binary;
 
 // Event types and tool-call/todo payload helpers (events.rs).
 pub(crate) use events::{
-    assistant_message, parse_todo_args, parse_tool_args_value, push_session_id, safe_prompt_arg,
-    tool_call_message, tool_call_patch, tool_path_arg, tool_result_patch,
+    assistant_message, parse_todo_args, parse_todo_result, parse_tool_args_value, push_session_id,
+    safe_prompt_arg, tool_call_message, tool_call_patch, tool_path_arg, tool_result_patch,
 };
 pub use events::{EngineEvent, TodoItem, TodosPayload};
 // Live child-process registry (registry.rs).
@@ -917,6 +917,13 @@ async fn send_reserved(
     command.process_group(0);
     #[cfg(windows)]
     hide_console(&mut command);
+    // Shebang shims (`#!/usr/bin/env node`) need the CLI search dirs in
+    // PATH: when adopt_login_shell_path failed/timed out, the process PATH
+    // is a stale launchd snapshot and an absolute shim path alone cannot
+    // find the interpreter. Same dirs find_cli_binary searched; appended
+    // after the process PATH, so normal resolution order is unchanged.
+    // Harmless for the WSL/ssh-wrapped command (local env doesn't cross).
+    command.env("PATH", resolve::cli_search_path());
 
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -1544,6 +1551,26 @@ mod permission_tests {
         let off = argv(&claude::ClaudeEngine::new(), &req(None));
         assert!(!off.contains(&"--mcp-config".to_string()));
         assert!(!off.contains(&"mcp__ccgui-computer".to_string()));
+    }
+
+    #[test]
+    fn engine_info_exposes_computer_use_support_under_its_camel_case_key() {
+        // The composer's /ccgui-cua gate reads `supportsComputerUse` off
+        // list_engines; a rename (or a lost rename_all) would make the field
+        // read undefined and refuse every engine. Pin the wire name.
+        let info = EngineInfo {
+            id: "claude".into(),
+            available: true,
+            enabled: true,
+            supports_images: true,
+            supports_computer_use: true,
+            supports_effort: true,
+            supports_tool_constraints: false,
+            permissions: vec!["auto".into()],
+        };
+        let json = serde_json::to_value(&info).expect("EngineInfo serializes");
+        assert_eq!(json["supportsComputerUse"], serde_json::json!(true));
+        assert!(json.get("supports_computer_use").is_none());
     }
 
     #[test]
