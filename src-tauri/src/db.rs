@@ -981,21 +981,27 @@ mod tests {
         let orphan_dir = scratch.path("wt-orphan");
         std::fs::create_dir_all(&child_dir).unwrap();
         std::fs::create_dir_all(&orphan_dir).unwrap();
+        // Backslashes in a Windows path are invalid JSON escapes; serialize
+        // the paths the way the legacy settings writer did so the fixture
+        // parses on every platform.
+        let json_path = |p: &std::path::Path| {
+            serde_json::to_string(&p.display().to_string()).expect("json string")
+        };
         let legacy = format!(
             r#"[
             {{"id":"legacy-grouped","name":"grouped-ws","path":"/ws/shared","kind":"main",
              "parentId":null,"settings":{{"sortOrder":2,"groupId":"g1"}}}},
             {{"id":"legacy-ungrouped","name":"ungrouped-ws","path":"/ws/ungrouped","kind":"main",
              "parentId":null,"settings":{{"sortOrder":null,"groupId":null}}}},
-            {{"id":"legacy-child","name":"worktree-child","path":"{child}","kind":"worktree",
+            {{"id":"legacy-child","name":"worktree-child","path":{child},"kind":"worktree",
              "parentId":"legacy-grouped","settings":{{"sortOrder":null,"groupId":null}}}},
             {{"id":"legacy-stale","name":"stale-child","path":"/ws/gone","kind":"worktree",
              "parentId":"legacy-grouped","settings":{{"sortOrder":null,"groupId":null}}}},
-            {{"id":"legacy-orphan","name":"orphan-child","path":"{orphan}","kind":"worktree",
+            {{"id":"legacy-orphan","name":"orphan-child","path":{orphan},"kind":"worktree",
              "parentId":"missing-parent","settings":{{"sortOrder":null,"groupId":null}}}}
         ]"#,
-            child = child_dir.display(),
-            orphan = orphan_dir.display(),
+            child = json_path(&child_dir),
+            orphan = json_path(&orphan_dir),
         );
         let legacy_path = scratch.path("workspaces.json");
         std::fs::write(&legacy_path, legacy).unwrap();
