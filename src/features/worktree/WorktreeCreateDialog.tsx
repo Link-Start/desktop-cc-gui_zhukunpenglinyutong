@@ -18,6 +18,7 @@ import {
   defaultWorktreePath,
   isPlausibleBranchName,
   parsePrInput,
+  randomBranchSuffix,
   suggestPrBranch,
 } from "./pr-input";
 import {
@@ -51,6 +52,15 @@ function usePrPreview({
   const [resolveError, setResolveError] = useState<"notGitHub" | "invalidPrInput" | null>(null);
   const resolveSeq = useRef(0);
   const lastResolveKey = useRef("");
+  // 建议分支带三位随机后缀（本地同名分支残留会让创建反复失败）。后缀按 PR
+  // 号换一次：同一 PR 内保持稳定，否则 resolve key 每次渲染都变、解析打转。
+  // 随机值不可派生，所以在渲染期重置（React 文档的 sanctioned 模式）：本次
+  // 渲染会被立即丢弃并用新后缀重跑，不会带着旧值提交。
+  const [suffix, setSuffix] = useState(() => ({ pr: prNumber, value: randomBranchSuffix() }));
+  if (suffix.pr !== prNumber) {
+    setSuffix({ pr: prNumber, value: randomBranchSuffix() });
+  }
+  const branchSuffix = suffix.value;
   useEffect(() => {
     if (tab !== "pr") return;
     if (!prNumber) {
@@ -65,7 +75,7 @@ function usePrPreview({
     setResolveError(null);
     const timer = setTimeout(() => {
       // preview?.title 参与派生分支名，必须跟踪；title 晚到时再跑一轮。
-      const suggested = suggestPrBranch(prNumber, preview?.title);
+      const suggested = suggestPrBranch(prNumber, preview?.title, branchSuffix);
       const dir = locationTouched
         ? location.trim()
         : defaultWorktreePath(parentPath, suggested);
@@ -91,9 +101,11 @@ function usePrPreview({
     }, 400);
     return () => clearTimeout(timer);
     // 依赖 preview?.title：标题晚到时重跑并复查冲突；key guard 防死循环。
-  }, [prInput, prNumber, preview?.title, location, locationTouched, parentPath, tab]);
+  }, [prInput, prNumber, preview?.title, location, locationTouched, parentPath, tab, branchSuffix]);
 
-  const suggestedBranch = prNumber ? suggestPrBranch(prNumber, preview?.title) : "";
+  const suggestedBranch = prNumber
+    ? suggestPrBranch(prNumber, preview?.title, branchSuffix)
+    : "";
   return { preview, resolving, resolveError, suggestedBranch };
 }
 

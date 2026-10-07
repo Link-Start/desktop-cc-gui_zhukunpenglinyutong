@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Message, PlanReviewDecision } from "@/lib/ipc";
 import { useChatStore } from "../store";
 import { useScopedSession, useScopedSessionKey } from "../split/session-scope";
 import { isPlanActionable } from "../store/plan-review";
+import { memoizeMessageHistory } from "./memoize-message-history";
 import {
   CopyPlanButton,
   PlanCardHeader,
   PlanViewFullButton,
-  execPermissionLabel,
-  planSummary,
 } from "./PlanReviewCard";
+import { execPermissionLabel, planSummary } from "./plan-review-helpers";
 
 /**
  * Plan-approval dock (composer form): the three primary actions — approve &
@@ -26,11 +26,7 @@ import {
  *  the visible effect of the click. Resolved like usePendingQuestion. */
 export function usePendingPlanReview() {
   const key = useScopedSessionKey();
-  return useChatStore((s) => {
-    if (!key) return null;
-    const session = s.bySession[key];
-    const messages = session?.messages ?? [];
-    const resume = session?.planReviewResume;
+  const pendingPlan = useMemo(() => memoizeMessageHistory<Message | null, string | null>((messages, resume) => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const record = messages[i].planReview;
       if (!record) continue;
@@ -45,6 +41,11 @@ export function usePendingPlanReview() {
       }
     }
     return null;
+  }), []);
+  return useChatStore((s) => {
+    if (!key) return null;
+    const session = s.bySession[key];
+    return pendingPlan(session?.messages, session?.planReviewResume);
   });
 }
 
@@ -54,15 +55,16 @@ export function usePendingPlanReview() {
  *  settled plan turn (next_turn) does not block the switch. */
 export function usePlanReviewGateActive(): boolean {
   const key = useScopedSessionKey();
-  return useChatStore((s) => {
-    if (!key) return false;
-    const session = s.bySession[key];
-    if (!session?.streaming) return false;
-    for (let i = session.messages.length - 1; i >= 0; i--) {
-      const record = session.messages[i].planReview;
+  const actionablePlan = useMemo(() => memoizeMessageHistory((messages) => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const record = messages[i].planReview;
       if (record && isPlanActionable(record.status)) return true;
     }
     return false;
+  }), []);
+  return useChatStore((s) => {
+    const session = key ? s.bySession[key] : undefined;
+    return session?.streaming ? actionablePlan(session.messages) : false;
   });
 }
 
@@ -104,32 +106,32 @@ function PlanReviewDockBody({
     if (!key || busy) return;
     setBusy(true);
     setNotice(null);
-    const result = await respondToPlanReview(
-      key,
-      record.planId,
-      record.revision,
-      decision,
-      text,
-    );
-    setBusy(false);
-    if (result.kind === "conflict") {
-      // The store record already flipped to the backend's current state; if
-      // that state is terminal the pending hook now yields null, so hand a
-      // snapshot to the dock's hold panel — the user still sees the notice
-      // and the refreshed status instead of the dock just vanishing.
-      onHold({ ...message, planReview: result.record });
-      setNotice({ kind: "conflict" });
-    } else if (result.kind === "error") {
-      setNotice({ kind: "error", message: result.error });
-    } else if (decision === "request_changes") {
-      setEditing(false);
-      setFeedback("");
+    try {
+      const result = await respondToPlanReview(
+        key,
+        record.planId,
+        record.revision,
+        decision,
+        text,
+      );
+      if (result.kind === "conflict") {
+        // The store record already flipped to the backend's current state; if
+        // that state is terminal the pending hook now yields null, so hand a
+        // snapshot to the dock's hold panel — the user still sees the notice
+        // and the refreshed status instead of the dock just vanishing.
+        onHold({ ...message, planReview: result.record });
+        setNotice({ kind: "conflict" });
+      } else if (result.kind === "error") {
+        setNotice({ kind: "error", message: result.error });
+      } else if (decision === "request_changes") {
+        setEditing(false);
+        setFeedback("");
+      }
+    } finally {
+      // The awaited call may reject; the dock must never stay stuck busy.
+      setBusy(false);
     }
   };
-
-  const btn =
-    "inline-flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-caption-1-medium transition-colors disabled:cursor-not-allowed";
-  const secondary = `${btn} border border-border-secondary bg-background-secondary-default text-text-secondary hover:bg-background-tertiary-hover`;
 
   return (
     <div
@@ -188,67 +190,118 @@ function PlanReviewDockBody({
           {t("chat.planReviewError", { message: notice.message })}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-caption-1-regular text-text-tertiary">
-          {busy || record.status === "submitting"
-            ? t("chat.planReviewSubmitting")
-            : !record.complete
-              ? t("chat.planReviewIncomplete")
-              : null}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setEditing(false);
-                  setFeedback("");
-                }}
-                className={secondary}
-              >
-                {t("chat.planReviewCancel")}
-              </button>
-              <button
-                type="button"
-                disabled={!canDecide || !feedback.trim()}
-                onClick={() => void submit("request_changes", feedback)}
-                className={`${btn} bg-button-primary text-text-white disabled:text-button-primary-disabled-foreground`}
-              >
-                {t("chat.planReviewFeedbackSubmit")}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                disabled={!canDecide}
-                onClick={() => void submit("defer")}
-                className={secondary}
-              >
-                {t("chat.planReviewDefer")}
-              </button>
-              <button
-                type="button"
-                disabled={!canDecide}
-                onClick={() => setEditing(true)}
-                className={secondary}
-              >
-                {t("chat.planReviewRequestChanges")}
-              </button>
-              <button
-                type="button"
-                disabled={!canApprove}
-                title={record.complete ? undefined : t("chat.planReviewIncomplete")}
-                onClick={() => void submit("approve")}
-                className={`${btn} bg-button-primary text-text-white disabled:text-button-primary-disabled-foreground`}
-              >
-                {t("chat.planReviewApprove")}
-              </button>
-            </>
-          )}
-        </div>
+      <PlanDockActionBar
+        editing={editing}
+        busy={busy}
+        submitting={busy || record.status === "submitting"}
+        canDecide={canDecide}
+        canApprove={canApprove}
+        complete={record.complete}
+        feedback={feedback}
+        onCancelFeedback={() => {
+          setEditing(false);
+          setFeedback("");
+        }}
+        onSubmitFeedback={() => void submit("request_changes", feedback)}
+        onStartFeedback={() => setEditing(true)}
+        onDefer={() => void submit("defer")}
+        onApprove={() => void submit("approve")}
+      />
+    </div>
+  );
+}
+
+/** Decision row: feedback cancel/submit while editing, else defer /
+ *  request-changes / approve plus the busy/incomplete status text. */
+function PlanDockActionBar({
+  editing,
+  busy,
+  submitting,
+  canDecide,
+  canApprove,
+  complete,
+  feedback,
+  onCancelFeedback,
+  onSubmitFeedback,
+  onStartFeedback,
+  onDefer,
+  onApprove,
+}: {
+  editing: boolean;
+  busy: boolean;
+  submitting: boolean;
+  canDecide: boolean;
+  canApprove: boolean;
+  complete: boolean;
+  feedback: string;
+  onCancelFeedback: () => void;
+  onSubmitFeedback: () => void;
+  onStartFeedback: () => void;
+  onDefer: () => void;
+  onApprove: () => void;
+}) {
+  const { t } = useTranslation();
+  const btn =
+    "inline-flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-caption-1-medium transition-colors disabled:cursor-not-allowed";
+  const secondary = `${btn} border border-border-secondary bg-background-secondary-default text-text-secondary hover:bg-background-tertiary-hover`;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-caption-1-regular text-text-tertiary">
+        {submitting
+          ? t("chat.planReviewSubmitting")
+          : !complete
+            ? t("chat.planReviewIncomplete")
+            : null}
+      </span>
+      <div className="ml-auto flex items-center gap-2">
+        {editing ? (
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onCancelFeedback}
+              className={secondary}
+            >
+              {t("chat.planReviewCancel")}
+            </button>
+            <button
+              type="button"
+              disabled={!canDecide || !feedback.trim()}
+              onClick={onSubmitFeedback}
+              className={`${btn} bg-button-primary text-text-white disabled:text-button-primary-disabled-foreground`}
+            >
+              {t("chat.planReviewFeedbackSubmit")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              disabled={!canDecide}
+              onClick={onDefer}
+              className={secondary}
+            >
+              {t("chat.planReviewDefer")}
+            </button>
+            <button
+              type="button"
+              disabled={!canDecide}
+              onClick={onStartFeedback}
+              className={secondary}
+            >
+              {t("chat.planReviewRequestChanges")}
+            </button>
+            <button
+              type="button"
+              disabled={!canApprove}
+              title={complete ? undefined : t("chat.planReviewIncomplete")}
+              onClick={onApprove}
+              className={`${btn} bg-button-primary text-text-white disabled:text-button-primary-disabled-foreground`}
+            >
+              {t("chat.planReviewApprove")}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

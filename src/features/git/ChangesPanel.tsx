@@ -1,17 +1,13 @@
 import {
   memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
-  useSyncExternalStore, type CSSProperties, type RefObject,
+  useSyncExternalStore, type RefObject,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useTranslation } from "react-i18next";
-import Plus from "lucide-react/dist/esm/icons/plus";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 import ChevronRight from "lucide-react/dist/esm/icons/chevron-right";
-import Minus from "lucide-react/dist/esm/icons/minus";
-import Undo2 from "lucide-react/dist/esm/icons/undo-2";
-import { Focusable } from "react-aria-components";
-import { Tooltip, TooltipContent } from "@/components/base/tooltip/tooltip";
 import { ConfirmDialog } from "@/components/dialogs";
+import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { type GitFileEntry, type GitStatus } from "@/lib/ipc";
 import { errorText } from "@/lib/errors";
 import { cx } from "@/utils/cx";
@@ -20,6 +16,8 @@ import { resolveWorkspaceRepository } from "@/features/files/repositorySelection
 import { useGitStore } from "./store";
 import { ChangesPanelHeader } from "./ChangesPanelHeader";
 import { CommitFooter } from "./CommitFooter";
+import { buildGitTree, flattenGitTree } from "./git-tree";
+import { DirectoryRow, FileRow } from "./GitTreeRow";
 
 function useVisibleGitValue<Value>(
   visible: boolean,
@@ -27,17 +25,280 @@ function useVisibleGitValue<Value>(
 ) {
   const previous = useRef<Value>();
   const subscribe = useCallback(
-    (notify: () => void) => visible ? useGitStore.subscribe(notify) : () => {},
+    (notify: () => void) => (visible ? useGitStore.subscribe(notify) : () => {}),
     [visible],
   );
   const value = useSyncExternalStore(
     subscribe,
-    () => visible ? select(useGitStore.getState()) : previous.current,
+    () => (visible ? select(useGitStore.getState()) : previous.current),
   );
   useLayoutEffect(() => {
     previous.current = value;
   }, [value]);
   return value;
+}
+
+const VIEW_MODE_KEY = "ccgui-next.git.viewMode";
+
+/** Persisted flat/tree preference. The read lives in the lazy initializer, so
+ *  a disabled localStorage only costs one fallback on first mount. */
+function useGitViewMode() {
+  const [viewMode, setViewMode] = useState<"flat" | "tree">(() => {
+    try {
+      return (localStorage.getItem(VIEW_MODE_KEY) as "flat" | "tree") || "tree";
+    } catch {
+      return "tree";
+    }
+  });
+
+  const toggleViewMode = useCallback(() => {
+    const next = viewMode === "tree" ? "flat" : "tree";
+    setViewMode(next);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, next);
+    } catch {
+      // Private mode / quota: the session keeps the choice.
+    }
+  }, [viewMode]);
+
+  return { viewMode, toggleViewMode };
+}
+
+/** Which files the commit footer's checkbox selection holds. Staged files
+ *  start selected; a status refresh drops vanished paths and adopts files that
+ *  became staged outside the panel (CLI, another window). The refresh adjust
+ *  happens during render so a stale selection never reaches a committed frame. */
+function useChangesSelection(status: GitStatus | undefined) {
+  const stagedPaths = useMemo(() => status?.staged.map((f) => f.path) ?? [], [status]);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(() => new Set(stagedPaths));
+  const [previousStaged, setPreviousStaged] = useState<string[]>(stagedPaths);
+
+  if (previousStaged !== stagedPaths) {
+    setPreviousStaged(stagedPaths);
+    setSelectedFiles((prev) => {
+      const allCurrentPaths = new Set([
+        ...stagedPaths,
+        ...(status?.unstaged ?? []).map((f) => f.path),
+        ...(status?.untracked ?? []).map((f) => f.path),
+      ]);
+      const next = new Set<string>();
+      for (const path of prev) {
+        if (allCurrentPaths.has(path)) next.add(path);
+      }
+      const previousStagedSet = new Set(previousStaged);
+      for (const path of stagedPaths) {
+        if (!previousStagedSet.has(path)) next.add(path);
+      }
+      return next;
+    });
+  }
+
+  const toggleSelectFile = useCallback((path: string) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectDir = useCallback((paths: string[]) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      const allSelected = paths.every((p) => next.has(p));
+      if (allSelected) {
+        for (const p of paths) next.delete(p);
+      } else {
+        for (const p of paths) next.add(p);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectGroup = useCallback((paths: string[]) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      const allSelected = paths.length > 0 && paths.every((p) => next.has(p));
+      if (allSelected) {
+        for (const p of paths) next.delete(p);
+      } else {
+        for (const p of paths) next.add(p);
+      }
+      return next;
+    });
+  }, []);
+
+  return { selectedFiles, setSelectedFiles, toggleSelectFile, toggleSelectDir, toggleSelectGroup };
+}
+
+/** Mutations, their busy/error bookkeeping, and the commit-confirmation flow. */
+function useChangesActions(
+  gitWorkspacePath: string,
+  status: GitStatus | undefined,
+  selection: ReturnType<typeof useChangesSelection>,
+) {
+  const { selectedFiles, setSelectedFiles } = selection;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [pending, setPending] = useState<Record<string, true>>({});
+  const [commitMsg, setCommitMsg] = useState("");
+  /** Paths awaiting discard confirmation (one row or a whole group). */
+  const [discardTarget, setDiscardTarget] = useState<string[] | null>(null);
+  /** Commit waiting on confirmation because it would unstage files the user
+   *  staged but left unchecked — that reshuffles the index (e.g. hunks
+   *  placed with `git add -p`), so it never happens silently. */
+  const [pendingCommitPlan, setPendingCommitPlan] = useState<{
+    message: string;
+    toStage: string[];
+    toUnstage: string[];
+  } | null>(null);
+
+  /** Runs a mutating action: tracks busy state, surfaces errors inline. */
+  const run = useCallback((key: string, action: () => Promise<unknown>) => {
+    setPending((p) => ({ ...p, [key]: true }));
+    setActionError(null);
+    void action()
+      .catch((err: unknown) => setActionError(errorText(err)))
+      .finally(() => {
+        setPending((p) => {
+          const next = { ...p };
+          delete next[key];
+          return next;
+        });
+      });
+  }, []);
+
+  /** Dismiss the header error: the failed action's error, else the store's
+   *  last refresh failure. */
+  const dismissError = useCallback(() => {
+    setActionError(null);
+    useGitStore.getState().clearError(gitWorkspacePath);
+  }, [gitWorkspacePath]);
+
+  const stage = useCallback(
+    (files: string[]) => {
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        for (const f of files) next.add(f);
+        return next;
+      });
+      run("stage", () => useGitStore.getState().stage(gitWorkspacePath, files));
+    },
+    [run, gitWorkspacePath, setSelectedFiles],
+  );
+
+  const unstage = useCallback(
+    (files: string[]) => {
+      setSelectedFiles((prev) => {
+        const next = new Set(prev);
+        for (const f of files) next.delete(f);
+        return next;
+      });
+      run("unstage", () => useGitStore.getState().unstage(gitWorkspacePath, files));
+    },
+    [run, gitWorkspacePath, setSelectedFiles],
+  );
+
+  const stageOne = useCallback((file: string) => stage([file]), [stage]);
+  const unstageOne = useCallback((file: string) => unstage([file]), [unstage]);
+
+  const discardRow = useCallback((file: string) => setDiscardTarget([file]), []);
+  const confirmDiscard = useCallback(() => {
+    if (discardTarget === null) return;
+    run("discard", () => useGitStore.getState().discard(gitWorkspacePath, discardTarget));
+    setDiscardTarget(null);
+  }, [run, gitWorkspacePath, discardTarget]);
+
+  const runCommitPlan = useCallback(
+    (plan: { message: string; toStage: string[]; toUnstage: string[] }) => {
+      run("commit", async () => {
+        if (plan.toUnstage.length > 0) {
+          await useGitStore.getState().unstage(gitWorkspacePath, plan.toUnstage);
+        }
+        if (plan.toStage.length > 0) {
+          await useGitStore.getState().stage(gitWorkspacePath, plan.toStage);
+        }
+        await useGitStore.getState().commit(gitWorkspacePath, plan.message);
+        setCommitMsg("");
+      });
+    },
+    [run, gitWorkspacePath],
+  );
+
+  const confirmCommitPlan = useCallback(() => {
+    if (pendingCommitPlan === null) return;
+    const plan = pendingCommitPlan;
+    setPendingCommitPlan(null);
+    runCommitPlan(plan);
+  }, [pendingCommitPlan, runCommitPlan]);
+
+  const handleCommitSelected = useCallback(async () => {
+    const message = commitMsg.trim();
+    if (!message || selectedFiles.size === 0 || !status) return;
+
+    const stagedSet = new Set(status.staged.map((f) => f.path));
+    // A checked file commits in full: anything still sitting in the
+    // worktree (unstaged or untracked) gets staged too, so a partially
+    // staged file never commits only its indexed half.
+    const worktreePaths = new Set([
+      ...status.unstaged.map((f) => f.path),
+      ...status.untracked.map((f) => f.path),
+    ]);
+    const toStage: string[] = [];
+    const toUnstage: string[] = [];
+    for (const path of selectedFiles) {
+      if (worktreePaths.has(path)) {
+        toStage.push(path);
+      }
+    }
+    for (const path of stagedSet) {
+      if (!selectedFiles.has(path)) {
+        toUnstage.push(path);
+      }
+    }
+
+    const plan = { message, toStage, toUnstage };
+    if (toUnstage.length > 0) {
+      setPendingCommitPlan(plan);
+      return;
+    }
+    runCommitPlan(plan);
+  }, [commitMsg, selectedFiles, status, runCommitPlan]);
+
+  const openStagedDiff = useCallback(
+    (file: string) => useGitStore.getState().openDiff(gitWorkspacePath, { file, staged: true }),
+    [gitWorkspacePath],
+  );
+  const openUnstagedDiff = useCallback(
+    (file: string) => useGitStore.getState().openDiff(gitWorkspacePath, { file, staged: false }),
+    [gitWorkspacePath],
+  );
+
+  return {
+    actionError,
+    pending,
+    commitMsg,
+    setCommitMsg,
+    discardTarget,
+    setDiscardTarget,
+    pendingCommitPlan,
+    setPendingCommitPlan,
+    run,
+    dismissError,
+    stage,
+    unstage,
+    stageOne,
+    unstageOne,
+    discardRow,
+    confirmDiscard,
+    runCommitPlan,
+    confirmCommitPlan,
+    handleCommitSelected,
+    openStagedDiff,
+    openUnstagedDiff,
+  };
 }
 
 export function ChangesPanel({
@@ -74,77 +335,46 @@ export function ChangesPanel({
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const scrollOffset = useRef(0);
 
+  const { viewMode, toggleViewMode } = useGitViewMode();
+  const selection = useChangesSelection(status);
+  const {
+    selectedFiles,
+    toggleSelectFile,
+    toggleSelectDir,
+    toggleSelectGroup,
+  } = selection;
+  const {
+    actionError,
+    pending,
+    commitMsg,
+    setCommitMsg,
+    discardTarget,
+    setDiscardTarget,
+    pendingCommitPlan,
+    setPendingCommitPlan,
+    run,
+    dismissError,
+    stage,
+    unstage,
+    stageOne,
+    unstageOne,
+    discardRow,
+    confirmDiscard,
+    confirmCommitPlan,
+    handleCommitSelected,
+    openStagedDiff,
+    openUnstagedDiff,
+  } = useChangesActions(gitWorkspacePath, status, selection);
+
   useLayoutEffect(() => {
     if (visible && scrollElement) scrollElement.scrollTop = scrollOffset.current;
   }, [visible, scrollElement]);
-
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [pending, setPending] = useState<Record<string, true>>({});
-  const [commitMsg, setCommitMsg] = useState("");
-  /** Paths awaiting discard confirmation (one row or a whole group). */
-  const [discardTarget, setDiscardTarget] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     void useGitStore.getState().refresh(gitWorkspacePath);
     void useGitStore.getState().loadBranches(gitWorkspacePath);
   }, [gitWorkspacePath, visible]);
-
-  /** Runs a mutating action: tracks busy state, surfaces errors inline. */
-  const run = useCallback((key: string, action: () => Promise<unknown>) => {
-    setPending((p) => ({ ...p, [key]: true }));
-    setActionError(null);
-    void action()
-      .catch((err: unknown) => setActionError(errorText(err)))
-      .finally(() => {
-        setPending((p) => {
-          const next = { ...p };
-          delete next[key];
-          return next;
-        });
-      });
-  }, []);
-  /** Dismiss the header error: the failed action's error, else the store's
-   * last refresh failure. */
-  const dismissError = useCallback(() => {
-    setActionError(null);
-    useGitStore.getState().clearError(gitWorkspacePath);
-  }, [gitWorkspacePath]);
-
-  const stage = useCallback(
-    (files: string[]) =>
-      run("stage", () => useGitStore.getState().stage(gitWorkspacePath, files)),
-    [run, gitWorkspacePath],
-  );
-  const unstage = useCallback(
-    (files: string[]) =>
-      run("unstage", () => useGitStore.getState().unstage(gitWorkspacePath, files)),
-    [run, gitWorkspacePath],
-  );
-  const stageOne = useCallback((file: string) => stage([file]), [stage]);
-  const unstageOne = useCallback((file: string) => unstage([file]), [unstage]);
-  const discard = useCallback(
-    (files: string[]) =>
-      run("discard", () => useGitStore.getState().discard(gitWorkspacePath, files)),
-    [run, gitWorkspacePath],
-  );
-  const discardRow = useCallback((file: string) => setDiscardTarget([file]), []);
-  const confirmDiscard = useCallback(() => {
-    if (discardTarget === null) return;
-    discard(discardTarget);
-    setDiscardTarget(null);
-  }, [discard, discardTarget]);
-  // File rows open the diff in the center area, where it has room.
-  const openStagedDiff = useCallback(
-    (file: string) =>
-      useGitStore.getState().openDiff(gitWorkspacePath, { file, staged: true }),
-    [gitWorkspacePath],
-  );
-  const openUnstagedDiff = useCallback(
-    (file: string) =>
-      useGitStore.getState().openDiff(gitWorkspacePath, { file, staged: false }),
-    [gitWorkspacePath],
-  );
 
   const header = visible ? (
     <ChangesPanelHeader
@@ -166,12 +396,17 @@ export function ChangesPanel({
       error={actionError ?? refreshError ?? null}
       run={run}
       onDismissError={dismissError}
+      viewMode={viewMode}
+      onToggleViewMode={toggleViewMode}
     />
   ) : null;
 
   if (notRepo) {
     return (
-      <aside style={{ display: visible ? undefined : "none" }} className={cx("flex h-full flex-col bg-background-primary-default", className)}>
+      <aside
+        style={{ display: visible ? undefined : "none" }}
+        className={cx("flex h-full flex-col bg-background-primary-default", className)}
+      >
         {header}
         <div className="flex flex-1 items-center justify-center p-4">
           <p className="text-center text-body-medium text-text-tertiary">
@@ -183,12 +418,17 @@ export function ChangesPanel({
   }
 
   return (
-    <aside style={{ display: visible ? undefined : "none" }} className={cx("flex h-full min-h-0 flex-col bg-background-primary-default", className)}>
+    <aside
+      style={{ display: visible ? undefined : "none" }}
+      className={cx("flex h-full min-h-0 flex-col bg-background-primary-default", className)}
+    >
       {header}
       <div
         ref={setScrollElement}
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-        onScroll={(event) => { if (visible) scrollOffset.current = event.currentTarget.scrollTop; }}
+        onScroll={(event) => {
+          if (visible) scrollOffset.current = event.currentTarget.scrollTop;
+        }}
       >
         <ChangesBody
           status={status}
@@ -196,6 +436,11 @@ export function ChangesPanel({
           scrollElement={scrollElement}
           scrollOffset={scrollOffset}
           pending={pending}
+          viewMode={viewMode}
+          selectedFiles={selectedFiles}
+          onToggleSelectFile={toggleSelectFile}
+          onToggleSelectDir={toggleSelectDir}
+          onToggleSelectGroup={toggleSelectGroup}
           stage={stage}
           unstage={unstage}
           stageOne={stageOne}
@@ -210,13 +455,51 @@ export function ChangesPanel({
         <CommitFooter
           workspacePath={gitWorkspacePath}
           stagedCount={status?.staged.length ?? 0}
+          selectedCount={selectedFiles.size}
+          onCommitSelected={handleCommitSelected}
           busy={pending.commit === true}
           commitMsg={commitMsg}
           onCommitMsgChange={setCommitMsg}
           run={run}
         />
       )}
-      {visible && discardTarget !== null && (
+      <ChangesConfirmDialogs
+        visible={visible}
+        discardTarget={discardTarget}
+        pendingCommitPlan={pendingCommitPlan}
+        onConfirmDiscard={confirmDiscard}
+        onCancelDiscard={() => setDiscardTarget(null)}
+        onConfirmPlan={confirmCommitPlan}
+        onCancelPlan={() => setPendingCommitPlan(null)}
+      />
+    </aside>
+  );
+}
+
+/** Discard and commit-plan confirmations: conditions stay together so the
+ *  panel body's JSX does not grow another two conditional blocks. */
+function ChangesConfirmDialogs({
+  visible,
+  discardTarget,
+  pendingCommitPlan,
+  onConfirmDiscard,
+  onCancelDiscard,
+  onConfirmPlan,
+  onCancelPlan,
+}: {
+  visible: boolean;
+  discardTarget: string[] | null;
+  pendingCommitPlan: { message: string; toStage: string[]; toUnstage: string[] } | null;
+  onConfirmDiscard: () => void;
+  onCancelDiscard: () => void;
+  onConfirmPlan: () => void;
+  onCancelPlan: () => void;
+}) {
+  const { t } = useTranslation();
+  if (!visible) return null;
+  return (
+    <>
+      {discardTarget !== null && (
         <ConfirmDialog
           danger
           message={
@@ -224,11 +507,20 @@ export function ChangesPanel({
               ? t("git.discardConfirm", { path: discardTarget[0] })
               : t("git.discardAllConfirm", { count: discardTarget.length })
           }
-          onConfirm={confirmDiscard}
-          onCancel={() => setDiscardTarget(null)}
+          onConfirm={onConfirmDiscard}
+          onCancel={onCancelDiscard}
         />
       )}
-    </aside>
+      {pendingCommitPlan !== null && (
+        <ConfirmDialog
+          message={t("git.commitUnstageConfirm", {
+            count: pendingCommitPlan.toUnstage.length,
+          })}
+          onConfirm={onConfirmPlan}
+          onCancel={onCancelPlan}
+        />
+      )}
+    </>
   );
 }
 
@@ -241,6 +533,11 @@ function ChangesBody({
   scrollElement,
   scrollOffset,
   pending,
+  viewMode,
+  selectedFiles,
+  onToggleSelectFile,
+  onToggleSelectDir,
+  onToggleSelectGroup,
   stage,
   unstage,
   stageOne,
@@ -255,6 +552,11 @@ function ChangesBody({
   scrollElement: HTMLDivElement | null;
   scrollOffset: RefObject<number>;
   pending: Record<string, true>;
+  viewMode: "flat" | "tree";
+  selectedFiles: Set<string>;
+  onToggleSelectFile: (path: string) => void;
+  onToggleSelectDir: (paths: string[]) => void;
+  onToggleSelectGroup: (paths: string[]) => void;
   stage: (files: string[]) => void;
   unstage: (files: string[]) => void;
   stageOne: (file: string) => void;
@@ -270,13 +572,18 @@ function ChangesBody({
   if (total === 0) return <ChangesPlaceholder text={t("git.noChanges")} />;
   return (
     <>
-      <ChangesSummary status={status} />
+      <ChangesSummary status={status} selectedCount={selectedFiles.size} />
       <GroupSection
         visible={visible}
         scrollElement={scrollElement}
         scrollOffset={scrollOffset}
         title={t("git.staged")}
         entries={status.staged}
+        viewMode={viewMode}
+        selectedFiles={selectedFiles}
+        onToggleSelectFile={onToggleSelectFile}
+        onToggleSelectDir={onToggleSelectDir}
+        onToggleSelectGroup={onToggleSelectGroup}
         groupActionLabel={t("git.unstageAll")}
         onGroupAction={unstage}
         rowActionLabel={t("git.unstage")}
@@ -291,6 +598,11 @@ function ChangesBody({
         scrollOffset={scrollOffset}
         title={t("git.unstaged")}
         entries={status.unstaged}
+        viewMode={viewMode}
+        selectedFiles={selectedFiles}
+        onToggleSelectFile={onToggleSelectFile}
+        onToggleSelectDir={onToggleSelectDir}
+        onToggleSelectGroup={onToggleSelectGroup}
         groupActionLabel={t("git.stageAll")}
         onGroupAction={stage}
         rowActionLabel={t("git.stage")}
@@ -309,6 +621,11 @@ function ChangesBody({
         scrollOffset={scrollOffset}
         title={t("git.untracked")}
         entries={status.untracked}
+        viewMode={viewMode}
+        selectedFiles={selectedFiles}
+        onToggleSelectFile={onToggleSelectFile}
+        onToggleSelectDir={onToggleSelectDir}
+        onToggleSelectGroup={onToggleSelectGroup}
         groupActionLabel={t("git.stageAll")}
         onGroupAction={stage}
         rowActionLabel={t("git.stage")}
@@ -335,29 +652,34 @@ function ChangesPlaceholder({ text }: { text: string }) {
   );
 }
 
-const ChangesSummary = memo(function ChangesSummary({ status }: { status: GitStatus }) {
+const ChangesSummary = memo(function ChangesSummary({
+  status,
+  selectedCount,
+}: {
+  status: GitStatus;
+  selectedCount: number;
+}) {
   const { t } = useTranslation();
   const all = [...status.staged, ...status.unstaged, ...status.untracked];
   const adds = all.reduce((n, f) => n + (f.additions ?? 0), 0);
   const dels = all.reduce((n, f) => n + (f.deletions ?? 0), 0);
   return (
-    <div className="sticky top-0 z-20 flex items-center gap-1.5 border-b border-separator-border bg-background-primary-default px-3 py-2">
-      <span className="text-body-medium text-text-primary">
-        {all.length} {t("git.uncommittedChanges")}
-      </span>
-      <span className="text-xs text-state-success-text">+{adds}</span>
-      <span className="text-xs text-text-error-primary">−{dels}</span>
+    <div className="sticky top-0 z-20 flex items-center justify-between border-b border-separator-border bg-background-primary-default px-3 py-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-body-medium text-text-primary">
+          {all.length} {t("git.uncommittedChanges")}
+        </span>
+        <span className="text-xs text-state-success-text">+{adds}</span>
+        <span className="text-xs text-text-error-primary">−{dels}</span>
+      </div>
+      {selectedCount > 0 && (
+        <span className="text-xs font-medium text-text-secondary">
+          {t("git.selectedCount", { count: selectedCount })}
+        </span>
+      )}
     </div>
   );
 });
-
-const STATUS_COLOR: Record<string, string> = {
-  M: "text-status-yellow-text",
-  A: "text-state-success-text",
-  D: "text-text-error-primary",
-  R: "text-status-purple-text",
-  C: "text-status-blue-text",
-};
 
 interface GroupSectionProps {
   visible: boolean;
@@ -365,6 +687,11 @@ interface GroupSectionProps {
   scrollOffset: RefObject<number>;
   title: string;
   entries: GitFileEntry[];
+  viewMode: "flat" | "tree";
+  selectedFiles: Set<string>;
+  onToggleSelectFile: (path: string) => void;
+  onToggleSelectDir: (paths: string[]) => void;
+  onToggleSelectGroup: (paths: string[]) => void;
   groupActionLabel: string;
   onGroupAction: (files: string[]) => void;
   rowActionLabel: string;
@@ -388,6 +715,11 @@ const GroupSection = memo(function GroupSection({
   scrollOffset,
   title,
   entries,
+  viewMode,
+  selectedFiles,
+  onToggleSelectFile,
+  onToggleSelectDir,
+  onToggleSelectGroup,
   groupActionLabel,
   onGroupAction,
   rowActionLabel,
@@ -401,17 +733,58 @@ const GroupSection = memo(function GroupSection({
   actionBusy,
   isNew = false,
 }: GroupSectionProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
+  const [collapsedDirIds, setCollapsedDirIds] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLUListElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  const virtual = entries.length > 40;
+
+  const toggleDirOpen = useCallback((id: string) => {
+    setCollapsedDirIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const allGroupPaths = useMemo(() => entries.map((e) => e.path), [entries]);
+  const selectedCountInGroup = useMemo(
+    () => allGroupPaths.filter((p) => selectedFiles.has(p)).length,
+    [allGroupPaths, selectedFiles],
+  );
+  const groupSelectedState: "all" | "some" | "none" =
+    selectedCountInGroup === 0
+      ? "none"
+      : selectedCountInGroup === allGroupPaths.length
+      ? "all"
+      : "some";
+
+  const tree = useMemo(() => {
+    if (viewMode !== "tree") return [];
+    return buildGitTree(entries);
+  }, [entries, viewMode]);
+
+  const visibleTreeItems = useMemo(() => {
+    if (viewMode !== "tree") return [];
+    return flattenGitTree(tree, collapsedDirIds);
+  }, [tree, collapsedDirIds, viewMode]);
+
+  const itemCount = viewMode === "tree" ? visibleTreeItems.length : entries.length;
+  const virtual = itemCount > 40;
+
   useLayoutEffect(() => {
     const scroller = scrollElement;
     if (!visible || !open || !virtual || !scroller) return;
     const measure = () => {
       if (!listRef.current) return;
       setScrollMargin(
-        listRef.current.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop,
+        listRef.current.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top +
+          scroller.scrollTop,
       );
     };
     measure();
@@ -419,10 +792,20 @@ const GroupSection = memo(function GroupSection({
     observer.observe(scroller);
     for (const child of scroller.children) observer.observe(child);
     return () => observer.disconnect();
-  }, [visible, open, virtual, entries.length, scrollElement]);
-  const getItemKey = useCallback((index: number) => entries[index].path, [entries]);
+  }, [visible, open, virtual, itemCount, scrollElement]);
+
+  const getItemKey = useCallback(
+    (index: number) => {
+      if (viewMode === "tree") {
+        return visibleTreeItems[index]?.id ?? `item-${index}`;
+      }
+      return entries[index]?.path ?? `item-${index}`;
+    },
+    [viewMode, visibleTreeItems, entries],
+  );
+
   const virtualizer = useVirtualizer({
-    count: entries.length,
+    count: itemCount,
     getScrollElement: () => scrollElement,
     estimateSize: () => 32,
     getItemKey,
@@ -431,35 +814,61 @@ const GroupSection = memo(function GroupSection({
     initialOffset: () => scrollOffset.current ?? 0,
     enabled: visible && open && virtual,
   });
+
   if (entries.length === 0) return <section hidden />;
-  const rows = !visible ? [] : virtual ? virtualizer.getVirtualItems() : entries.map((entry, index) => ({
-    key: entry.path,
-    index,
-    start: index * 32 + scrollMargin,
-    size: 32,
-  }));
+
+  const rows = !visible
+    ? []
+    : virtual
+    ? virtualizer.getVirtualItems()
+    : Array.from({ length: itemCount }, (_, index) => ({
+        key: viewMode === "tree" ? visibleTreeItems[index]?.id : entries[index]?.path,
+        index,
+        start: index * 32 + scrollMargin,
+        size: 32,
+      }));
+
   return (
     <section>
       <div
         className={cx(
-          "sticky top-[33px] z-10 flex items-center gap-1 bg-background-secondary-default px-3 py-1.5",
+          "sticky top-[33px] z-10 flex items-center gap-1.5 bg-background-secondary-default px-3 py-1.5",
           "border-b border-separator-border",
         )}
       >
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-1"
+          className="flex items-center text-foreground-icon-tertiary hover:text-foreground-icon-secondary"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
+          aria-label={open ? t("git.collapseGroup", { title }) : t("git.expandGroup", { title })}
         >
           {open ? (
-            <ChevronDown aria-hidden className="size-4 text-foreground-icon-tertiary" />
+            <ChevronDown aria-hidden className="size-4" />
           ) : (
-            <ChevronRight aria-hidden className="size-4 text-foreground-icon-tertiary" />
+            <ChevronRight aria-hidden className="size-4" />
           )}
+        </button>
+
+        <div className="flex shrink-0 items-center justify-center">
+          <Checkbox
+            size="sm"
+            isSelected={groupSelectedState === "all"}
+            isIndeterminate={groupSelectedState === "some"}
+            onChange={() => onToggleSelectGroup(allGroupPaths)}
+            aria-label={title}
+          />
+        </div>
+
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1 text-left"
+          onClick={() => setOpen((v) => !v)}
+        >
           <span className="text-body-medium text-text-secondary">{title}</span>
           <span className="text-xs text-text-tertiary">{entries.length}</span>
         </button>
+
         {groupDiscardLabel !== undefined && onGroupDiscard !== undefined && (
           <button
             type="button"
@@ -485,172 +894,90 @@ const GroupSection = memo(function GroupSection({
           {groupActionLabel}
         </button>
       </div>
+
       {open && (
-        <ul ref={listRef} className="relative" style={{ height: entries.length * 32 }}>
-          {rows.map((row) => (
-            <FileRow
-              key={row.key}
-              entry={entries[row.index]}
-              style={{
-                position: "absolute", top: 0, left: 0, width: "100%",
-                height: row.size, transform: `translateY(${row.start - scrollMargin}px)`,
-              }}
-              actionLabel={rowActionLabel}
-              actionKind={rowActionKind}
-              onAction={onRowAction}
-              discardLabel={rowDiscardLabel}
-              onDiscard={onRowDiscard}
-              onOpen={onOpen}
-              actionBusy={actionBusy}
-              isNew={isNew}
-            />
-          ))}
+        <ul ref={listRef} className="relative" style={{ height: itemCount * 32 }}>
+          {rows.map((row) => {
+            const transform = `translateY(${row.start - scrollMargin}px)`;
+            const rowStyle = {
+              position: "absolute" as const,
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: row.size,
+              transform,
+            };
+
+            if (viewMode === "tree") {
+              const item = visibleTreeItems[row.index];
+              if (!item) return null;
+              if (item.type === "dir") {
+                const isAllSelected = item.allPaths.every((p) => selectedFiles.has(p));
+                const isSomeSelected =
+                  !isAllSelected && item.allPaths.some((p) => selectedFiles.has(p));
+                const selectedState = isAllSelected ? "all" : isSomeSelected ? "some" : "none";
+                return (
+                  <DirectoryRow
+                    key={row.key}
+                    node={item}
+                    style={rowStyle}
+                    indent={12 + item.depth * 16}
+                    isOpen={!collapsedDirIds.has(item.id)}
+                    onToggleOpen={toggleDirOpen}
+                    selectedState={selectedState}
+                    onToggleSelect={onToggleSelectDir}
+                    actionLabel={rowActionLabel}
+                    actionKind={rowActionKind}
+                    onAction={onGroupAction}
+                    discardLabel={rowDiscardLabel}
+                    onDiscard={onGroupDiscard}
+                    actionBusy={actionBusy}
+                  />
+                );
+              }
+              return (
+                <FileRow
+                  key={row.key}
+                  entry={item.entry}
+                  style={rowStyle}
+                  indent={12 + item.depth * 16}
+                  displayName={item.name}
+                  isSelected={selectedFiles.has(item.path)}
+                  onToggleSelect={onToggleSelectFile}
+                  actionLabel={rowActionLabel}
+                  actionKind={rowActionKind}
+                  onAction={onRowAction}
+                  discardLabel={rowDiscardLabel}
+                  onDiscard={onRowDiscard}
+                  onOpen={onOpen}
+                  actionBusy={actionBusy}
+                  isNew={isNew}
+                />
+              );
+            }
+
+            const entry = entries[row.index];
+            if (!entry) return null;
+            return (
+              <FileRow
+                key={row.key}
+                entry={entry}
+                style={rowStyle}
+                isSelected={selectedFiles.has(entry.path)}
+                onToggleSelect={onToggleSelectFile}
+                actionLabel={rowActionLabel}
+                actionKind={rowActionKind}
+                onAction={onRowAction}
+                discardLabel={rowDiscardLabel}
+                onDiscard={onRowDiscard}
+                onOpen={onOpen}
+                actionBusy={actionBusy}
+                isNew={isNew}
+              />
+            );
+          })}
         </ul>
       )}
     </section>
-  );
-});
-
-interface FileRowProps {
-  entry: GitFileEntry;
-  style?: CSSProperties;
-  actionLabel: string;
-  actionKind: "stage" | "unstage";
-  /** Untracked group: show the "New" badge like the template panel. */
-  isNew?: boolean;
-  /** Present only on worktree-side rows; opens the discard confirmation. */
-  discardLabel?: string;
-  onDiscard?: (path: string) => void;
-  onAction: (path: string) => void;
-  onOpen: (path: string) => void;
-  actionBusy: boolean;
-}
-
-const FileRow = memo(function FileRow({
-  entry,
-  style,
-  actionLabel,
-  actionKind,
-  isNew = false,
-  discardLabel,
-  onDiscard,
-  onAction,
-  onOpen,
-  actionBusy,
-}: FileRowProps) {
-  const { t } = useTranslation();
-  const raw = entry.status.replace("?", "").trim().charAt(0).toUpperCase();
-  const letter = raw.length > 0 ? raw : "?";
-  const sepIdx = Math.max(entry.path.lastIndexOf("/"), entry.path.lastIndexOf("\\"));
-  const dirPart = sepIdx > 0 ? entry.path.slice(0, sepIdx + 1) : "";
-  const filePart = sepIdx >= 0 ? entry.path.slice(sepIdx + 1) : entry.path;
-  return (
-    <li style={style} className="group relative grid min-h-8 grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-1.5 px-3 hover:bg-background-secondary-hover">
-      <span
-        className={cx(
-          "w-4 shrink-0 text-center font-mono text-xs",
-          STATUS_COLOR[letter] ?? "text-text-tertiary",
-        )}
-      >
-        {letter}
-      </span>
-      <Tooltip>
-        <Focusable>
-          <button
-            type="button"
-            onClick={() => onOpen(entry.path)}
-            aria-label={isNew ? `${entry.path} (${t("git.newFile")})` : undefined}
-            className="flex min-w-0 items-baseline overflow-hidden text-left font-mono text-xs"
-          >
-            {/* Directory truncates from the left (…/foo/bar) so the filename
-                — the most important part — stays visible as long as possible;
-                it right-truncates only when it alone overflows. The tooltip
-                below shows the full path on hover. */}
-            {dirPart && (
-              <span dir="rtl" className="min-w-0 truncate text-left text-text-tertiary">
-                <bdo dir="ltr">{dirPart}</bdo>
-              </span>
-            )}
-            <span className="min-w-0 truncate text-text-primary">{filePart}</span>
-          </button>
-        </Focusable>
-        <TooltipContent className="break-all font-mono">{entry.path}</TooltipContent>
-      </Tooltip>
-      <span className="flex min-w-0 items-center justify-end gap-1 font-mono text-xs tabular-nums">
-        {isNew && (
-          <Tooltip>
-            <Focusable>
-              <span
-                role="img"
-                aria-label={t("git.newFile")}
-                className="size-1.5 shrink-0 rounded-full bg-notification-success-foreground"
-              />
-            </Focusable>
-            <TooltipContent>{t("git.newFile")}</TooltipContent>
-          </Tooltip>
-        )}
-        {entry.additions !== undefined && (
-          <span className="truncate text-state-success-text">+{entry.additions}</span>
-        )}
-        {entry.deletions !== undefined && entry.deletions > 0 && (
-          <span className="truncate text-text-error-primary">−{entry.deletions}</span>
-        )}
-      </span>
-      <div
-        // Row actions overlay the trailing edge instead of reserving
-        // permanent columns, so path + stats use the full row width. The
-        // solid background (matching the row's own bg in each state) hides
-        // the text underneath; reveal happens on row hover or keyboard
-        // focus within the row.
-        className={cx(
-          "absolute inset-y-0 right-1.5 flex items-center gap-0.5 pl-3",
-          "bg-background-primary-default group-hover:bg-background-secondary-hover",
-          "pointer-events-none opacity-0",
-          "group-hover:pointer-events-auto group-hover:opacity-100",
-          "focus-within:pointer-events-auto focus-within:opacity-100",
-        )}
-      >
-        {discardLabel !== undefined && onDiscard !== undefined && (
-          <Tooltip>
-            <Focusable>
-              <button
-                type="button"
-                disabled={actionBusy}
-                onClick={() => onDiscard(entry.path)}
-                aria-label={discardLabel}
-                className={cx(
-                  "rounded p-0.5 text-foreground-icon-secondary",
-                  "hover:bg-background-tertiary-hover disabled:text-foreground-icon-disabled",
-                )}
-              >
-                <Undo2 aria-hidden className="size-4" />
-              </button>
-            </Focusable>
-            <TooltipContent>{discardLabel}</TooltipContent>
-          </Tooltip>
-        )}
-        <Tooltip>
-          <Focusable>
-            <button
-              type="button"
-              disabled={actionBusy}
-              onClick={() => onAction(entry.path)}
-              aria-label={actionLabel}
-              className={cx(
-                "rounded p-0.5 text-foreground-icon-secondary",
-                "hover:bg-background-tertiary-hover disabled:text-foreground-icon-disabled",
-              )}
-            >
-              {actionKind === "stage" ? (
-                <Plus aria-hidden className="size-4" />
-              ) : (
-                <Minus aria-hidden className="size-4" />
-              )}
-            </button>
-          </Focusable>
-          <TooltipContent>{actionLabel}</TooltipContent>
-        </Tooltip>
-      </div>
-    </li>
   );
 });

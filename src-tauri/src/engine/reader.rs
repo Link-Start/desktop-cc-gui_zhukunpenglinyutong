@@ -377,6 +377,7 @@ impl TurnCore {
                 args,
                 result,
                 patch,
+                tool_call_id,
             } => {
                 // A tool row opening (or its arg patch), or a completed
                 // assistant snapshot (codex/kimi report whole messages), ends
@@ -403,6 +404,12 @@ impl TurnCore {
                 }
                 if let Some(result) = result {
                     payload["result"] = result;
+                }
+                // The engine's own call id, when it reported one: the
+                // frontend pairs a result with its call on this rather than
+                // on the tool name, which collides across parallel calls.
+                if let Some(tool_call_id) = tool_call_id {
+                    payload["toolCallId"] = Value::String(tool_call_id);
                 }
                 if patch {
                     payload["patch"] = Value::Bool(true);
@@ -705,6 +712,24 @@ impl TurnCore {
                     Value::String(effort),
                 );
             }
+            EngineEvent::Launch { model, effort } => {
+                state.push(
+                    &self.sink,
+                    &self.run_id,
+                    &self.engine_id,
+                    "launch",
+                    selection_payload(model, effort),
+                );
+            }
+            EngineEvent::Served { model, effort } => {
+                state.push(
+                    &self.sink,
+                    &self.run_id,
+                    &self.engine_id,
+                    "served",
+                    selection_payload(model, effort),
+                );
+            }
             EngineEvent::McpServers { servers, tools } => {
                 // Not a chat event: the MCP settings page reads this snapshot
                 // (workspace-scoped, timestamped) instead of the stream.
@@ -902,15 +927,34 @@ pub(crate) async fn read_line_capped(
         }
     }
 }
+/// `{model?, effort?}` for the launch/served selection events. Absent sides
+/// are omitted, not nulled: a sparse report must never read as an
+/// authoritative empty one.
+fn selection_payload(model: Option<String>, effort: Option<String>) -> Value {
+    let mut out = serde_json::Map::new();
+    if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
+        out.insert("model".to_string(), Value::String(model));
+    }
+    if let Some(effort) = effort.filter(|e| !e.trim().is_empty()) {
+        out.insert("effort".to_string(), Value::String(effort));
+    }
+    Value::Object(out)
+}
 /// Read NDJSON stdout until EOF, dispatch events, then settle the turn:
 /// registry cleanup, temp-file cleanup, and the terminal done/error event.
 pub(crate) async fn run_reader(stdout: ChildStdout, ctx: RunContext) {
     let mut state = TurnState::new(ctx.preassigned_session_id.clone());
-    if let Some(model) = ctx.initial_model.clone() {
-        ctx.dispatch_event(&mut state, EngineEvent::Model(model));
-    }
-    if let Some(effort) = ctx.initial_effort.clone() {
-        ctx.dispatch_event(&mut state, EngineEvent::Effort(effort));
+    // The launch selection is one `launch` event, not `model`/`effort`
+    // reports: the response check compares it against what the stream later
+    // reports as served, and neither side may be read as the other.
+    if ctx.initial_model.is_some() || ctx.initial_effort.is_some() {
+        ctx.dispatch_event(
+            &mut state,
+            EngineEvent::Launch {
+                model: ctx.initial_model.clone(),
+                effort: ctx.initial_effort.clone(),
+            },
+        );
     }
     // codex reports usage into its own session log instead of the stdout
     // stream (the stream only carries it with `turn.completed`), so a long
@@ -1192,6 +1236,24 @@ mod staging_tests {
         assert!(kept.ends_with("引擎错误"));
     }
 
+    /// Absent sides stay absent: a sparse report must never read as an
+    /// authoritative empty one.
+    #[test]
+    fn selection_payload_omits_unreported_sides() {
+        assert_eq!(
+            selection_payload(Some("claude-opus-5-5".to_string()), None),
+            serde_json::json!({ "model": "claude-opus-5-5" })
+        );
+        assert_eq!(
+            selection_payload(None, Some("xhigh".to_string())),
+            serde_json::json!({ "effort": "xhigh" })
+        );
+        assert_eq!(
+            selection_payload(Some(" ".to_string()), Some(String::new())),
+            serde_json::json!({})
+        );
+    }
+
     struct Noop;
     impl event_sink::Emit for Noop {
         fn emit_json(&self, _: &str, _: &str) {}
@@ -1436,6 +1498,7 @@ mod terminal_event_tests {
             args: None,
             result: None,
             patch: false,
+            tool_call_id: None,
         };
 
         // Explicit window: a mid-response tool row (claude streams tool args

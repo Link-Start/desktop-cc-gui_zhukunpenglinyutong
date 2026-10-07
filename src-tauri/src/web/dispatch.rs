@@ -46,6 +46,19 @@ fn ser<T: serde::Serialize>(r: Result<T, String>) -> Result<Value, String> {
     r.and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
 }
 
+/// 记忆写入失败保持结构化：错误以 JSON 字符串过桥，前端 memoryErrorMessage
+/// 按 code/kind 本地化。
+fn memory_ser<T: serde::Serialize>(
+    r: Result<T, crate::memory::MemoryError>,
+) -> Result<Value, String> {
+    match r {
+        Ok(value) => serde_json::to_value(value).map_err(|e| e.to_string()),
+        Err(error) => Err(
+            serde_json::to_string(&error).unwrap_or_else(|_| error.message),
+        ),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct EngineIdArgs {
@@ -78,6 +91,26 @@ struct PluginIdArgs {
 struct PluginStorageGetArgs {
     id: String,
     key: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginAssetIdArgs {
+    plugin_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginAssetPathArgs {
+    plugin_id: String,
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginAssetRevokeArgs {
+    plugin_id: String,
+    grant_id: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -129,6 +162,11 @@ struct SendMessageArgs {
     workspace_path: String,
     session_id: Option<String>,
     prompt: String,
+    #[serde(default)]
+    prompt_contributions: Vec<crate::engine::PromptContribution>,
+    /// ccgui 内置 `/compact`：OMP 走原生 compact RPC 命令。默认值让旧客户端保持可用。
+    #[serde(default)]
+    native_compact: Option<bool>,
     image_paths: Option<Vec<String>>,
     model: Option<String>,
     effort: Option<String>,
@@ -137,6 +175,9 @@ struct SendMessageArgs {
     /// Desktop-only feature; default keeps older web clients compatible.
     #[serde(default)]
     computer_use: Option<bool>,
+    /// 记忆工具挂载（memory/mcp.rs）：默认值让旧客户端保持可用。
+    #[serde(default)]
+    memory_bot: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,6 +198,26 @@ struct AnswerQuestionArgs {
 struct EngineArgs {
     engine: String,
     workspace: Option<String>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginHostArgs {
+    plugin_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginEngineArgs {
+    plugin_id: String,
+    engine: String,
+    workspace: Option<String>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginCatalogArgs {
+    plugin_id: String,
+    workspace: Option<String>,
+    #[serde(default)]
+    refresh_providers: Option<bool>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,6 +259,7 @@ struct LoadRemoteSessionPageArgs {
 struct DeleteRemoteSessionArgs {
     workspace_path: String,
     engine: String,
+    session_id: String,
     remote_path: String,
 }
 #[derive(Deserialize)]
@@ -216,6 +278,14 @@ struct UsageRecordArgs {
 struct EngineSessionArgs {
     engine: String,
     session_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordAcceptedFrameArgs {
+    engine: String,
+    session_id: String,
+    frame: String,
+    workspace_path: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -298,18 +368,49 @@ struct IdArgs {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AgentAddArgs {
-    name: String,
-    prompt: Option<String>,
-    icon: Option<String>,
+struct BotCreateArgs {
+    input: crate::bots::BotCreate,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct AgentUpdateArgs {
+struct BotUpdateArgs {
     id: String,
-    name: Option<String>,
-    prompt: Option<String>,
-    icon: Option<String>,
+    patch: crate::bots::BotPatch,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryListArgs {
+    bot_id: Option<String>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryAddArgs {
+    bot_id: Option<String>,
+    target: String,
+    content: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryUpdateArgs {
+    id: String,
+    content: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryClearArgs {
+    bot_id: Option<String>,
+    target: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryReviewArgs {
+    bot_id: String,
+    engine: String,
+    #[serde(default)]
+    provider_id: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    transcript: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -584,6 +685,8 @@ pub(super) async fn dispatch(
                 a.workspace_path,
                 a.session_id,
                 a.prompt,
+                a.prompt_contributions,
+                a.native_compact,
                 a.image_paths,
                 a.model,
                 a.effort,
@@ -591,6 +694,7 @@ pub(super) async fn dispatch(
                 a.provider_id,
                 a.run_id,
                 a.computer_use,
+                a.memory_bot,
             )
             .await)
         }
@@ -612,6 +716,33 @@ pub(super) async fn dispatch(
         "list_engine_models" => {
             let a: EngineArgs = parse_args(&raw)?;
             ser(crate::engine::models::list_engine_models(app.state(), a.engine, a.workspace).await)
+        }
+        // Plugin model discovery is safe for remote hosts: the desktop that
+        // owns the engines performs the authoritative probes and re-checks
+        // host:models. Window control remains desktop-Tauri only.
+        "plugin_list_engines" => {
+            let a: PluginHostArgs = parse_args(&raw)?;
+            ser(crate::plugin_host::plugin_list_engines(a.plugin_id).await)
+        }
+        "plugin_list_engine_models" => {
+            let a: PluginEngineArgs = parse_args(&raw)?;
+            ser(crate::plugin_host::plugin_list_engine_models(
+                app.state(),
+                a.plugin_id,
+                a.engine,
+                a.workspace,
+            )
+            .await)
+        }
+        "plugin_model_catalog" => {
+            let a: PluginCatalogArgs = parse_args(&raw)?;
+            ser(crate::plugin_host::plugin_model_catalog(
+                app.state(),
+                a.plugin_id,
+                a.workspace,
+                a.refresh_providers,
+            )
+            .await)
         }
         "save_pasted_image" => {
             let a: SavePastedImageArgs = parse_args(&raw)?;
@@ -697,6 +828,7 @@ pub(super) async fn dispatch(
                 app.state(),
                 a.workspace_path,
                 a.engine,
+                a.session_id,
                 a.remote_path,
             )
             .await)
@@ -766,6 +898,17 @@ pub(super) async fn dispatch(
         "rescan_sessions" => {
             crate::history::reader::rescan_sessions(app.state());
             Ok(Value::Null)
+        }
+        "record_accepted_internal_frame" => {
+            let a: RecordAcceptedFrameArgs = parse_args(&raw)?;
+            ser(crate::history::reader::record_accepted_internal_frame(
+                app.state(),
+                a.engine,
+                a.session_id,
+                a.frame,
+                a.workspace_path,
+            )
+            .await)
         }
         "list_workspaces" => ser(crate::history::reader::list_workspaces(app.state())),
         "reorder_workspaces" => {
@@ -847,19 +990,74 @@ pub(super) async fn dispatch(
             let a: PathArgs = parse_args(&raw)?;
             ser(crate::slash_commands::list_slash_commands(app.state(), a.path).await)
         }
-        // agents & prompts (composer `#`/`!` pickers)
-        "agent_list" => ser(crate::agents::agent_list().await),
-        "agent_add" => {
-            let a: AgentAddArgs = parse_args(&raw)?;
-            ser(crate::agents::agent_add(a.name, a.prompt, a.icon).await)
+        // bots & prompts (composer `#`/`!` pickers)
+        "bot_list" => ser(crate::bots::bot_list().await),
+        "bot_create" => {
+            let a: BotCreateArgs = parse_args(&raw)?;
+            ser(crate::bots::bot_create(a.input).await)
         }
-        "agent_update" => {
-            let a: AgentUpdateArgs = parse_args(&raw)?;
-            ser(crate::agents::agent_update(a.id, a.name, a.prompt, a.icon).await)
+        "bot_update" => {
+            let a: BotUpdateArgs = parse_args(&raw)?;
+            ser(crate::bots::bot_update(a.id, a.patch).await)
         }
-        "agent_delete" => {
+        "bot_delete" => {
             let a: IdArgs = parse_args(&raw)?;
-            ser(crate::agents::agent_delete(a.id).await)
+            ser(crate::bots::bot_delete(app.state(), a.id).await)
+        }
+        "bot_duplicate" => {
+            let a: IdArgs = parse_args(&raw)?;
+            ser(crate::bots::bot_duplicate(a.id).await)
+        }
+        // 记忆（memory/mcp.rs）：写入错误保持结构化（JSON 字符串过桥），
+        // 远程界面才能和桌面一致地本地化「超限 / 安全扫描」。
+        "memory_list" => {
+            let a: MemoryListArgs = parse_args(&raw)?;
+            memory_ser(crate::memory::view(&app.state(), a.bot_id.as_deref()))
+        }
+        "memory_add" => {
+            let a: MemoryAddArgs = parse_args(&raw)?;
+            let target = crate::memory::Target::parse(&a.target)
+                .map_err(|error| serde_json::to_string(&error).unwrap_or(error.message))?;
+            memory_ser(
+                crate::memory::add(&app.state(), target, a.bot_id.as_deref(), &a.content, "user")
+                    .map(|(entry, _created)| entry),
+            )
+        }
+        "memory_update" => {
+            let a: MemoryUpdateArgs = parse_args(&raw)?;
+            memory_ser(crate::memory::update(&app.state(), &a.id, &a.content))
+        }
+        "memory_remove" => {
+            let a: IdArgs = parse_args(&raw)?;
+            memory_ser(crate::memory::remove_by_id(&app.state(), &a.id))
+        }
+        "memory_clear" => {
+            let a: MemoryClearArgs = parse_args(&raw)?;
+            let target = crate::memory::Target::parse(&a.target)
+                .map_err(|error| serde_json::to_string(&error).unwrap_or(error.message))?;
+            memory_ser(crate::memory::clear(&app.state(), target, a.bot_id.as_deref()))
+        }
+        "memory_pending_approve" => {
+            let a: IdArgs = parse_args(&raw)?;
+            memory_ser(crate::memory::pending::approve(&app.state(), &a.id))
+        }
+        "memory_pending_reject" => {
+            let a: IdArgs = parse_args(&raw)?;
+            memory_ser(crate::memory::pending::reject(&app.state(), &a.id))
+        }
+        "memory_review" => {
+            let a: MemoryReviewArgs = parse_args(&raw)?;
+            let state = app.state();
+            let outcome = crate::memory::review::review(
+                &state,
+                &a.bot_id,
+                &a.engine,
+                a.provider_id.as_deref(),
+                a.model.as_deref(),
+                &a.transcript,
+            )
+            .await;
+            serde_json::to_value(outcome).map_err(|e| e.to_string())
         }
         // built-in agent catalog (agency-agents pack)
         "list_built_in_agents" => {
@@ -1067,7 +1265,7 @@ pub(super) async fn dispatch(
         // plugins (plan §9 risk table ruling): read-only commands ride the
         // bridge so web clients render plugin UI; install/uninstall/enable/
         // storage writes stay desktop-only and fall through to unknown.
-        "plugin_list" => ser(crate::plugins::plugin_list(app.state())),
+        "plugin_list" => ser(crate::plugins::plugin_list(app.state()).await),
         "plugin_read_artwork" => {
             let a: PluginReadArtworkArgs = parse_args(&raw)?;
             ser(crate::plugins::plugin_read_artwork(a.id, a.path))
@@ -1079,6 +1277,25 @@ pub(super) async fn dispatch(
         "plugin_storage_get" => {
             let a: PluginStorageGetArgs = parse_args(&raw)?;
             ser(crate::plugins::plugin_storage_get(app.state(), a.id, a.key))
+        }
+        // Asset capabilities use the same authenticated bridge and the same
+        // backend permission gates as desktop; they grant no general file
+        // access, so unlike document-storage writes they are routed here.
+        "plugin_asset_grant_directory" => {
+            let a: PluginAssetPathArgs = parse_args(&raw)?;
+            ser(crate::plugins::assets::plugin_asset_grant_directory(a.plugin_id, a.path).await)
+        }
+        "plugin_asset_list_directories" => {
+            let a: PluginAssetIdArgs = parse_args(&raw)?;
+            ser(crate::plugins::assets::plugin_asset_list_directories(a.plugin_id))
+        }
+        "plugin_asset_revoke_directory" => {
+            let a: PluginAssetRevokeArgs = parse_args(&raw)?;
+            ser(crate::plugins::assets::plugin_asset_revoke_directory(a.plugin_id, a.grant_id))
+        }
+        "plugin_reveal_path" => {
+            let a: PluginAssetPathArgs = parse_args(&raw)?;
+            ser(crate::plugins::assets::plugin_reveal_path(a.plugin_id, a.path).await)
         }
         // Marketplace browsing is read-only too, so the web client renders
         // the market page; plugin_install_from_marketplace stays desktop-only.

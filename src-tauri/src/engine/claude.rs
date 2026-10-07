@@ -1,6 +1,6 @@
 use super::{
-    command_for_binary, images, push_session_id, tool_call_message, tool_call_patch, BuiltCommand,
-    Engine, EngineEvent, SendRequest,
+    command_for_binary, images, push_session_id, tool_call_message_with_id,
+    tool_call_patch_with_id, BuiltCommand, Engine, EngineEvent, SendRequest,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -27,6 +27,7 @@ struct PendingTool {
     name: String,
     id: Option<String>,
     json: String,
+    tool_call_id: Option<String>,
 }
 
 impl ClaudeEngine {
@@ -49,6 +50,9 @@ impl Engine for ClaudeEngine {
         true
     }
     fn supports_computer_use(&self) -> bool {
+        true
+    }
+    fn supports_memory(&self) -> bool {
         true
     }
     fn supports_effort(&self) -> bool {
@@ -124,37 +128,29 @@ impl Engine for ClaudeEngine {
                 }
             }
         }
+        // App-served MCP children, one --mcp-config carrying all of them.
+        // Computer use: the screenshot/input driver (see computer_use.rs),
+        // pre-approved because a click-per-approval loop is unusable; the
+        // user opted in via the computer-use dialog and the driver itself
+        // fails closed on missing OS grants. Memory: the per-bot memory tool
+        // (memory/mcp.rs), pre-approved because remembering is a background
+        // bookkeeping act the user opted into per bot — the write gate is the
+        // scan/capacity check in the server, not a per-call prompt.
+        let mut mcp_servers = serde_json::Map::new();
         if req.computer_use == Some(true) {
-            // Computer use: expose this app's screenshot/input driver as an
-            // MCP child process (see computer_use.rs) and pre-approve its
-            // tools — a click-per-approval loop is unusable; the user opted
-            // in via the computer-use dialog and the driver itself fails
-            // closed on missing OS grants.
-            let exe = std::env::current_exe()
-                .map_err(|e| format!("resolve own exe for computer use: {e}"))?;
-            let mut server = serde_json::json!({
-                "command": exe.to_string_lossy(),
-                "args": ["--computer-use-mcp"],
-            });
-            // Overlay control channel: the child reports action targets so
-            // the main app's virtual cursor can follow (absent in tests).
-            if let (Some(base), Some(token)) = (
-                crate::cu_overlay::control_base(),
-                crate::cu_overlay::control_token(),
-            ) {
-                server["env"] = serde_json::json!({
-                    "CCGUI_CU_CONTROL": base,
-                    "CCGUI_CU_TOKEN": token,
-                });
-            }
-            let config = serde_json::json!({
-                "mcpServers": {
-                    "ccgui-computer": server,
-                }
-            });
+            let spec = crate::computer_use::computer_use_spec()?;
+            mcp_servers.insert(spec.name.clone(), crate::computer_use::mcp_server_json(&spec));
+            preapproved.push("mcp__ccgui-computer");
+        }
+        if let Some(bot_id) = req.memory_bot.as_deref() {
+            let spec = crate::memory::mcp::bound_spec(bot_id)?;
+            mcp_servers.insert(spec.name.clone(), crate::computer_use::mcp_server_json(&spec));
+            preapproved.push("mcp__ccgui-memory");
+        }
+        if !mcp_servers.is_empty() {
+            let config = serde_json::json!({ "mcpServers": mcp_servers });
             cmd.arg("--mcp-config");
             cmd.arg(config.to_string());
-            preapproved.push("mcp__ccgui-computer");
         }
         if !preapproved.is_empty() {
             cmd.arg("--allowedTools");
@@ -312,25 +308,41 @@ impl Engine for ClaudeEngine {
             "assistant" => {
                 // Full message snapshot; used as session-id and actual model source.
                 push_session_id(&value, "session_id", out);
-                if let Some(model) = value
+                let reported_model = value
                     .get("message")
                     .and_then(|m| m.get("model"))
                     .or_else(|| value.get("model"))
                     .and_then(Value::as_str)
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                {
-                    out.push(EngineEvent::Model(model.to_string()));
-                }
-                if let Some(effort) = value
+                    .map(str::to_string);
+                let reported_effort = value
                     .get("message")
-                    .and_then(|m| m.get("thinking_effort"))
+                    .and_then(|m| m.get("thinking_effort").or_else(|| m.get("effort")))
                     .or_else(|| value.get("thinking_effort"))
+                    // Only use effort explicitly present in this streamed assistant
+                    // payload. Local transcript metadata is not response evidence.
+                    .or_else(|| value.get("effort"))
                     .and_then(Value::as_str)
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                {
-                    out.push(EngineEvent::Effort(effort.to_string()));
+                    .map(str::to_string);
+                if let Some(model) = reported_model.clone() {
+                    out.push(EngineEvent::Model(model));
+                }
+                if let Some(effort) = reported_effort.clone() {
+                    out.push(EngineEvent::Effort(effort));
+                }
+                // The response's own account of what ran. `<synthetic>` marks
+                // messages the CLI fabricated locally (errors, interrupts):
+                // that is not a served model and must not read as one.
+                let served_model = reported_model
+                    .filter(|model| !model.starts_with('<'));
+                if served_model.is_some() || reported_effort.is_some() {
+                    out.push(EngineEvent::Served {
+                        model: served_model,
+                        effort: reported_effort,
+                    });
                 }
             }
             "user" => {
@@ -385,9 +397,8 @@ impl Engine for ClaudeEngine {
                                 continue;
                             }
                             let res = value.get("toolUseResult").or_else(|| block.get("content"));
-                            let name = block
-                                .get("tool_use_id")
-                                .and_then(Value::as_str)
+                            let tool_call_id = block.get("tool_use_id").and_then(Value::as_str);
+                            let name = tool_call_id
                                 .and_then(|id| {
                                     self.tool_names
                                         .lock()
@@ -395,7 +406,7 @@ impl Engine for ClaudeEngine {
                                         .and_then(|map| map.get(id).cloned())
                                 })
                                 .unwrap_or_default();
-                            out.push(super::tool_result_patch(name, res));
+                            out.push(super::tool_result_patch_with_id(name, res, tool_call_id));
                         }
                     }
                 }
@@ -806,6 +817,7 @@ fn parse_content_block_start(
             }
         }
     }
+    let tool_call_id = block.get("id").and_then(Value::as_str).map(str::to_string);
     if let Some(index) = event.get("index").and_then(Value::as_u64) {
         if let Ok(mut map) = pending.lock() {
             map.insert(
@@ -814,13 +826,14 @@ fn parse_content_block_start(
                     name: name.clone(),
                     id: block.get("id").and_then(Value::as_str).map(str::to_string),
                     json: String::new(),
+                    tool_call_id: tool_call_id.clone(),
                 },
             );
         }
     }
     // Name-only start so the timeline can show the tool immediately; args
     // patch in when the JSON stream completes (or if input is already full).
-    out.push(tool_call_message(name, input));
+    out.push(tool_call_message_with_id(name, input, tool_call_id.as_deref()));
 }
 
 fn parse_content_block_stop(
@@ -847,7 +860,11 @@ fn parse_content_block_stop(
             map.insert(id.clone(), path);
         }
     }
-    out.push(tool_call_patch(tool.name, Some(&args)));
+    out.push(tool_call_patch_with_id(
+        tool.name,
+        Some(&args),
+        tool.tool_call_id.as_deref(),
+    ));
 }
 
 #[cfg(test)]
@@ -907,6 +924,69 @@ mod tests {
     }
 
     #[test]
+    fn assistant_snapshot_reports_the_served_selection() {
+        let mut out = Vec::new();
+        ClaudeEngine::new().parse_line(
+            &serde_json::json!({
+                "type": "assistant",
+                "session_id": "s-1",
+                "message": { "model": "claude-opus-4", "thinking_effort": "high" }
+            })
+            .to_string(),
+            &mut out,
+        );
+        assert!(
+            out.iter().any(|e| matches!(
+                e,
+                EngineEvent::Served { model: Some(model), effort: Some(effort) }
+                    if model == "claude-opus-4" && effort == "high"
+            )),
+            "got {out:?}"
+        );
+
+        // `<synthetic>` marks a message the CLI fabricated locally (an error
+        // or an interrupt): not a served model, so no evidence is emitted.
+        let mut out = Vec::new();
+        ClaudeEngine::new().parse_line(
+            &serde_json::json!({
+                "type": "assistant",
+                "message": { "model": "<synthetic>" }
+            })
+            .to_string(),
+            &mut out,
+        );
+        assert!(
+            !out.iter().any(|e| matches!(e, EngineEvent::Served { .. })),
+            "got {out:?}"
+        );
+
+        // A top-level level is accepted only when the streamed assistant
+        // event explicitly carries it.
+        let mut out = Vec::new();
+        ClaudeEngine::new().parse_line(
+            &serde_json::json!({
+                "type": "assistant",
+                "session_id": "s-1",
+                "effort": "max",
+                "message": { "model": "claude-opus-4" }
+            })
+            .to_string(),
+            &mut out,
+        );
+        assert!(
+            out.iter().any(|e| matches!(e, EngineEvent::Effort(level) if level == "max")),
+            "got {out:?}"
+        );
+        assert!(
+            out.iter().any(|e| matches!(
+                e,
+                EngineEvent::Served { model: Some(_), effort: Some(effort) } if effort == "max"
+            )),
+            "got {out:?}"
+        );
+    }
+
+    #[test]
     fn assistant_message_reports_actual_thinking_effort() {
         let line = serde_json::json!({
             "type": "assistant",
@@ -941,6 +1021,32 @@ mod tests {
         assert!(
             !out.iter().any(|e| matches!(e, EngineEvent::Effort(_))),
             "got {out:?}"
+        );
+    }
+
+    #[test]
+    fn assistant_snapshot_without_effort_keeps_it_unreported() {
+        let mut out = Vec::new();
+        ClaudeEngine::new().parse_line(
+            &serde_json::json!({
+                "type": "assistant",
+                "session_id": "s-1",
+                "message": { "model": "claude-opus-4" }
+            })
+            .to_string(),
+            &mut out,
+        );
+        assert!(
+            out.iter().any(|event| matches!(
+                event,
+                EngineEvent::Served { model: Some(model), effort: None }
+                    if model == "claude-opus-4"
+            )),
+            "model remains reported while effort stays unknown: {out:?}"
+        );
+        assert!(
+            !out.iter().any(|event| matches!(event, EngineEvent::Effort(_))),
+            "missing stream effort must not be inferred: {out:?}"
         );
     }
 
@@ -1050,11 +1156,16 @@ mod tests {
         assert_eq!(out.len(), 1);
         match &out[0] {
             EngineEvent::Message {
-                role, text, args, ..
+                role,
+                text,
+                args,
+                tool_call_id,
+                ..
             } => {
                 assert_eq!(role, "tool");
                 assert_eq!(text, "Bash");
                 assert!(args.is_none());
+                assert_eq!(tool_call_id.as_deref(), Some("toolu_1"));
             }
             _ => panic!("expected tool message"),
         }
@@ -1099,12 +1210,14 @@ mod tests {
                 path,
                 args,
                 patch,
+                tool_call_id,
                 ..
             } => {
                 assert_eq!(text, "Read");
                 assert_eq!(path.as_deref(), Some("src/a.ts"));
                 assert_eq!(args, &Some(serde_json::json!({"file_path": "src/a.ts"})));
                 assert!(*patch);
+                assert_eq!(tool_call_id.as_deref(), Some("toolu_1"));
             }
             _ => panic!("expected patched tool message"),
         }
@@ -1153,11 +1266,13 @@ mod tests {
                 text,
                 result,
                 patch,
+                tool_call_id,
                 ..
             } => {
                 assert_eq!(text, "Bash");
                 assert_eq!(result, &Some(serde_json::json!("On branch main")));
                 assert!(*patch);
+                assert_eq!(tool_call_id.as_deref(), Some("toolu_1"));
             }
             _ => unreachable!(),
         }
@@ -1620,6 +1735,8 @@ mod tests {
         let mut request = SendRequest {
             session_id: None,
             prompt: "hi".into(),
+            prompt_contributions: vec![],
+            native_compact: false,
             images: vec![],
             workspace: std::path::PathBuf::from("/tmp"),
             model: None,
@@ -1629,6 +1746,7 @@ mod tests {
             additional_dirs: vec![],
             provider_id: None,
             computer_use: None,
+            memory_bot: None,
             allowed_tools: None,
         };
         let built = engine.build_command(&request, "claude").unwrap();
@@ -1669,6 +1787,8 @@ mod tests {
         let request = SendRequest {
             session_id: None,
             prompt: "hi".into(),
+            prompt_contributions: Vec::new(),
+            native_compact: false,
             images: vec![],
             workspace: std::path::PathBuf::from("/tmp"),
             model: None,
@@ -1678,6 +1798,7 @@ mod tests {
             additional_dirs: vec![],
             provider_id: None,
             computer_use: None,
+            memory_bot: None,
             allowed_tools: Some(vec!["Read".into(), "Grep".into()]),
         };
         let built = engine.build_command(&request, "claude").unwrap();

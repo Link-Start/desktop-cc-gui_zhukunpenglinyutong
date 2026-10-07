@@ -4,6 +4,7 @@ import { HashRouter, Route, Routes } from "react-router-dom";
 import ChatPage from "@/features/chat/ChatPage";
 import { CommandPalette } from "@/features/commands/CommandPalette";
 import PluginPageHost from "@/features/plugins/manager/PluginPageHost";
+import { PluginOverlayHost } from "@/features/plugins/runtime/overlay-host";
 import { bindSystemThemeSync, bindThemeChangePersistence } from "@/features/settings/theme";
 import { UpdateToast } from "@/features/update/UpdateToast";
 import { useUpdateStore } from "@/features/update/store";
@@ -16,6 +17,11 @@ import { startShortcutRuntime } from "@/features/shortcuts/runtime";
 import { ShortcutsGuideModal } from "@/features/shortcuts/ShortcutsGuideModal";
 import PetOverlayApp from "@/features/pet/PetOverlayApp";
 import { PetRuntime } from "@/features/pet/PetRuntime";
+import { ipc } from "@/lib/ipc";
+import { isWeb } from "@/lib/platform";
+import { readStoredBool } from "@/lib/storage";
+import { WEB_ACCESS_AUTO_START_KEY } from "@/features/settings/web-access-keys";
+import { NativeTitleTooltip } from "@/components/base/tooltip/native-title-tooltip";
 
 // Settings is a rare route; load it on demand so startup ships less JS.
 // Warm the chunk shortly after startup so the first click has no fetch gap.
@@ -29,8 +35,12 @@ export default function App() {
     window.addEventListener("hashchange", update);
     return () => window.removeEventListener("hashchange", update);
   }, []);
-  if (overlay) return <PetOverlayApp />;
-  return <MainApp />;
+  return (
+    <>
+      {overlay ? <PetOverlayApp /> : <MainApp />}
+      <NativeTitleTooltip />
+    </>
+  );
 }
 
 function MainApp() {
@@ -66,6 +76,35 @@ function MainApp() {
     const id = setTimeout(() => void useUpdateStore.getState().checkForUpdates(), 3000);
     return () => clearTimeout(id);
   }, []);
+  // LAN web access autostart: starts the LAN bridge on launch when enabled in
+  // settings. The persisted app setting is the source of truth (the backend
+  // setup hook reads the same flag); the localStorage key is only a fallback
+  // cache for when the settings read fails.
+  useEffect(() => {
+    if (isWeb) return;
+    void ipc
+      .getAppSettings()
+      .then((s) => {
+        const enabled =
+          typeof s.webAccessAutoStart === "boolean"
+            ? s.webAccessAutoStart
+            : readStoredBool(WEB_ACCESS_AUTO_START_KEY, false);
+        if (!enabled) return;
+        void ipc.webAccessStatus().then((status) => {
+          if (!status) {
+            void ipc.webAccessStart().catch(() => {});
+          }
+        });
+      })
+      .catch(() => {
+        if (!readStoredBool(WEB_ACCESS_AUTO_START_KEY, false)) return;
+        void ipc.webAccessStatus().then((status) => {
+          if (!status) {
+            void ipc.webAccessStart().catch(() => {});
+          }
+        });
+      });
+  }, []);
 
   return (
     <LazyMotion features={domAnimation}>
@@ -90,6 +129,8 @@ function MainApp() {
               underneath, same as the /settings overlay. */}
           <Route path="/p/:pageId" element={<PluginPageHost />} />
         </Routes>
+        {/* Non-modal plugin viewport mounts, independent of the route. */}
+        <PluginOverlayHost />
       </HashRouter>
       <UpdateToast />
       <GrantAccessDialogHost />

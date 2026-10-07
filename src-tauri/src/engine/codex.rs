@@ -80,6 +80,37 @@ fn apply_computer_use(
     Ok(())
 }
 
+/// Mount the per-bot memory tool on this one launch. Same `-c` override
+/// mechanism as the computer-use driver above: no file is written, and the
+/// Bot id rides in argv so concurrent sessions cannot cross ledgers.
+fn apply_memory(cmd: &mut tokio::process::Command, req: &SendRequest) -> Result<(), String> {
+    let Some(bot_id) = req.memory_bot.as_deref() else {
+        return Ok(());
+    };
+    let spec = crate::memory::mcp::bound_spec(bot_id)?;
+    let name = spec.name;
+    let args = spec
+        .args
+        .iter()
+        .map(|arg| toml_string(arg))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut overrides = vec![
+        format!("mcp_servers.{name}.command={}", toml_string(&spec.command)),
+        format!("mcp_servers.{name}.args=[{args}]"),
+    ];
+    for (key, value) in &spec.env {
+        overrides.push(format!(
+            "mcp_servers.{name}.env.{key}={}",
+            toml_string(value)
+        ));
+    }
+    for value in overrides {
+        cmd.arg("-c").arg(value);
+    }
+    Ok(())
+}
+
 /// Process-scoped equivalents of the provider keys formerly written into
 /// config.toml/auth.json. Explicit model/effort picks still win.
 pub(super) fn apply_channel(
@@ -206,6 +237,9 @@ pub(super) fn apply_channel(
     }
     // Keep the existing provider contract: unrelated native hooks, trust and
     // MCP settings are inherited, not replaced by a channel's document.
+    // `disable_response_storage` is retired by current Codex versions: they
+    // log it as an ignored session flag, so saved legacy channels must not
+    // keep injecting it as a process override.
     for key in [
         "model",
         "model_provider",
@@ -213,7 +247,6 @@ pub(super) fn apply_channel(
         "model_context_window",
         "model_auto_compact_token_limit",
         "preferred_auth_method",
-        "disable_response_storage",
         "model_providers",
     ] {
         if (key == "model" && req.model.is_some())
@@ -256,6 +289,7 @@ impl Engine for CodexEngine {
     fn host_command(&self, req: &SendRequest, bin: &str) -> Result<BuiltCommand, String> {
         let mut cmd = command_for_binary(bin);
         apply_computer_use(&mut cmd, req)?;
+        apply_memory(&mut cmd, req)?;
         cmd.arg("app-server");
         // Without this the model never asks: it emits a plain agent message
         // (plus a sleep item) instead of a client request.
@@ -295,6 +329,9 @@ impl Engine for CodexEngine {
     fn supports_computer_use(&self) -> bool {
         true
     }
+    fn supports_memory(&self) -> bool {
+        true
+    }
     fn supports_effort(&self) -> bool {
         true
     }
@@ -330,6 +367,10 @@ impl Engine for CodexEngine {
         // Refuse before spawning instead of mounting a server that dies.
         if req.computer_use == Some(true) {
             return Err("操作电脑不支持远程工作区(WSL):注入的是本机驱动".into());
+        }
+        // Same reason: the memory server is this app's own binary.
+        if req.memory_bot.is_some() {
+            return Err("记忆工具不支持远程工作区(WSL):注入的是本机程序".into());
         }
         let mut cmd = command_for_binary(bin);
         cmd.arg("exec");
@@ -623,6 +664,8 @@ mod tests {
             session_id: None,
             workspace: std::path::PathBuf::from("/tmp"),
             prompt: "hi".into(),
+            prompt_contributions: Vec::new(),
+            native_compact: false,
             images: Vec::new(),
             model: Some("gpt-6-astra".into()),
             effort: None,
@@ -631,6 +674,7 @@ mod tests {
             additional_dirs: Vec::new(),
             provider_id: None,
             computer_use: None,
+            memory_bot: None,
             allowed_tools: None,
         }
     }
@@ -774,7 +818,7 @@ mod tests {
     fn channel_toml_is_applied_for_new_and_resumed_sessions_without_auth_in_argv() {
         let provider = serde_json::json!({"settingsConfig": {
             "auth": {"OPENAI_API_KEY":"test-channel-secret"},
-            "config": "model_provider = \"relay\"\nmodel = \"channel-model\"\nmodel_reasoning_effort = \"low\"\n[model_providers.relay]\nname = \"Relay\"\nbase_url = \"https://relay.example/v1\"\nwire_api = \"responses\"\nrequires_openai_auth = true\n[model_providers.relay.http_headers]\nX-Route = \"channel\"\n"
+            "config": "disable_response_storage = true\nmodel_provider = \"relay\"\nmodel = \"channel-model\"\nmodel_reasoning_effort = \"low\"\n[model_providers.relay]\nname = \"Relay\"\nbase_url = \"https://relay.example/v1\"\nwire_api = \"responses\"\nrequires_openai_auth = true\n[model_providers.relay.http_headers]\nX-Route = \"channel\"\n"
         }});
         for session_id in [None, Some("existing-session".into())] {
             let mut req = base_req();
@@ -785,6 +829,7 @@ mod tests {
             assert_eq!(config["model_provider"].as_str(), Some("relay"));
             assert_eq!(config["model_reasoning_effort"].as_str(), Some("high"));
             assert!(!config.contains_key("model"), "explicit -m wins");
+            assert!(!config.contains_key("disable_response_storage"));
             let relay = &config["model_providers"]["relay"];
             assert_eq!(relay["base_url"].as_str(), Some("https://relay.example/v1"));
             assert!(relay.get("http_headers").is_none());

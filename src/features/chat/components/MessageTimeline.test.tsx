@@ -3,8 +3,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatDuration } from "./format-duration";
 import { MessageRow, MessageTimeline } from "./MessageTimeline";
-import type { Message } from "@/lib/ipc";
-import { EMPTY_SESSION } from "../store/stream";
+import { buildBotBlock } from "./agent-block";
+import { useBotStore } from "@/features/bots/bot-store";
+import type { BotConfig, Message } from "@/lib/ipc";
+import { EMPTY_SESSION, type SessionState } from "../store/stream";
 import i18n from "@/lib/i18n";
 
 const searchHarness = vi.hoisted(() => ({ handlers: new Map<string, () => void>(), scrollToIndex: vi.fn() }));
@@ -253,5 +255,306 @@ describe("user bubble copy affordance", () => {
     const shown = container.textContent ?? "";
     expect(shown).toContain("↑1.5M");
     expect(shown).toContain("↓2.2k");
+  });
+});
+
+describe("settled response check record", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(async () => {
+    await i18n.changeLanguage("zh");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  function settledMessage(): Message {
+    return {
+      seq: 2,
+      role: "assistant",
+      text: "ok",
+      ts: null,
+      model: "gpt-6-astra",
+      effort: "max",
+      responseCheck: {
+        requested: { model: "gpt-6-astra", effort: "max" },
+        served: { model: "gpt-5.6-luna", effort: "low" },
+      },
+    };
+  }
+
+  it("keeps the check available after the turn ends", async () => {
+    await act(async () => {
+      root.render(
+        <MessageRow message={settledMessage()} workspacePath="/ws" turnFinal />,
+      );
+    });
+    const badge = container.querySelector<HTMLButtonElement>(
+      'button[aria-label^="响应校验"]',
+    );
+    expect(badge).not.toBeNull();
+    expect(badge!.getAttribute("aria-label")).toBe("响应校验：与响应不一致");
+    // Hover-revealed together with the rest of the meta row.
+    expect(container.textContent).toContain("模型 gpt-6-astra");
+  });
+
+  it("shows no badge for a message with no recorded check", async () => {
+    await act(async () => {
+      root.render(
+        <MessageRow
+          message={{ seq: 2, role: "assistant", text: "ok", ts: null, model: "gpt-6-astra" }}
+          workspacePath="/ws"
+          turnFinal
+        />,
+      );
+    });
+    expect(container.querySelector('button[aria-label^="响应校验"]')).toBeNull();
+  });
+
+  it("keeps the footer on the reply when a card is the newest row", async () => {
+    // A denied tool leaves a grant card after the reply; the card renders its
+    // own chrome and must not steal the footer slot from the assistant row.
+    const messages: Message[] = [
+      { seq: 1, role: "user", text: "go", ts: null },
+      {
+        seq: 2,
+        role: "assistant",
+        text: "ok",
+        ts: null,
+        model: "gpt-6-astra",
+        responseCheck: {
+          requested: { model: "gpt-6-astra", effort: "max" },
+          served: { model: "gpt-6-astra", effort: "max" },
+        },
+      },
+      {
+        seq: 3,
+        role: "grant",
+        text: "",
+        ts: null,
+        path: "S:\\ws\\package.json",
+        grant: { status: "pending", dir: "S:\\ws" },
+      },
+    ];
+    await act(async () => {
+      root.render(
+        <MessageTimeline
+          session={{ ...EMPTY_SESSION, messages }}
+          streaming={false}
+          onLoadEarlier={() => {}}
+          workspacePath="/ws"
+        />,
+      );
+    });
+    const badge = container.querySelector<HTMLButtonElement>(
+      'button[aria-label^="响应校验"]',
+    );
+    expect(badge).not.toBeNull();
+    expect(badge!.getAttribute("aria-label")).toBe("响应校验：与响应一致");
+  });
+});
+
+describe("user bubble agent badge", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+  const realGetContext = HTMLCanvasElement.prototype.getContext;
+
+  beforeEach(() => {
+    // jsdom has no 2D context. The engine skips its loop when getContext
+    // returns null, but jsdom would also log the missing implementation.
+    HTMLCanvasElement.prototype.getContext = (() =>
+      null) as typeof HTMLCanvasElement.prototype.getContext;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+    HTMLCanvasElement.prototype.getContext = realGetContext;
+    useBotStore.setState({ bots: [], builtInAgents: [], builtInDivisions: [], loaded: false });
+  });
+
+  function bot(overrides: Partial<BotConfig> = {}): BotConfig {
+    return {
+      id: "bot-1",
+      slug: "reviewer",
+      name: "CCGUI PR审查工程师",
+      title: null,
+      description: null,
+      avatar: { type: "generated", foldShape: "shield", eyes: "angry", hue: 0, saturation: 78 },
+      soul: "",
+      instructions: "",
+      capabilities: { skills: [], tools: [], mcpServers: [] },
+      runtime: { kind: "direct", model: null, cwd: null, extraArgs: [], permissionMode: "ask" },
+      memory: {
+        enabled: true,
+        writeApproval: false,
+        memoryCharLimit: 2200,
+        reviewEnabled: true,
+        reviewEveryNTurns: 5,
+      },
+      source: "custom",
+      builtinId: null,
+      pinned: false,
+      hidden: false,
+      schemaVersion: 1,
+      createdAt: 0,
+      updatedAt: 0,
+      ...overrides,
+    };
+  }
+
+  /** A committed user turn: the bare prompt followed by the frozen block
+   *  sendPrompt appends. */
+  function messageWithBlock(input: { name?: string; icon?: string; botId?: string }): Message {
+    return {
+      seq: 1,
+      role: "user",
+      text: `https://github.com/zhukunpenglinyutong/jetbrains-cc-gui/pull/1895\n\n${buildBotBlock({
+        name: input.name ?? "CCGUI PR审查工程师",
+        icon: input.icon ?? "",
+        botId: input.botId ?? "bot-1",
+        body: "你是评审工程师。",
+      })}`,
+      ts: null,
+    };
+  }
+
+  async function renderBadge(message: Message) {
+    await act(async () => {
+      root.render(<MessageRow message={message} workspacePath="/ws" turnFinal />);
+    });
+    return container.querySelector<HTMLElement>(".text-caption-1-regular");
+  }
+
+  it("renders the bot's paper avatar next to the frozen name", async () => {
+    useBotStore.setState({ bots: [bot()], loaded: true });
+    const badge = await renderBadge(messageWithBlock({}));
+    expect(badge?.textContent).toContain("CCGUI PR审查工程师");
+    const avatar = badge?.querySelector<HTMLElement>('[data-testid="bot-avatar"]');
+    expect(avatar?.dataset.avatarType).toBe("generated");
+    expect(avatar?.querySelector("canvas")).not.toBeNull();
+  });
+
+  it("follows the live bot when its avatar was edited after the send", async () => {
+    useBotStore.setState({ bots: [bot({ avatar: { type: "emoji", value: "🧐" } })], loaded: true });
+    const badge = await renderBadge(messageWithBlock({}));
+    const avatar = badge?.querySelector<HTMLElement>('[data-testid="bot-avatar"]');
+    expect(avatar?.dataset.avatarType).toBe("emoji");
+    expect(avatar?.textContent).toBe("🧐");
+  });
+
+  it("keeps the recorded emoji when the bot no longer exists", async () => {
+    const badge = await renderBadge(messageWithBlock({ icon: "🔍", botId: "deleted" }));
+    const avatar = badge?.querySelector<HTMLElement>('[data-testid="bot-avatar"]');
+    expect(avatar?.dataset.avatarType).toBe("emoji");
+    expect(avatar?.textContent).toBe("🔍");
+  });
+
+  it("falls back to a deterministic paper avatar when only an id was recorded", async () => {
+    const badge = await renderBadge(messageWithBlock({ botId: "deleted" }));
+    const avatar = badge?.querySelector<HTMLElement>('[data-testid="bot-avatar"]');
+    expect(avatar?.dataset.avatarType).toBe("generated");
+    const label = avatar?.querySelector("canvas")?.getAttribute("aria-label");
+    expect(label).toBeTruthy();
+    // Same message, same face: the fallback seed is the recorded id, not a
+    // random pick that repaints on every mount.
+    await renderBadge(messageWithBlock({ botId: "deleted" }));
+    expect(
+      container.querySelector("canvas")?.getAttribute("aria-label"),
+    ).toBe(label);
+  });
+});
+
+describe("host compaction rows", () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(async () => {
+    await i18n.changeLanguage("zh");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  async function renderCompacting(
+    messages: Message[],
+    compaction: SessionState["compaction"],
+    streaming: boolean,
+  ) {
+    await act(async () => {
+      root.render(
+        <MessageTimeline
+          session={{ ...EMPTY_SESSION, messages, compaction }}
+          streaming={streaming}
+          onLoadEarlier={() => {}}
+          workspacePath="/ws"
+        />,
+      );
+    });
+  }
+
+  const hintText = () => `< ${i18n.t("chat.compactingContext")} >`;
+  const curtains = () => container.querySelectorAll('[data-testid="compaction-curtain"]');
+
+  it("keeps the compaction as one grey line in place and drops the resume nudge", async () => {
+    const messages: Message[] = [
+      { seq: 1, role: "user", text: "读一下那个文件", ts: null },
+      { seq: 2, role: "user", text: "/compact", ts: null },
+      { seq: 3, role: "user", text: i18n.t("chat.autoCompactResume"), ts: null },
+      { seq: 4, role: "assistant", text: "文件已经读完了。", ts: null },
+    ];
+    // Settled: no compaction running, which is exactly when the line has to
+    // stay — it is the transcript's only record of the compaction.
+    await renderCompacting(messages, null, false);
+
+    expect(container.textContent).toContain("读一下那个文件");
+    // The rows stay in the store (compact-turn detection reads them) and are
+    // handled at render time — including on a history page reloaded from the
+    // engine's transcript, where only the texts identify them.
+    expect(container.textContent).not.toContain("/compact");
+    expect(container.textContent).not.toContain(i18n.t("chat.autoCompactResume"));
+
+    expect(curtains().length).toBe(1);
+    const line = curtains()[0];
+    expect(line.textContent).toBe(hintText());
+    expect(line.querySelector("span")?.className).toContain("text-text-tertiary");
+    expect(line.className).toContain("justify-end");
+  });
+
+  it("does not double the line while a host compaction runs", async () => {
+    const messages: Message[] = [
+      { seq: 1, role: "user", text: "继续", ts: null },
+      { seq: 2, role: "user", text: "/compact", ts: null },
+    ];
+    await renderCompacting(messages, { automatic: false, startedAt: 1 }, true);
+    // The row already shows it; the tail must stay quiet instead of adding a
+    // second line or the ordinary thinking indicator.
+    expect(curtains().length).toBe(1);
+    expect(container.textContent).not.toContain(i18n.t("chat.thinking"));
+  });
+
+  it("mounts the line at the tail for an engine compaction, then returns to the indicator", async () => {
+    const messages: Message[] = [{ seq: 1, role: "user", text: "继续", ts: null }];
+    await renderCompacting(messages, { automatic: true, startedAt: 1 }, true);
+    expect(curtains().length).toBe(1);
+    expect(container.textContent).not.toContain(i18n.t("chat.thinking"));
+
+    await renderCompacting(messages, null, true);
+    expect(curtains().length).toBe(0);
+    expect(container.textContent).toContain(i18n.t("chat.thinking"));
   });
 });

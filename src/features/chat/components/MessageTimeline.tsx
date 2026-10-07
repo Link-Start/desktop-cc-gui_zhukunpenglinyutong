@@ -23,6 +23,7 @@ import { buildRows, collectToolKeys, rowKey, type TimelineRow } from "./timeline
 import { formatDuration } from "./format-duration";
 import { modelDisplayName } from "@/features/settings/usage-model";
 import { ProcessDisclosure, type ProcessSearchTarget } from "./ProcessDisclosure";
+import { ResponseCheckBadge } from "./response-check-badge";
 import { CollapsibleMessage } from "./CollapsibleMessage";
 import { useScrollFollow, useTailPin } from "./use-scroll-follow";
 import { ScrollControl } from "./ScrollControl";
@@ -31,6 +32,9 @@ import { PluginBoundary } from "@/features/plugins/boundary/PluginBoundary";
 import { useAnchorRailScroll } from "./use-anchor-rail-scroll";
 import { useLoadEarlier } from "./use-load-earlier";
 import { stripAgentBlock } from "./agent-block";
+import { BotAvatarView } from "@/features/bots/bot-avatar";
+import { avatarFromLegacyIcon } from "@/features/bots/bot-avatar-model";
+import { useBotStore } from "@/features/bots/bot-store";
 import { registerShortcutHandler } from "@/features/shortcuts/runtime";
 import { TimelineSearchBar } from "./TimelineSearchBar";
 import {
@@ -76,6 +80,9 @@ const TimelineRowView = memo(function TimelineRowView({
       </PluginBoundary>
     );
   }
+  // The compaction command renders in place, not as a bubble: one grey line
+  // that stays after the compaction ends.
+  if (row.kind === "curtain") return <CompactionCurtain />;
   // Every process run — thinking, tools, or both — folds into the same
   // collapsed summary line ("思考 N 次 工具调用 M 次 >"); expanding shows
   // the per-step details.
@@ -100,6 +107,21 @@ const TimelineRowView = memo(function TimelineRowView({
     />
   );
 });
+
+/** The one trace host automatic compaction leaves in the transcript: a grey,
+ *  right-aligned line where the /compact bubble used to be. It belongs to the
+ *  row, so it survives the compaction ending; the engine's own mid-turn
+ *  compaction has no row and mounts this component as the tail instead. */
+export function CompactionCurtain() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex justify-end py-2 pr-1" data-testid="compaction-curtain">
+      <span className="text-caption-1-medium text-text-tertiary">
+        {`< ${t("chat.compactingContext")} >`}
+      </span>
+    </div>
+  );
+}
 
 const LazyMarkdown = lazy(() => import("./Markdown"));
 
@@ -181,10 +203,17 @@ function MessageMeta({ message }: { message: Message }) {
     modelFormatted,
     effortText,
   ].filter((p): p is string => Boolean(p));
-  if (parts.length === 0) return null;
+  const check = message.responseCheck ?? null;
+  if (parts.length === 0 && !check) return null;
   return (
     <span className="text-caption-1-regular tabular-nums text-text-tertiary opacity-0 transition-opacity duration-150 group-hover:opacity-100">
       {parts.join(" · ")}
+      {/* Recorded at settle: the response check outlives the tail indicator. */}
+      {check && (
+        <span className="ml-1.5 inline-flex items-center align-middle">
+          <ResponseCheckBadge check={check} />
+        </span>
+      )}
     </span>
   );
 }
@@ -240,22 +269,54 @@ function UserMessageCopy({ text }: { text: string }) {
   );
 }
 
+/** The badge above a user bubble: which bot authored the prompt.
+ *
+ *  The committed message only carries the name, icon and bot id, so the avatar
+ *  resolves against the live bot list first (an edited bot shows its new look
+ *  on old turns too). When the bot is gone or built-in, the recorded icon is
+ *  the fallback — an emoji as-is, an id-shaped stand-in otherwise — so the
+ *  slot is never empty. Rendering goes through the same `BotAvatarView` every
+ *  other surface uses, so the badge avatar moves like the settings list. */
+function AgentBadge({
+  name,
+  icon,
+  botId,
+}: {
+  name: string;
+  icon?: string;
+  botId?: string;
+}) {
+  const { t } = useTranslation();
+  const bot = useBotStore((s) =>
+    botId ? s.bots.find((entry) => entry.id === botId) : undefined,
+  );
+  const avatar = bot?.avatar ?? avatarFromLegacyIcon(icon, botId || icon || name);
+  return (
+    <span
+      aria-label={t("chat.agentBadge", { name })}
+      className="mb-1 flex items-center gap-1 text-caption-1-regular text-text-tertiary"
+    >
+      <span aria-hidden className="flex">
+        <BotAvatarView avatar={avatar} seed={botId || name} size={14} />
+      </span>
+      {name}
+    </span>
+  );
+}
+
 /** User bubble. The agent block sendPrompt appended stays in history (the
  *  CLI transcript owns it), but the bubble strips it and carries the agent
  *  identity as a small badge above, mirroring the meta row's caption type. */
 function UserMessageRow({ message }: { message: Message }) {
-  const { t } = useTranslation();
   const stripped = useMemo(() => stripAgentBlock(message.text), [message.text]);
   return (
     <div className="group -mr-1.5 ml-auto flex w-full min-w-0 flex-col items-end">
       {stripped.agentName && (
-        <span
-          aria-label={t("chat.agentBadge", { name: stripped.agentName })}
-          className="mb-1 flex items-center gap-1 text-caption-1-regular text-text-tertiary"
-        >
-          {stripped.agentIcon && <span aria-hidden>{stripped.agentIcon}</span>}
-          {stripped.agentName}
-        </span>
+        <AgentBadge
+          name={stripped.agentName}
+          icon={stripped.agentIcon}
+          botId={stripped.botId}
+        />
       )}
       <div className="flex w-fit min-w-0 max-w-[72%] flex-col rounded-xl bg-bubble-user px-3.5 py-2.5 text-left text-body-regular whitespace-pre-wrap [overflow-wrap:anywhere] text-text-white max-md:max-w-[85%]">
         <CollapsibleMessage>
@@ -504,7 +565,10 @@ export const MessageTimeline = memo(function MessageTimeline({
   // settles: while streaming, mid-turn segments (kimi multi-message replies)
   // are not the final word.
   const turnLive = streaming;
-  const count = rows.length + (streaming ? 1 : 0);
+  // The tail item is the turn-status indicator (or the grey compaction line).
+  // A compaction keeps it mounted even between sends, so the line does not
+  // blink out in the gap between the compact turn and the resume turn.
+  const count = rows.length + (streaming || session.compaction ? 1 : 0);
 
   const virtualizer = useVirtualizer({
     count,
@@ -652,27 +716,35 @@ export const MessageTimeline = memo(function MessageTimeline({
                 className="py-2"
               >
                 {isTail ? (
-                  <AgentThinking
-                    variant="wave"
-                    label={session.compaction ? t("chat.compactingContext") : t("chat.thinking")}
-                    className="py-2"
-                    startedAt={session.turnStartedAt ?? undefined}
-                    durationFormatter={(d) => t("chat.metaDuration", { duration: d })}
-                    model={activeModelFormatted}
-                    effort={activeEffortFormatted}
-                    usage={liveUsage}
-                    retry={
-                      session.retry
-                        ? session.retry.max > 0
-                          ? t("chat.retrying", {
-                              attempt: session.retry.attempt,
-                              max: session.retry.max,
-                            })
-                          : t("chat.retryingNoMax", { attempt: session.retry.attempt })
-                        : null
-                    }
-                    retryDetail={session.retry?.message || null}
-                  />
+                  // A host-sent compaction already shows in place (its /compact
+                  // row became the grey line), so the tail only carries the
+                  // engine's own mid-turn compaction — a flag with no row.
+                  session.compaction?.automatic ? (
+                    <CompactionCurtain />
+                  ) : session.compaction ? null : (
+                    <AgentThinking
+                      variant="wave"
+                      label={t("chat.thinking")}
+                      className="py-2"
+                      startedAt={session.turnStartedAt ?? undefined}
+                      durationFormatter={(d) => t("chat.metaDuration", { duration: d })}
+                      model={activeModelFormatted}
+                      effort={activeEffortFormatted}
+                      usage={liveUsage}
+                      metaExtra={<ResponseCheckBadge check={session.responseCheck} />}
+                      retry={
+                        session.retry
+                          ? session.retry.max > 0
+                            ? t("chat.retrying", {
+                                attempt: session.retry.attempt,
+                                max: session.retry.max,
+                              })
+                            : t("chat.retryingNoMax", { attempt: session.retry.attempt })
+                          : null
+                      }
+                      retryDetail={session.retry?.message || null}
+                    />
+                  )
                 ) : (
                   <TimelineRowView
                     row={rows[item.index]}
