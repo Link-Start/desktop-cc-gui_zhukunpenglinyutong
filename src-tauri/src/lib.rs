@@ -1,5 +1,6 @@
 pub mod agent_catalog;
 pub mod app_info;
+pub mod app_menu;
 pub mod bots;
 pub mod baidu_tongji;
 pub mod browser;
@@ -30,6 +31,7 @@ pub mod pets;
 pub mod plugin_caps;
 pub mod plugin_host;
 pub mod plugins;
+pub mod preview_protocol;
 pub mod prompts;
 pub mod provider_files;
 pub mod provider_models;
@@ -111,7 +113,7 @@ pub fn run() {
         settings::apply_codex_home(&settings);
     }
 
-    plugins::asset_protocol::register(tauri::Builder::default())
+    plugins::asset_protocol::register(preview_protocol::register(tauri::Builder::default()))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -317,6 +319,12 @@ pub fn run() {
             window_builder
                 .build()
                 .expect("failed to create main window");
+            // Replace the automatic macOS menu with the same one minus its
+            // Close Window (⌘W) item; the frontend shortcut runtime owns that
+            // key and closes the tab in view (see app_menu.rs).
+            if let Err(error) = app_menu::install(app.handle()) {
+                eprintln!("[menu] install failed: {error}");
+            }
             // Cmd+Q / AppleScript `quit` bypass both the window X's
             // CloseRequested and Tauri's ExitRequested on macOS; without
             // this hook one stray quit kills every live engine run with no
@@ -428,6 +436,7 @@ pub fn run() {
             plugin_host::plugin_model_catalog,
             // plugin marketplace (Phase 3, plan §6)
             plugins::market::plugin_fetch_index,
+            plugins::market::plugin_fetch_featured,
             plugins::market::plugin_fetch_market_readme,
             plugins::market::plugin_install_from_marketplace,
             plugins::market::plugin_check_updates,

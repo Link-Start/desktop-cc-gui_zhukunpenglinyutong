@@ -269,12 +269,20 @@ the final file. The metrics output reports requests, mounted rows and actions.
 
 Open `/tests/browser/markdown-preview.html` to check the files-feature Markdown
 preview (Streamdown) against a document covering GFM tables, heading levels,
-lists, task list, blockquote, fenced code, KaTeX math and a Mermaid diagram:
+lists, task list, blockquote, fenced code, KaTeX math, a Mermaid diagram and
+inline links:
 tables render with a bordered wrapper and styled header row, code blocks carry
 language header + copy/download controls with `files.markdown.*` labels, the
 block formula renders via KaTeX, and the Mermaid diagram stays an empty
 container until scrolled into view (IntersectionObserver lazy render), then
-draws the flow SVG. No app, no backend, no saved state.
+draws the flow SVG. Links (both the external and relative `plan.md` targets)
+must read as links: green with a dotted underline (`.md-preview-link`), not
+body text. The `toggle search` button opens the real find bar top-right (the
+preview has no header in this fixture, so use the button instead of ⌘F):
+typing `退款` shows a live `n/total` count, every match gets the yellow
+highlight and the current one the stronger orange, Enter / Shift+Enter walk
+the matches scrolling each into view, Esc closes and clears the highlights.
+No app, no backend, no saved state.
 
 Open `/tests/browser/plugin-detail-rail.html` to check the plugin detail page
 at a desktop width (1145x731 in the verification run, with the app's 40px tab
@@ -298,3 +306,20 @@ instead of the wave indicator. The four buttons switch idle / host / engine /
 resume states; the readout reports the rendered bubbles against the five
 stored rows, the hint's computed colour and alignment, and PASS/FAIL. No model,
 no IPC, no saved conversation.
+
+Open `/tests/browser/plugin-spotlight.html` for the real 编辑精选轮播
+(`PluginSpotlight`) over a synthetic market whose six covers span the whole
+素材链: an editorial `image` (full-bleed `object-cover`), a 3600×740 and a
+357×425 screenshot (original aspect, `object-contain`), icon-only, no-art at
+all, and one whose cover *and* screenshot both fail. Every image is an inline
+SVG data URL, so the page never touches the network. The readout asserts what
+jsdom cannot: the progress bar's keyframe really is the autoplay timer
+(`getAnimations().playState`), hovering pauses it *and* freezes the advance,
+the shipped `motion-reduce:animate-none` declaration stops both, and no
+screenshot is cropped (a `cover` would cut the two ends off the 4.86:1 status
+bar and blow the 357×425 shot up into a strip). PASS/FAIL lands on
+`<body data-status>` and the title. It measures animation effects in a real
+browser — not CPU/GPU cost, and not the native WKWebView. Drive it with a
+real-clock runner: Chrome's `--virtual-time-budget` fast-forwards `setTimeout`
+without advancing CSS animation clocks, so an autoplay check under it reports a
+false failure.
